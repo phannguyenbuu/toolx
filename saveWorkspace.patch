@@ -1,0 +1,37 @@
+  const saveWorkspace = async () => {
+    if (!localWorkspaceName.trim()) {
+      alert('Vui lòng nhập tên workspace!');
+      return;
+    }
+    
+    const workspace = {
+      name: localWorkspaceName.trim(),
+      config: { ...config },
+      dataMode: dataMode.toString(),
+      xUpQty,
+      standardQty,
+      unitPrice
+    };
+    
+    try {
+      // Save to database via API
+      const savedWorkspace = await workspaceService.saveWorkspace(workspace);
+      
+      if (savedWorkspace) {
+        // Update local state
+        const updated = [...savedWorkspaces.filter(w => w.name !== workspace.name), savedWorkspace];
+        setSavedWorkspaces(updated);
+        localStorage.setItem('imposition-workspaces', JSON.stringify(updated));
+        
+        setWorkspaceName('');
+        setLocalWorkspaceName('');
+        setIsWorkspaceModalOpen(false);
+        alert('Đã lưu workspace thành công!');
+      } else {
+        alert('Lỗi khi lưu workspace. Vui lòng thử lại!');
+      }
+    } catch (error) {
+      console.error('Error saving workspace:', error);
+      alert('Lỗi khi lưu workspace. Vui lòng thử lại!');
+    }
+  };

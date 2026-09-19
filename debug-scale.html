@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Scale Debug</title>
+</head>
+<body>
+    <h1>Scale Mode Debug</h1>
+    <div id="output"></div>
+    <script>
+        // Test calculation
+        function testScale(imgW, imgH, itemW_mm, itemH_mm, scale_percent) {
+            const DPI = 300;
+            const scale = scale_percent / 100;
+            
+            // Step 1: mm → px
+            const target_w_px = Math.round((itemW_mm / 25.4) * DPI);
+            const target_h_px = Math.round((itemH_mm / 25.4) * DPI);
+            
+            // Step 2: Fit
+            const imgAspect = imgW / imgH;
+            const targetAspect = target_w_px / target_h_px;
+            
+            let fitted_w_px, fitted_h_px;
+            if (imgAspect > targetAspect) {
+                fitted_w_px = target_w_px;
+                fitted_h_px = Math.round(target_w_px / imgAspect);
+            } else {
+                fitted_h_px = target_h_px;
+                fitted_w_px = Math.round(target_h_px * imgAspect);
+            }
+            
+            // Step 3: Scale
+            const scaled_w_px = Math.round(fitted_w_px * scale);
+            const scaled_h_px = Math.round(fitted_h_px * scale);
+            
+            // Step 4: px → mm
+            const scaled_w_mm = (scaled_w_px / DPI) * 25.4;
+            const scaled_h_mm = (scaled_h_px / DPI) * 25.4;
+            
+            return {
+                target_w_px, target_h_px,
+                imgAspect: imgAspect.toFixed(3),
+                targetAspect: targetAspect.toFixed(3),
+                fitted_w_px, fitted_h_px,
+                scaled_w_px, scaled_h_px,
+                scaled_w_mm: scaled_w_mm.toFixed(2),
+                scaled_h_mm: scaled_h_mm.toFixed(2)
+            };
+        }
+        
+        const result = testScale(2000, 1000, 100, 100, 50);
+        
+        document.getElementById('output').innerHTML = `
+            <h2>Test: 2000x1000px @ 50%</h2>
+            <pre>${JSON.stringify(result, null, 2)}</pre>
+            <h3>Expected:</h3>
+            <p>scaledPx: 591x296px</p>
+            <p>scaledMm: 50.04x25.06mm</p>
+        `;
+        
+        console.log('Scale calculation:', result);
+    </script>
+</body>
+</html>

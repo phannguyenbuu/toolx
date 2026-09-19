@@ -1,0 +1,168 @@
+{
+    "models": [
+        {
+            "cost": 12000000,
+            "data": {
+                "color": "bw",
+                "cost": 12000000,
+                "file": "/models/Light Room/obj/Bed.glb",
+                "name": "Giường",
+                "preview": "/models/Light Room/preview/kingbed-001.jpg",
+                "type": "bed",
+                "zone": [
+                    2,
+                    10,
+                    9,
+                    17
+                ]
+            },
+            "id": "Giường-1763110007636",
+            "modelFile": "/models/Light Room/obj/Bed.glb",
+            "position": [
+                1.0712336114718166,
+                0.001,
+                -2.0508829784762614
+            ],
+            "rotationIndex": 1
+        },
+        {
+            "cost": 2000000,
+            "data": {
+                "color": "bw",
+                "cost": 2000000,
+                "file": "/models/Light Room/obj/Bedtab.glb",
+                "name": "Tủ đầu giường",
+                "preview": "/models/Light Room/preview/bedtab-001.jpg",
+                "type": "tab"
+            },
+            "id": "Tủ đầu giường-1763110018838",
+            "modelFile": "/models/Light Room/obj/Bedtab.glb",
+            "position": [
+                -0.16994418853218818,
+                0.001,
+                -3.4913455479954116
+            ],
+            "rotationIndex": 0
+        },
+        {
+            "cost": 2000000,
+            "data": {
+                "color": "bw",
+                "cost": 2000000,
+                "file": "/models/Light Room/obj/Bedtab.glb",
+                "name": "Tủ đầu giường",
+                "preview": "/models/Light Room/preview/bedtab-001.jpg",
+                "type": "tab"
+            },
+            "id": "Tủ đầu giường-1763110028047",
+            "modelFile": "/models/Light Room/obj/Bedtab.glb",
+            "position": [
+                -0.12845416006983257,
+                0.001,
+                -0.4111768596885206
+            ],
+            "rotationIndex": 0
+        },
+        {
+            "cost": 1200000,
+            "data": {
+                "color": "bw",
+                "cost": 1200000,
+                "file": "/models/Light Room/obj/Bench.glb",
+                "name": "Băng ngồi",
+                "preview": "/models/Light Room/preview/bench.jpg",
+                "type": "bench"
+            },
+            "id": "Băng ngồi-1763110039863",
+            "modelFile": "/models/Light Room/obj/Bench.glb",
+            "position": [
+                2.6525080183461434,
+                0.001,
+                -1.9368609176598
+            ],
+            "rotationIndex": 0
+        },
+        {
+            "cost": 6000000,
+            "data": {
+                "color": "bw",
+                "cost": 6000000,
+                "file": "/models/Light Room/obj/Wardrobe2m4.glb",
+                "name": "Tủ âm tường 2m4",
+                "preview": "/models/Light Room/preview/wardrobe2m4.jpg",
+                "type": "wardrobe"
+            },
+            "id": "Tủ âm tường 2m4-1763110047953",
+            "modelFile": "/models/Light Room/obj/Wardrobe2m4.glb",
+            "position": [
+                3.6825328627409153,
+                0.001,
+                1.1024774819020742
+            ],
+            "rotationIndex": 0
+        },
+        {
+            "cost": 4000000,
+            "data": {
+                "color": "bw",
+                "cost": 4000000,
+                "file": "/models/Light Room/obj/Wardrobe1m2.glb",
+                "name": "Tủ âm tường 1m2",
+                "preview": "/models/Light Room/preview/wardrobe1m2.jpg",
+                "type": "wardrobe"
+            },
+            "id": "Tủ âm tường 1m2-1763110054534",
+            "modelFile": "/models/Light Room/obj/Wardrobe1m2.glb",
+            "position": [
+                5.120373364688271,
+                0.001,
+                -4.371874928315511
+            ],
+            "rotationIndex": 1
+        },
+        {
+            "cost": 1000000,
+            "data": {
+                "color": "bw",
+                "cost": 1000000,
+                "file": "/models/Light Room/obj/Readchair.glb",
+                "name": "Ghế đọc sách",
+                "preview": "/models/Light Room/preview/readchair.jpg",
+                "type": "chair"
+            },
+            "id": "Ghế đọc sách-1763110071649",
+            "modelFile": "/models/Light Room/obj/Readchair.glb",
+            "position": [
+                4.907543688826283,
+                0.001,
+                -0.4615495662574247
+            ],
+            "rotationIndex": 3
+        },
+        {
+            "cost": 8000000,
+            "data": {
+                "color": "bw",
+                "cost": 8000000,
+                "file": "/models/Light Room/obj/WorkTable.glb",
+                "name": "Bàn làm việc",
+                "preview": "/models/Light Room/preview/worktable.jpg",
+                "type": "table"
+            },
+            "id": "Bàn làm việc-1763113030836",
+            "modelFile": "/models/Light Room/obj/WorkTable.glb",
+            "position": [
+                1.5780822802068428,
+                0.001,
+                -4.0613145240910935
+            ],
+            "rotationIndex": 0
+        }
+    ],
+    "room": {
+        "door": 0.238,
+        "height": 3.6,
+        "length": 6,
+        "width": 7
+    }
+}

@@ -1,0 +1,121 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: toolxprint-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ${DB_NAME:-labeldesigner}
+      POSTGRES_USER: ${DB_USER:-labeldesigner}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-labeldesigner123}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-labeldesigner}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - toolxprint-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: toolxprint-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - toolxprint-network
+
+  # Backend NestJS API
+  backend:
+    build:
+      context: ./backend-nestjs
+      dockerfile: Dockerfile
+    container_name: toolxprint-backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${DB_USER:-labeldesigner}:${DB_PASSWORD:-labeldesigner123}@postgres:5432/${DB_NAME:-labeldesigner}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      REDIS_URL: redis://redis:6379
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - toolxprint-network
+
+  # Python AI Service
+  python:
+    build:
+      context: ./python-services
+      dockerfile: Dockerfile
+    container_name: toolxprint-python
+    restart: unless-stopped
+    ports:
+      - "3005:3005"
+    environment:
+      FLASK_ENV: production
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - python_uploads:/app/uploads
+      - python_icc:/app/icc
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - toolxprint-network
+
+  # Frontend (React + Nginx)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        REACT_APP_API_URL: ${REACT_APP_API_URL:-/api}
+        REACT_APP_PYTHON_API_URL: ${REACT_APP_PYTHON_API_URL:-/api}
+        REACT_APP_SOCKET_URL: ${REACT_APP_SOCKET_URL:-}
+    container_name: toolxprint-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - backend
+      - python
+    networks:
+      - toolxprint-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  python_uploads:
+  python_icc:
+
+networks:
+  toolxprint-network:
+    driver: bridge

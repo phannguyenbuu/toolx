@@ -1,0 +1,102 @@
+{
+  "resizeRules": {
+    "X": {      
+        "A1": {
+          "type": "full",
+          "offset": "0.02,0,-h/2"
+        },
+
+        
+        "A3": {
+          "type": "full",
+          "offset": "-0.02,0,-h/2"
+        },
+
+        "B1": {
+          "type": "full",
+          "offset": "0.08,0,-l/2+0.25"
+        },
+        "B3": {
+          "type": "full", 
+          "offset": "-0.08,0,-l/2+0.25"
+        },
+              
+        "C1": {"type": "full", "offset": "0.02,0,-h/2-0.02"},
+        "C3": {
+          "type": "full", "offset": "-0.02,0,-h/2-0.02"
+        },
+        
+        "D1": {
+          "type": "full",
+          "positiveDelta": 0.5,
+          "negativeDelta": 0.5
+        },
+        
+        "D2": {
+          "type": "full",
+          "positiveDelta": 0.5,
+          "negativeDelta": -0.5
+        },
+        
+        "D3": {
+          "type": "full",
+          "positiveDelta": 0.5,
+          "negativeDelta": -0.5
+        },
+        
+        "E1": {
+          "type": "full",
+          "positiveDelta": 0.5,
+          "negativeDelta": -0.5
+        },
+        
+        "E2": {
+          "type": "full",
+          "positiveDelta": 0.5,
+          "negativeDelta": -0.5
+        },
+        "E3": {
+          "type": "full",
+          "positiveDelta": 0.5,
+          "negativeDelta": -0.5
+        },
+        
+        "F1": {"type": "full", "offset": "0.04,0,(h/2+0.03)"},
+        "F3": {"type": "full", "offset": "-0.04,0,(h/2+0.03)"}
+      },
+  "Y": {
+    "A2": {
+      "type": "pivot",
+      "deltaMultiplier": 1
+    },
+    "C2": {
+      "type": "pivot",
+      "deltaMultiplier": 1
+    },
+    "F2": {
+      "type": "pivot",
+      "deltaMultiplier": 1
+    }
+  },
+  "Z": {
+    "B2": {
+      "type": "pivot",
+      "deltaMultiplier": 1,
+      "extent": 0.02,
+      "offset": "0,0,l"
+    },
+
+    "O": {
+      "type": "pivot",
+      "deltaMultiplier": 1,
+      "offset": "0,0,l"
+    }
+  }
+},
+
+  "foldPivots": {
+    "A": { "moveZ": "-l-0.02" },
+    "B": { "moveZ": "-h" },
+    "F": { "moveZ": "l" }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "scales": {
+    "A1": { "x": "height", "y": "height" },
+    "A3": { "x": "height", "y": "height" },
+    "B1": { "x": "height", "y": "length" },
+    "B3": { "x": "height", "y": "length" },
+    "D2": { "x": "depth", "y": "length" },
+    "C1": { "x": "length", "y": "height" },
+    "C3": { "x": "length", "y": "height" },
+    "E2": { "x": "depth", "y": "length" },
+    "F1": { "x": "length", "y": "height" },
+    "F3": { "x": "length", "y": "height" },
+    "D": { "x": "height", "y": "length" },
+    "E": { "x": "height", "y": "length" },
+    "O": { "x": "width", "y": "length" }
+  },
+  "pivots": {
+    "A1": { "x": "maxX", "y": "maxY" },
+    "A3": { "x": "minX", "y": "maxY" },
+    "B1": { "x": "maxX", "y": "maxY" },
+    "B3": { "x": "minX", "y": "maxY" },
+    "C1": { "x": "maxX", "y": "maxY" },
+    "C3": { "x": "minX", "y": "maxY" },
+    "F1": { "x": "maxX", "y": "maxY" },
+    "F3": { "x": "minX", "y": "maxY" },
+    "D": { "x": "maxX", "y": "maxY" },
+    "E": { "x": "minX", "y": "maxY" },
+    "O": { "x": "centerX", "y": "minY" }
+  },
+  "behaviors": {
+    "O": {
+      "disableRuleZ": true,
+      "disableDeltaY": true,
+      "scaleYFromLength": true
+    },
+    "D": {
+      "anchorEdge": "minX",
+      "chain": ["D1", "D2", "D3"],
+      "alignY": "oAvgY",
+      "midSelector": "smallestWidth"
+    },
+    "E": {
+      "anchorEdge": "maxX",
+      "chain": ["E3", "E2", "E1"],
+      "alignY": "oAvgY",
+      "midSelector": "smallestWidth"
+    }
+  }
+}

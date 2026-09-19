@@ -1,0 +1,69 @@
+.konva-editor-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.8);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.konva-editor-inline {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.konva-editor-inline .konva-editor {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.konva-editor {
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  max-width: 600px;
+  width: 90vw;
+  max-height: 90vh;
+}
+
+.editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.konva-canvas {
+  border: 2px solid #00f2fe;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #ffffff;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.konva-canvas canvas {
+  cursor: grab;
+}
+
+.konva-canvas canvas:active {
+  cursor: grabbing;
+}

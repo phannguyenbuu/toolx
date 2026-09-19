@@ -1,0 +1,36 @@
+--- processor.py.orig	2024-01-15 09:30:00.000000000 +0700
++++ processor.py	2024-01-15 09:35:00.000000000 +0700
+@@ -123,11 +123,11 @@
+ def auto_rotate_source(img: Image.Image, target_w: int, target_h: int) -> Image.Image:
+-    """Auto rotate image to match target orientation"""
++    """Auto rotate image to match target orientation - matches frontend logic"""
+     src_ratio = img.width / img.height
+     dst_ratio = target_w / target_h
+     
+     if (src_ratio > 1 and dst_ratio < 1) or (src_ratio < 1 and dst_ratio > 1):
+-        return img.rotate(-90, expand=True)
++        return img.rotate(90, expand=True)  # PIL rotate(90) = CCW to match CSS rotate(-90deg)
+     
+     return img
+ 
+@@ -580,8 +580,8 @@
+         # Use -90 (CW) to match frontend CSS rotate(-90deg)
+         src_landscape = src_img.width > src_img.height
+         item_landscape = item_w > item_h
+         if auto_rotate and (src_landscape != item_landscape):
+-            src_img = src_img.rotate(-90, expand=True)
++            src_img = src_img.rotate(90, expand=True)  # CCW to match frontend
+         
+         # Fit image to item dimensions
+         target_w_px = mm_to_px(item_w, dpi)
+@@ -1050,8 +1050,8 @@
+         # Use +90 (CCW in PIL) to match frontend CSS rotate(-90deg) visual result
+         # PIL: rotate(90) = CCW, CSS: rotate(-90deg) = CCW visually
+         src_landscape = img.width > img.height
+         item_landscape = item_w > item_h
+         if auto_rotate and (src_landscape != item_landscape):
+-            img = img.rotate(-90, expand=True)
++            img = img.rotate(90, expand=True)  # CCW to match frontend
+         
+         # Fit to item dimensions - preserve color mode
+         processed = process_image_fit_mode(img, target_w_px, target_h_px, fit_mode, False)

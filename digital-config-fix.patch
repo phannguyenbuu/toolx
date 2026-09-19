@@ -1,0 +1,36 @@
+--- Vấn đề tính giá in nhanh Digital ---
+
+CÁC THÔNG SỐ CẤU HÌNH CHƯA ĐƯỢC XỬ LÝ ĐẦY ĐỦ:
+
+1. KHÔNG LƯU TRỮ CẤU HÌNH:
+   - digitalConfig chỉ lưu trong state, mất khi reload
+   - Cần thêm localStorage để persist cấu hình
+   - Cần thêm import/export cấu hình
+
+2. THIẾU CẤU HÌNH MÁY IN:
+   - machines chỉ có default, không lưu trữ
+   - Cần persist danh sách máy in
+   - Cần cấu hình chi phí theo máy
+
+3. THIẾU CẤU HÌNH GIẤY:
+   - paperDatabase chỉ có default
+   - Cần cho phép import/export database giấy
+   - Cần cập nhật giá giấy theo thời gian
+
+4. THIẾU CẤU HÌNH HOÀN THIỆN:
+   - config.defaultFinishings không được sử dụng đầy đủ
+   - Cần tích hợp vào tính giá
+   - Cần cấu hình giá theo loại hoàn thiện
+
+5. THIẾU VALIDATION:
+   - Không kiểm tra tính hợp lệ của cấu hình
+   - Không có cảnh báo khi thiếu thông số
+   - Không có fallback khi lỗi
+
+GIẢI PHÁP CẦN THỰC HIỆN:
+
+1. Thêm localStorage cho tất cả cấu hình
+2. Thêm validation và error handling
+3. Thêm import/export cấu hình
+4. Tích hợp đầy đủ các thông số vào tính giá
+5. Thêm UI quản lý cấu hình tốt hơn

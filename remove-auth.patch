@@ -1,0 +1,43 @@
+--- App.tsx.backup	2026-01-20 09:58:00.000000000 +0700
++++ App.tsx	2026-01-20 09:58:00.000000000 +0700
+@@ -1312,25 +1312,21 @@
+       )}
+ 
+-      {/* IMPOSITION PAGE - Auth required */}
++      {/* IMPOSITION PAGE - No auth required */}
+       {currentPage === 'imposition' && (
+-        <AuthGuard onLoginClick={() => setIsLoginModalOpen(true)}>
+-          <div className="flex-1 overflow-hidden">
+-            <ImpositionPage onClose={() => setCurrentPage('label-designer')} />
+-          </div>
+-        </AuthGuard>
++        <div className="flex-1 overflow-hidden">
++          <ImpositionPage onClose={() => setCurrentPage('label-designer')} />
++        </div>
+       )}
+ 
+-      {/* IMPOSITION ADVANCED PAGE - Auth required */}
++      {/* IMPOSITION ADVANCED PAGE - No auth required */}
+       {currentPage === 'imposition-advanced' && (
+-        <AuthGuard onLoginClick={() => setIsLoginModalOpen(true)}>
+-          <div className="flex-1 overflow-hidden">
+-            <ImpositionAdvancedPage onClose={() => setCurrentPage('label-designer')} />
+-          </div>
+-        </AuthGuard>
++        <div className="flex-1 overflow-hidden">
++          <ImpositionAdvancedPage onClose={() => setCurrentPage('label-designer')} />
++        </div>
+       )}
+ 
+-      {/* FILE MANAGER PAGE - Auth required */}
++      {/* FILE MANAGER PAGE - No auth required */}
+       {currentPage === 'file-manager' && (
+-        <AuthGuard onLoginClick={() => setIsLoginModalOpen(true)}>
+-          <div className="flex-1 overflow-hidden">
+-            <FileManagerPage onClose={() => setCurrentPage('home')} />
+-          </div>
+-        </AuthGuard>
++        <div className="flex-1 overflow-hidden">
++          <FileManagerPage onClose={() => setCurrentPage('home')} />
++        </div>
+       )}
