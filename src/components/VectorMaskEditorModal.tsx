@@ -668,7 +668,7 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-3 select-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-3 select-none">
       {/* Hidden File Input */}
       <input
         type="file"
@@ -678,24 +678,24 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
         className="hidden"
       />
 
-      <div className="bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl w-full max-w-6xl h-[92vh] flex flex-col overflow-hidden text-slate-200 animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white border border-slate-200/90 rounded-2xl shadow-2xl w-full max-w-6xl h-[92vh] flex flex-col overflow-hidden text-slate-800 animate-in fade-in zoom-in-95 duration-200">
         {/* HEADER */}
-        <div className="px-5 py-3 border-b border-slate-800 bg-slate-900/90 flex items-center justify-between flex-shrink-0">
+        <div className="px-5 py-3.5 border-b border-slate-200/80 bg-slate-50/90 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-violet-600/20 border border-violet-500/40 flex items-center justify-center text-violet-400">
+            <div className="w-9 h-9 rounded-xl bg-violet-100 border border-violet-200 flex items-center justify-center text-violet-700 shadow-2xs">
               <PenTool size={18} />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-sm text-white tracking-wide">
+                <h3 className="font-bold text-sm text-slate-900 tracking-tight">
                   Vector Mask Editor
                 </h3>
-                <span className="text-[10px] bg-violet-950/80 text-violet-300 font-semibold px-2 py-0.5 rounded-full border border-violet-700/50">
+                <span className="text-[10px] bg-violet-100 text-violet-700 font-semibold px-2 py-0.5 rounded-full border border-violet-200">
                   Khuôn Bế & Điểm Neo Vector
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400">
-                Kích thước tem: <span className="text-violet-300 font-bold">{maskW} × {maskH} mm</span> • Tổng số điểm neo (Knots): <span className="text-emerald-400 font-bold">{knots.length}</span>
+              <p className="text-[11px] text-slate-500">
+                Kích thước tem: <span className="text-violet-700 font-bold">{maskW} × {maskH} mm</span> • Tổng số điểm neo (Knots): <span className="text-emerald-700 font-bold">{knots.length}</span>
               </p>
             </div>
           </div>
@@ -707,7 +707,7 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
               type="button"
               onClick={undo}
               disabled={historyIndex <= 0}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition"
+              className="p-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-600 hover:text-slate-900 disabled:opacity-30 disabled:pointer-events-none transition border border-slate-200 shadow-2xs cursor-pointer"
               title="Hoàn tác (Ctrl+Z)"
             >
               <RotateCcw size={15} />
@@ -716,19 +716,19 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
               type="button"
               onClick={redo}
               disabled={historyIndex >= history.length - 1}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition"
+              className="p-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-600 hover:text-slate-900 disabled:opacity-30 disabled:pointer-events-none transition border border-slate-200 shadow-2xs cursor-pointer"
               title="Làm lại (Ctrl+Shift+Z)"
             >
               <RotateCw size={15} />
             </button>
 
-            <div className="h-4 w-px bg-slate-700 mx-1" />
+            <div className="h-4 w-px bg-slate-200 mx-1" />
 
             {/* Zoom Controls */}
             <button
               type="button"
               onClick={() => setScale(s => Math.min(25, s * 1.2))}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+              className="p-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition border border-slate-200 shadow-2xs cursor-pointer"
               title="Phóng to (Zoom In)"
             >
               <ZoomIn size={15} />
@@ -736,7 +736,7 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
             <button
               type="button"
               onClick={() => setScale(s => Math.max(0.3, s / 1.2))}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+              className="p-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition border border-slate-200 shadow-2xs cursor-pointer"
               title="Thu nhỏ (Zoom Out)"
             >
               <ZoomOut size={15} />
@@ -744,19 +744,19 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
             <button
               type="button"
               onClick={handleFitView}
-              className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-medium transition"
+              className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-900 text-[11px] font-semibold transition border border-slate-200 shadow-2xs cursor-pointer"
               title="Căn vừa màn hình (Fit View)"
             >
               Fit
             </button>
 
-            <div className="h-4 w-px bg-slate-700 mx-1" />
+            <div className="h-4 w-px bg-slate-200 mx-1" />
 
             {/* Close Button */}
             <button
               type="button"
               onClick={onClose}
-              className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-rose-600/80 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer"
+              className="w-8 h-8 rounded-lg bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 flex items-center justify-center transition cursor-pointer border border-slate-200 shadow-2xs"
             >
               <X size={16} />
             </button>
@@ -772,10 +772,10 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
-            className={`flex-1 relative bg-slate-950 overflow-hidden cursor-${activeTool === 'pan' ? 'grab' : candidatePoint ? 'copy' : 'default'} select-none`}
+            className={`flex-1 relative bg-slate-100 overflow-hidden cursor-${activeTool === 'pan' ? 'grab' : candidatePoint ? 'copy' : 'default'} select-none`}
             style={{
               backgroundImage: showGrid
-                ? 'radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px)'
+                ? 'radial-gradient(circle, rgba(148, 163, 184, 0.45) 1px, transparent 1px)'
                 : 'none',
               backgroundSize: `${scale * 10}px ${scale * 10}px`,
             }}
@@ -792,9 +792,9 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                   y={0}
                   width={maskW}
                   height={maskH}
-                  fill="rgba(30, 41, 59, 0.4)"
-                  stroke="rgba(148, 163, 184, 0.3)"
-                  strokeWidth={0.5 / scale}
+                  fill="rgba(255, 255, 255, 0.95)"
+                  stroke="rgba(148, 163, 184, 0.6)"
+                  strokeWidth={0.6 / scale}
                   strokeDasharray={`${3 / scale}, ${3 / scale}`}
                 />
 
@@ -815,7 +815,7 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                 {previewMode === 'mask_overlay' && (
                   <path
                     d={`M -1000 -1000 L ${maskW + 1000} -1000 L ${maskW + 1000} ${maskH + 1000} L -1000 ${maskH + 1000} Z ${pathData}`}
-                    fill="rgba(0, 0, 0, 0.6)"
+                    fill="rgba(15, 23, 42, 0.6)"
                     fillRule="evenodd"
                   />
                 )}
@@ -823,7 +823,7 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                 {/* The Vector Shape Fill / Stroke */}
                 <path
                   d={pathData}
-                  fill={previewMode === 'cut_preview' ? 'none' : 'rgba(139, 92, 246, 0.15)'}
+                  fill={previewMode === 'cut_preview' ? 'none' : 'rgba(139, 92, 246, 0.12)'}
                   stroke={dieLineColor}
                   strokeWidth={dieLineWidth / scale}
                   className="pointer-events-auto cursor-move"
@@ -843,7 +843,7 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                     <text
                       x={candidatePoint.x + 6 / scale}
                       y={candidatePoint.y - 6 / scale}
-                      fill="#10B981"
+                      fill="#059669"
                       fontSize={9 / scale}
                       fontWeight="bold"
                     >
@@ -891,7 +891,7 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                         cy={k.y}
                         r={4 / scale}
                         fill={isSelected ? '#F59E0B' : isHovered ? '#10B981' : '#FFFFFF'}
-                        stroke={isSelected ? '#78350F' : '#6366F1'}
+                        stroke={isSelected ? '#92400E' : isHovered ? '#065F46' : '#6366F1'}
                         strokeWidth={1.2 / scale}
                       />
 
@@ -904,14 +904,14 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                             width={32 / scale}
                             height={12 / scale}
                             rx={3 / scale}
-                            fill="rgba(15, 23, 42, 0.9)"
+                            fill="rgba(255, 255, 255, 0.95)"
                             stroke="#F59E0B"
-                            strokeWidth={0.5 / scale}
+                            strokeWidth={0.6 / scale}
                           />
                           <text
                             x={k.x + 8 / scale}
                             y={k.y - 5 / scale}
-                            fill="#F59E0B"
+                            fill="#92400E"
                             fontSize={7 / scale}
                             fontWeight="bold"
                           >
@@ -926,37 +926,37 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
             </svg>
 
             {/* Bottom floating instruction bar */}
-            <div className="absolute bottom-3 left-4 bg-slate-900/90 border border-slate-700/80 backdrop-blur-md rounded-xl px-3 py-1.5 flex items-center gap-4 text-[11px] text-slate-300 shadow-xl">
-              <span className="flex items-center gap-1.5">
-                <MousePointer size={13} className="text-violet-400" />
+            <div className="absolute bottom-3 left-4 bg-white/95 border border-slate-200/90 backdrop-blur-md rounded-xl px-3.5 py-1.5 flex items-center gap-4 text-[11px] text-slate-600 shadow-lg">
+              <span className="flex items-center gap-1.5 font-medium">
+                <MousePointer size={13} className="text-violet-600" />
                 Kéo điểm neo để di chuyển
               </span>
-              <span className="text-slate-600">•</span>
-              <span className="flex items-center gap-1.5">
-                <Plus size={13} className="text-emerald-400" />
+              <span className="text-slate-300">•</span>
+              <span className="flex items-center gap-1.5 font-medium">
+                <Plus size={13} className="text-emerald-600" />
                 Rê vào cạnh để thêm điểm
               </span>
-              <span className="text-slate-600">•</span>
-              <span className="flex items-center gap-1.5">
-                <Trash2 size={13} className="text-rose-400" />
+              <span className="text-slate-300">•</span>
+              <span className="flex items-center gap-1.5 font-medium">
+                <Trash2 size={13} className="text-rose-500" />
                 Chọn điểm + bấm Delete để xóa
               </span>
-              <span className="text-slate-600">•</span>
-              <span className="text-slate-400">Cuộn chuột để Zoom • Giữ Space/chuột giữa để Pan</span>
+              <span className="text-slate-300">•</span>
+              <span className="text-slate-500">Cuộn chuột để Zoom • Giữ Space/chuột giữa để Pan</span>
             </div>
           </div>
 
           {/* RIGHT: Tools & Parameters Sidebar */}
-          <div className="w-80 bg-slate-900 border-l border-slate-800 flex flex-col overflow-y-auto flex-shrink-0">
+          <div className="w-80 bg-slate-50 border-l border-slate-200 flex flex-col overflow-y-auto flex-shrink-0">
             {/* Tabs */}
-            <div className="grid grid-cols-3 p-1.5 bg-slate-950/60 border-b border-slate-800 gap-1 text-xs">
+            <div className="grid grid-cols-3 p-1.5 bg-slate-100/90 border-b border-slate-200 gap-1 text-xs">
               <button
                 type="button"
                 onClick={() => setActiveTab('tools')}
                 className={`py-1.5 rounded-lg font-medium transition cursor-pointer flex items-center justify-center gap-1.5 ${
                   activeTab === 'tools'
-                    ? 'bg-violet-600 text-white shadow-sm font-semibold'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                    ? 'bg-white text-violet-700 shadow-xs font-bold border border-slate-200/80'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                 }`}
               >
                 <Sliders size={13} />
@@ -967,8 +967,8 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                 onClick={() => setActiveTab('presets')}
                 className={`py-1.5 rounded-lg font-medium transition cursor-pointer flex items-center justify-center gap-1.5 ${
                   activeTab === 'presets'
-                    ? 'bg-violet-600 text-white shadow-sm font-semibold'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                    ? 'bg-white text-violet-700 shadow-xs font-bold border border-slate-200/80'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                 }`}
               >
                 <Sparkles size={13} />
@@ -979,8 +979,8 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                 onClick={() => setActiveTab('settings')}
                 className={`py-1.5 rounded-lg font-medium transition cursor-pointer flex items-center justify-center gap-1.5 ${
                   activeTab === 'settings'
-                    ? 'bg-violet-600 text-white shadow-sm font-semibold'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                    ? 'bg-white text-violet-700 shadow-xs font-bold border border-slate-200/80'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                 }`}
               >
                 <Layers size={13} />
@@ -993,7 +993,7 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
               <div className="p-3.5 space-y-4 flex-1">
                 {/* Tool Mode Select */}
                 <div>
-                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
                     Chế độ thao tác
                   </label>
                   <div className="grid grid-cols-3 gap-1.5">
@@ -1002,8 +1002,8 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                       onClick={() => setActiveTool('select')}
                       className={`p-2 rounded-xl flex flex-col items-center gap-1 text-xs font-medium border transition cursor-pointer ${
                         activeTool === 'select'
-                          ? 'bg-violet-600/30 border-violet-500 text-white shadow-sm'
-                          : 'bg-slate-800/60 border-slate-700/70 text-slate-400 hover:text-slate-200'
+                          ? 'bg-violet-50 border-violet-400 text-violet-700 shadow-xs font-semibold'
+                          : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                       }`}
                     >
                       <MousePointer size={15} />
@@ -1015,8 +1015,8 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                       onClick={() => setActiveTool('pen')}
                       className={`p-2 rounded-xl flex flex-col items-center gap-1 text-xs font-medium border transition cursor-pointer ${
                         activeTool === 'pen'
-                          ? 'bg-violet-600/30 border-violet-500 text-white shadow-sm'
-                          : 'bg-slate-800/60 border-slate-700/70 text-slate-400 hover:text-slate-200'
+                          ? 'bg-violet-50 border-violet-400 text-violet-700 shadow-xs font-semibold'
+                          : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                       }`}
                     >
                       <PenTool size={15} />
@@ -1028,8 +1028,8 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                       onClick={() => setActiveTool('pan')}
                       className={`p-2 rounded-xl flex flex-col items-center gap-1 text-xs font-medium border transition cursor-pointer ${
                         activeTool === 'pan'
-                          ? 'bg-violet-600/30 border-violet-500 text-white shadow-sm'
-                          : 'bg-slate-800/60 border-slate-700/70 text-slate-400 hover:text-slate-200'
+                          ? 'bg-violet-50 border-violet-400 text-violet-700 shadow-xs font-semibold'
+                          : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                       }`}
                     >
                       <Hand size={15} />
@@ -1040,14 +1040,14 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
 
                 {/* Transform Actions */}
                 <div>
-                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
                     Biến đổi hình dạng
                   </label>
                   <div className="grid grid-cols-4 gap-1.5">
                     <button
                       type="button"
                       onClick={() => handleFlip('h')}
-                      className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white flex flex-col items-center gap-1 transition"
+                      className="p-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-900 flex flex-col items-center gap-1 transition shadow-2xs cursor-pointer"
                       title="Lật ngang (Flip Horizontal)"
                     >
                       <FlipHorizontal size={14} />
@@ -1056,7 +1056,7 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                     <button
                       type="button"
                       onClick={() => handleFlip('v')}
-                      className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white flex flex-col items-center gap-1 transition"
+                      className="p-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-900 flex flex-col items-center gap-1 transition shadow-2xs cursor-pointer"
                       title="Lật dọc (Flip Vertical)"
                     >
                       <FlipVertical size={14} />
@@ -1065,7 +1065,7 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                     <button
                       type="button"
                       onClick={() => handleRotate(90)}
-                      className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white flex flex-col items-center gap-1 transition"
+                      className="p-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-900 flex flex-col items-center gap-1 transition shadow-2xs cursor-pointer"
                       title="Xoay 90 độ"
                     >
                       <RotateCw size={14} />
@@ -1074,7 +1074,7 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                     <button
                       type="button"
                       onClick={handleCenterAlign}
-                      className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white flex flex-col items-center gap-1 transition"
+                      className="p-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-900 flex flex-col items-center gap-1 transition shadow-2xs cursor-pointer"
                       title="Căn giữa khung tem"
                     >
                       <Maximize2 size={14} />
@@ -1085,14 +1085,14 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
 
                 {/* Offset / Bleed Expand & Contract */}
                 <div>
-                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
                     Bù viền / Co giãn khuôn (Offset)
                   </label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => handleOffsetMargin(1)}
-                      className="px-2.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-violet-900/40 border border-slate-700 hover:border-violet-500 text-slate-300 hover:text-violet-200 text-xs font-semibold flex items-center justify-center gap-1 transition"
+                      className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-violet-50 border border-slate-200 hover:border-violet-300 text-slate-700 hover:text-violet-700 text-xs font-semibold flex items-center justify-center gap-1 transition shadow-2xs cursor-pointer"
                     >
                       <Plus size={13} />
                       <span>Nở ra (+1mm)</span>
@@ -1100,7 +1100,7 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                     <button
                       type="button"
                       onClick={() => handleOffsetMargin(-1)}
-                      className="px-2.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-violet-900/40 border border-slate-700 hover:border-violet-500 text-slate-300 hover:text-violet-200 text-xs font-semibold flex items-center justify-center gap-1 transition"
+                      className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-violet-50 border border-slate-200 hover:border-violet-300 text-slate-700 hover:text-violet-700 text-xs font-semibold flex items-center justify-center gap-1 transition shadow-2xs cursor-pointer"
                     >
                       <span>-</span>
                       <span>Co lại (-1mm)</span>
@@ -1110,9 +1110,9 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
 
                 {/* Selected Knot Coordinates & Delete Button */}
                 {selectedKnotId ? (
-                  <div className="p-3 bg-violet-950/40 border border-violet-700/50 rounded-xl space-y-2">
+                  <div className="p-3 bg-violet-50 border border-violet-200 rounded-xl space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-violet-300 flex items-center gap-1">
+                      <span className="text-[11px] font-bold text-violet-800 flex items-center gap-1">
                         <Sparkles size={12} />
                         Điểm neo đang chọn
                       </span>
@@ -1120,7 +1120,7 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                         type="button"
                         onClick={handleDeleteSelectedKnot}
                         disabled={knots.length <= 3}
-                        className="px-2 py-0.5 rounded-md bg-rose-600/80 hover:bg-rose-600 text-white text-[10px] font-semibold flex items-center gap-1 transition disabled:opacity-40"
+                        className="px-2 py-0.5 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-semibold flex items-center gap-1 transition disabled:opacity-40 cursor-pointer"
                         title="Xóa điểm neo này (Delete/Backspace)"
                       >
                         <Trash2 size={11} />
@@ -1133,34 +1133,34 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                       if (!sel) return null;
                       return (
                         <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div className="bg-slate-900/80 p-1.5 rounded-lg border border-slate-800 flex justify-between items-center">
-                            <span className="text-slate-400 text-[10px]">X:</span>
-                            <span className="font-mono font-bold text-amber-400">{sel.x.toFixed(1)} mm</span>
+                          <div className="bg-white p-1.5 rounded-lg border border-violet-100 flex justify-between items-center shadow-2xs">
+                            <span className="text-slate-500 text-[10px]">X:</span>
+                            <span className="font-mono font-bold text-violet-900">{sel.x.toFixed(1)} mm</span>
                           </div>
-                          <div className="bg-slate-900/80 p-1.5 rounded-lg border border-slate-800 flex justify-between items-center">
-                            <span className="text-slate-400 text-[10px]">Y:</span>
-                            <span className="font-mono font-bold text-amber-400">{sel.y.toFixed(1)} mm</span>
+                          <div className="bg-white p-1.5 rounded-lg border border-violet-100 flex justify-between items-center shadow-2xs">
+                            <span className="text-slate-500 text-[10px]">Y:</span>
+                            <span className="font-mono font-bold text-violet-900">{sel.y.toFixed(1)} mm</span>
                           </div>
                         </div>
                       );
                     })()}
                   </div>
                 ) : (
-                  <div className="p-3 bg-slate-950/40 border border-slate-800/80 rounded-xl text-center text-slate-500 text-[11px]">
+                  <div className="p-3 bg-slate-100/70 border border-slate-200 rounded-xl text-center text-slate-400 text-[11px]">
                     Bấm vào một điểm neo trên khung vẽ để chỉnh toạ độ hoặc xóa
                   </div>
                 )}
 
                 {/* SVG Import & Export Options */}
-                <div className="pt-2 border-t border-slate-800 space-y-2">
-                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+                <div className="pt-2 border-t border-slate-200 space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
                     Nhập & Xuất File Vector (SVG)
                   </label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center justify-center gap-1.5 border border-slate-700 transition"
+                      className="px-3 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 border border-slate-200 transition shadow-2xs cursor-pointer"
                     >
                       <Upload size={13} />
                       <span>Nhập SVG</span>
@@ -1168,7 +1168,7 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                     <button
                       type="button"
                       onClick={handleExportSvg}
-                      className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center justify-center gap-1.5 border border-slate-700 transition"
+                      className="px-3 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 border border-slate-200 transition shadow-2xs cursor-pointer"
                     >
                       <Download size={13} />
                       <span>Tải SVG</span>
@@ -1181,7 +1181,7 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
             {/* TAB 2: PRESET SHAPES */}
             {activeTab === 'presets' && (
               <div className="p-3.5 space-y-3 flex-1">
-                <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
                   Chọn mẫu khuôn bế có sẵn
                 </label>
 
@@ -1209,9 +1209,9 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                           setSelectedKnotId(null);
                           pushHistory(newKnots);
                         }}
-                        className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-violet-600/30 border border-slate-700/80 hover:border-violet-500 text-slate-300 hover:text-white flex items-center gap-2 text-xs font-medium transition cursor-pointer"
+                        className="p-2.5 rounded-xl bg-white hover:bg-violet-50/80 border border-slate-200 hover:border-violet-300 text-slate-700 hover:text-violet-800 flex items-center gap-2 text-xs font-medium transition cursor-pointer shadow-2xs"
                       >
-                        <div className="w-6 h-6 rounded-lg bg-slate-900 flex items-center justify-center text-violet-400 shrink-0">
+                        <div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center text-violet-600 shrink-0">
                           <Icon size={14} />
                         </div>
                         <span className="truncate">{p.label}</span>
@@ -1228,13 +1228,13 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                 {/* Background Image Tracing Controls */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                       Ảnh nguồn tham chiếu
                     </label>
                     <button
                       type="button"
                       onClick={() => setShowBgImage(!showBgImage)}
-                      className="text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1 font-medium"
+                      className="text-xs text-violet-600 hover:text-violet-700 flex items-center gap-1 font-medium cursor-pointer"
                     >
                       {showBgImage ? <Eye size={13} /> : <EyeOff size={13} />}
                       <span>{showBgImage ? 'Đang bật' : 'Đã ẩn'}</span>
@@ -1243,9 +1243,9 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
 
                   {showBgImage && (
                     <div>
-                      <div className="flex justify-between items-center text-xs text-slate-400 mb-1">
+                      <div className="flex justify-between items-center text-xs text-slate-600 mb-1">
                         <span>Độ mờ ảnh nền:</span>
-                        <span className="font-bold text-violet-300">{Math.round(bgImageOpacity * 100)}%</span>
+                        <span className="font-bold text-violet-700">{Math.round(bgImageOpacity * 100)}%</span>
                       </div>
                       <input
                         type="range"
@@ -1254,7 +1254,7 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                         step={0.05}
                         value={bgImageOpacity}
                         onChange={e => setBgImageOpacity(parseFloat(e.target.value))}
-                        className="w-full accent-violet-500 cursor-pointer"
+                        className="w-full accent-violet-600 cursor-pointer"
                       />
                     </div>
                   )}
@@ -1262,7 +1262,7 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
 
                 {/* Die Line Styling */}
                 <div className="space-y-2">
-                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
                     Màu đường khuôn cắt (Die Line)
                   </label>
                   <div className="flex gap-2">
@@ -1277,8 +1277,8 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                         key={c.color}
                         type="button"
                         onClick={() => setDieLineColor(c.color)}
-                        className={`w-7 h-7 rounded-lg border-2 transition ${
-                          dieLineColor === c.color ? 'border-white scale-110 shadow-md' : 'border-transparent opacity-80 hover:opacity-100'
+                        className={`w-7 h-7 rounded-lg border-2 transition cursor-pointer ${
+                          dieLineColor === c.color ? 'border-slate-800 scale-110 shadow-md' : 'border-transparent opacity-80 hover:opacity-100'
                         }`}
                         style={{ backgroundColor: c.color }}
                         title={c.label}
@@ -1289,7 +1289,7 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
 
                 {/* Preview Modes */}
                 <div className="space-y-2">
-                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
                     Chế độ xem trước
                   </label>
                   <div className="space-y-1.5">
@@ -1302,8 +1302,8 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                         key={m.id}
                         className={`flex items-center gap-2 p-2 rounded-xl border text-xs cursor-pointer transition ${
                           previewMode === m.id
-                            ? 'bg-violet-950/50 border-violet-500 text-white font-semibold'
-                            : 'bg-slate-800/40 border-slate-700/70 text-slate-400 hover:text-slate-200'
+                            ? 'bg-violet-50 border-violet-400 text-violet-900 font-semibold shadow-2xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-50'
                         }`}
                       >
                         <input
@@ -1320,8 +1320,8 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                 </div>
 
                 {/* Grid & Helpers Toggle */}
-                <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
-                  <span className="text-xs text-slate-400">Lưới toạ độ (Grid):</span>
+                <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
+                  <span className="text-xs text-slate-600">Lưới toạ độ (Grid):</span>
                   <input
                     type="checkbox"
                     checked={showGrid}
@@ -1335,10 +1335,10 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
         </div>
 
         {/* FOOTER */}
-        <div className="px-5 py-3 border-t border-slate-800 bg-slate-900/90 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-3 text-xs text-slate-400">
+        <div className="px-5 py-3 border-t border-slate-200 bg-slate-50/90 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-3 text-xs text-slate-600">
             <span className="flex items-center gap-1.5 font-medium">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse" />
               Khuôn bế Vector sẵn sàng
             </span>
             <span>•</span>
@@ -1349,14 +1349,14 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-semibold transition cursor-pointer"
+              className="px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold transition cursor-pointer shadow-2xs"
             >
               Hủy
             </button>
             <button
               type="button"
               onClick={handleApply}
-              className="px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-violet-900/40 cursor-pointer active:scale-98"
+              className="px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition flex items-center gap-2 shadow-md shadow-violet-500/20 cursor-pointer active:scale-98"
             >
               <Check size={16} />
               <span>Áp dụng Vector Mask</span>

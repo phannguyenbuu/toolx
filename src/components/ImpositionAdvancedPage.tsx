@@ -1648,33 +1648,21 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
   useEffect(() => {
     const loadWorkspaces = async () => {
       try {
-        // Load from API first
-        const apiWorkspaces = await workspaceService.getWorkspaces();
+        // Load from API first (graceful fallback if not logged in)
+        const apiWorkspaces = await workspaceService.getWorkspaces().catch(() => null);
         if (apiWorkspaces && apiWorkspaces.length > 0) {
           setSavedWorkspaces(apiWorkspaces);
           localStorage.setItem("imposition-workspaces", JSON.stringify(apiWorkspaces));
-        } else {
-          // Fallback to localStorage
-          const saved = localStorage.getItem("imposition-workspaces");
-          if (saved) {
-            try {
-              setSavedWorkspaces(JSON.parse(saved));
-            } catch (error) {
-              console.error("Error loading workspaces:", error);
-            }
-          }
+          return;
         }
-      } catch (error) {
-        console.error("Error loading workspaces from API:", error);
-        // Fallback to localStorage
-        const saved = localStorage.getItem("imposition-workspaces");
-        if (saved) {
-          try {
-            setSavedWorkspaces(JSON.parse(saved));
-          } catch (error) {
-            console.error("Error loading workspaces:", error);
-          }
-        }
+      } catch (_) {}
+
+      // Fallback to localStorage
+      const saved = localStorage.getItem("imposition-workspaces");
+      if (saved) {
+        try {
+          setSavedWorkspaces(JSON.parse(saved));
+        } catch (_) {}
       }
     };
     
