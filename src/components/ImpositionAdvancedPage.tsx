@@ -1354,9 +1354,16 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
 
   const currentPlan = plans[currentPlanIndex] || null;
 
-  // Drag & Drop reorder slots on Main Canvas
+  // Drag & Drop reorder slots and cross-sheet transfer on Main Canvas
   const [draggedSlotIdx, setDraggedSlotIdx] = useState<number | null>(null);
   const [dragOverSlotIdx, setDragOverSlotIdx] = useState<number | null>(null);
+  const [dragOverSheetIdx, setDragOverSheetIdx] = useState<number | null>(null);
+  const [draggedItemData, setDraggedItemData] = useState<{
+    sourceSheetIdx: number;
+    sourceSlotIdx: number;
+    sourceGlobalIdx: number;
+    isMultiShape: boolean;
+  } | null>(null);
 
   const handleSwapSlots = useCallback((fromIdx: number, toIdx: number) => {
     if (fromIdx === toIdx || !currentPlan) return;
@@ -1367,16 +1374,93 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
         if (fromIdx < 0 || fromIdx >= newItems.length || toIdx < 0 || toIdx >= newItems.length) {
           return pl;
         }
-        const temp = newItems[fromIdx];
-        newItems[fromIdx] = newItems[toIdx];
-        newItems[toIdx] = temp;
+        const itemA = { ...newItems[fromIdx] };
+        const itemB = { ...newItems[toIdx] };
+
+        // Swap spatial placement (x, y, sheetIndex) between item A and item B
+        const tempX = itemA.x;
+        const tempY = itemA.y;
+        const tempSheet = itemA.sheetIndex ?? 0;
+
+        itemA.x = itemB.x;
+        itemA.y = itemB.y;
+        itemA.sheetIndex = itemB.sheetIndex ?? 0;
+
+        itemB.x = tempX;
+        itemB.y = tempY;
+        itemB.sheetIndex = tempSheet;
+
+        newItems[fromIdx] = itemA;
+        newItems[toIdx] = itemB;
         return {
           ...pl,
           items: newItems
         };
       });
     });
+    toast.success('Đã hoán đổi vị trí đối tượng', { id: 'swap-slot', duration: 1500 });
   }, [currentPlan, currentPlanIndex]);
+
+  const handleMoveItemToSheet = useCallback((
+    fromIdx: number,
+    targetSheetIdx: number,
+    dropMmX?: number,
+    dropMmY?: number
+  ) => {
+    if (!currentPlan) return;
+    setPlans(prevPlans => {
+      return prevPlans.map((pl, pIdx) => {
+        if (pIdx !== currentPlanIndex) return pl;
+        const newItems = [...pl.items];
+        if (fromIdx < 0 || fromIdx >= newItems.length) return pl;
+
+        const item = { ...newItems[fromIdx] };
+        const itW = item.w !== undefined ? item.w : (item.rot ? config.itemH : config.itemW);
+        const itH = item.h !== undefined ? item.h : (item.rot ? config.itemW : config.itemH);
+
+        item.sheetIndex = targetSheetIdx;
+
+        if (dropMmX !== undefined && dropMmY !== undefined) {
+          const minX = config.marginLeft || 0;
+          const maxX = Math.max(minX, config.pageW - itW - (config.marginRight || 0));
+          const minY = config.marginTop || 0;
+          const maxY = Math.max(minY, config.pageH - itH - (config.marginBot || 0));
+
+          item.x = Math.max(minX, Math.min(maxX, dropMmX - itW / 2));
+          item.y = Math.max(minY, Math.min(maxY, dropMmY - itH / 2));
+        }
+
+        newItems[fromIdx] = item;
+        return {
+          ...pl,
+          items: newItems
+        };
+      });
+    });
+    setCurrentSheetIndex(targetSheetIdx);
+    toast.success(`Đã chuyển đối tượng sang Tờ ${targetSheetIdx + 1}`, { id: 'move-sheet', duration: 1500 });
+  }, [currentPlan, currentPlanIndex, config]);
+
+  const handleSwapDataPages = useCallback((
+    fromSheetIdx: number,
+    fromSlotIdx: number,
+    toSheetIdx: number,
+    toSlotIdx: number
+  ) => {
+    if (allPages.length <= 1) return;
+    const p1 = getPageForSlot(fromSlotIdx, fromSheetIdx);
+    const p2 = getPageForSlot(toSlotIdx, toSheetIdx);
+    if (p1 >= 0 && p2 >= 0 && p1 !== p2 && p1 < allPages.length && p2 < allPages.length) {
+      setAllPages(prev => {
+        const copy = [...prev];
+        const temp = copy[p1];
+        copy[p1] = copy[p2];
+        copy[p2] = temp;
+        return copy;
+      });
+      toast.success(`Đã đổi trang giữa Tờ ${fromSheetIdx + 1} và Tờ ${toSheetIdx + 1}`, { id: 'swap-page', duration: 1500 });
+    }
+  }, [allPages.length, getPageForSlot]);
 
   // Áp dụng kiểu trở lên plan hiện tại
   const styledPlan = useMemo(() => {
@@ -4424,19 +4508,83 @@ Chỉ trả về JSON, không giải thích thêm.`;
                         )}
                       </div>
 
-                      {/* Sheet Body Container */}
+                      {/* Sheet Body Container with Drag & Drop Zone for Cross-Sheet Item Transfer */}
                       <div
                         onClick={() => setCurrentSheetIndex(sIdx)}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          e.dataTransfer.dropEffect = 'move';
+                          if (dragOverSheetIdx !== sIdx) {
+                            setDragOverSheetIdx(sIdx);
+                          }
+                        }}
+                        onDragLeave={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          if (
+                            e.clientX < rect.left ||
+                            e.clientX >= rect.right ||
+                            e.clientY < rect.top ||
+                            e.clientY >= rect.bottom
+                          ) {
+                            if (dragOverSheetIdx === sIdx) {
+                              setDragOverSheetIdx(null);
+                            }
+                          }
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setDragOverSheetIdx(null);
+                          setDraggedSlotIdx(null);
+                          setDragOverSlotIdx(null);
+                          setDraggedItemData(null);
+
+                          let dragData: any = null;
+                          try {
+                            const json = e.dataTransfer.getData('application/json');
+                            if (json) dragData = JSON.parse(json);
+                          } catch (_) {}
+
+                          const sourceGlobalIdx = dragData ? dragData.sourceGlobalIdx : parseInt(e.dataTransfer.getData('text/plain'), 10);
+                          if (isNaN(sourceGlobalIdx)) return;
+
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const dropPxX = (e.clientX - rect.left) / canvasZoom;
+                          const dropPxY = (e.clientY - rect.top) / canvasZoom;
+                          const dropMmX = dropPxX / scale;
+                          const dropMmY = dropPxY / scale;
+
+                          if (isMultiShape) {
+                            handleMoveItemToSheet(sourceGlobalIdx, sIdx, dropMmX, dropMmY);
+                          } else if (dragData && dragData.sourceSheetIdx !== sIdx) {
+                            handleSwapDataPages(dragData.sourceSheetIdx, dragData.sourceSlotIdx, sIdx, 0);
+                          }
+                        }}
                         className={`bg-white rounded-lg relative transition-all ${
                           isCurrentActiveSheet
                             ? 'shadow-2xl ring-2 ring-violet-500/80'
                             : 'shadow-md hover:shadow-xl border border-slate-200/80'
+                        } ${
+                          dragOverSheetIdx === sIdx && draggedSlotIdx !== null
+                            ? 'ring-4 ring-indigo-500/90 shadow-2xl bg-indigo-50/20'
+                            : ''
                         }`}
                         style={{
                           width: config.pageW * scale,
                           height: config.pageH * scale,
                         }}
                       >
+                        {/* Visual Drop Zone Banner when dragging an item over another sheet */}
+                        {dragOverSheetIdx === sIdx && draggedSlotIdx !== null && (
+                          <div className="absolute inset-0 z-50 rounded-lg border-2 border-dashed border-indigo-500 bg-indigo-500/10 flex items-center justify-center pointer-events-none animate-fadeIn backdrop-blur-[1px]">
+                            <div className="bg-indigo-600 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 animate-bounce">
+                              <Move size={13} />
+                              <span>Thả vào Tờ {sIdx + 1}</span>
+                            </div>
+                          </div>
+                        )}
+
                         {/* 4 Interactive Margin Input Badges (displayed on active sheet or single sheet) */}
                         {(totalSheets === 1 || isCurrentActiveSheet) && (
                           <>
@@ -4492,11 +4640,11 @@ Chỉ trả về JSON, không giải thích thêm.`;
 
                         {/* Server-rendered preview overlay (only on active sheet if available) */}
                         {isCurrentActiveSheet && serverPreviewUrl && (
-                          <img src={serverPreviewUrl} alt="Server preview" className="absolute inset-0 w-full h-full rounded-lg z-10 pointer-events-none" style={{ opacity: isLoadingServerPreview ? 0.5 : 1, transition: 'opacity 0.3s' }} />
+                          <img src={serverPreviewUrl} alt="Server preview" className="absolute inset-0 w-full h-full rounded-lg object-contain pointer-events-none z-10 opacity-90" />
                         )}
                         {isCurrentActiveSheet && isLoadingServerPreview && (
                           <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
-                            <div className="bg-black/60 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+                            <div className="bg-black/60 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 backdrop-blur-xs">
                               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                               Đang tải preview...
                             </div>
@@ -4538,7 +4686,8 @@ Chỉ trả về JSON, không giải thích thêm.`;
 
                         {/* Sheet Items */}
                         {sheetItems.map((it, i) => {
-                          const itemGlobalIdx = isMultiShape ? allPlanItems.indexOf(it) : i;
+                          const itemsPerSheet = sheetItems.length;
+                          const itemGlobalIdx = isMultiShape ? allPlanItems.indexOf(it) : (sIdx * itemsPerSheet + i);
                           const itemShape = (it.shape || config.shape) as string;
                           const isSpecialShape = ['trapezoid', 'triangle', 'hexagon'].includes(itemShape);
                           const itemCornerRadius = it.cornerRadius !== undefined ? it.cornerRadius : config.cornerRadius;
@@ -4598,7 +4747,6 @@ Chỉ trả về JSON, không giải thích thêm.`;
                           const isDragged = draggedSlotIdx === itemGlobalIdx;
                           const isDragOver = dragOverSlotIdx === itemGlobalIdx;
 
-                          const itemsPerSheet = sheetItems.length;
                           const globalSlotIdx = isMultiShape ? itemGlobalIdx : (sIdx * itemsPerSheet + i);
                           const isBlankSlot = !isMultiShape && config.useTotalLimit && config.totalOrder > 0 && globalSlotIdx >= config.totalOrder;
 
@@ -4613,21 +4761,31 @@ Chỉ trả về JSON, không giải thích thêm.`;
                                 draggable
                                 onDragStart={(e) => {
                                   e.stopPropagation();
+                                  const data = {
+                                    sourceSheetIdx: sIdx,
+                                    sourceSlotIdx: i,
+                                    sourceGlobalIdx: itemGlobalIdx,
+                                    isMultiShape,
+                                  };
+                                  e.dataTransfer.setData('application/json', JSON.stringify(data));
                                   e.dataTransfer.setData('text/plain', String(itemGlobalIdx));
                                   e.dataTransfer.effectAllowed = 'move';
                                   setDraggedSlotIdx(itemGlobalIdx);
+                                  setDraggedItemData(data);
                                 }}
                                 onDragEnd={(e) => {
                                   e.stopPropagation();
                                   setDraggedSlotIdx(null);
                                   setDragOverSlotIdx(null);
+                                  setDragOverSheetIdx(null);
+                                  setDraggedItemData(null);
                                 }}
                                 className="pointer-events-auto min-w-6 h-6 px-2 rounded-full flex items-center justify-center text-[10px] font-bold transition-all duration-150 select-none cursor-grab active:cursor-grabbing bg-white/95 shadow-sm border hover:shadow-md hover:scale-125 active:scale-105 whitespace-nowrap gap-1"
                                 style={{
                                   color: itemColor,
                                   borderColor: itemColor,
                                 }}
-                                title={`Layer ${layerName} - Vị trí ${globalSlotIdx + 1} (Kéo đổi vị trí)`}
+                                title={`Layer ${layerName} - Tờ ${sIdx + 1} - Vị trí ${globalSlotIdx + 1} (Kéo thả chuyển tờ hoặc đổi vị trí)`}
                               >
                                 <span>{layerName}</span>
                                 <span className="opacity-80 font-mono text-[9px]">#{globalSlotIdx + 1}</span>
@@ -4645,6 +4803,28 @@ Chỉ trả về JSON, không giải thích thêm.`;
                           ) : null;
 
                           const dragProps = {
+                            draggable: true,
+                            onDragStart: (e: React.DragEvent) => {
+                              e.stopPropagation();
+                              const data = {
+                                sourceSheetIdx: sIdx,
+                                sourceSlotIdx: i,
+                                sourceGlobalIdx: itemGlobalIdx,
+                                isMultiShape,
+                              };
+                              e.dataTransfer.setData('application/json', JSON.stringify(data));
+                              e.dataTransfer.setData('text/plain', String(itemGlobalIdx));
+                              e.dataTransfer.effectAllowed = 'move';
+                              setDraggedSlotIdx(itemGlobalIdx);
+                              setDraggedItemData(data);
+                            },
+                            onDragEnd: (e: React.DragEvent) => {
+                              e.stopPropagation();
+                              setDraggedSlotIdx(null);
+                              setDragOverSlotIdx(null);
+                              setDragOverSheetIdx(null);
+                              setDraggedItemData(null);
+                            },
                             onDragOver: (e: React.DragEvent) => {
                               e.preventDefault();
                               e.stopPropagation();
@@ -4659,12 +4839,28 @@ Chỉ trả về JSON, không giải thích thêm.`;
                             onDrop: (e: React.DragEvent) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              const sourceIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
-                              if (!isNaN(sourceIdx) && sourceIdx !== itemGlobalIdx) {
-                                handleSwapSlots(sourceIdx, itemGlobalIdx);
-                              }
-                              setDraggedSlotIdx(null);
                               setDragOverSlotIdx(null);
+                              setDragOverSheetIdx(null);
+                              setDraggedSlotIdx(null);
+                              setDraggedItemData(null);
+
+                              let dragData: any = null;
+                              try {
+                                const json = e.dataTransfer.getData('application/json');
+                                if (json) dragData = JSON.parse(json);
+                              } catch (_) {}
+
+                              const sourceGlobalIdx = dragData ? dragData.sourceGlobalIdx : parseInt(e.dataTransfer.getData('text/plain'), 10);
+                              const sourceSheetIdx = dragData ? dragData.sourceSheetIdx : sIdx;
+                              const sourceSlotIdx = dragData ? dragData.sourceSlotIdx : 0;
+
+                              if (!isNaN(sourceGlobalIdx) && sourceGlobalIdx !== itemGlobalIdx) {
+                                if (isMultiShape) {
+                                  handleSwapSlots(sourceGlobalIdx, itemGlobalIdx);
+                                } else {
+                                  handleSwapDataPages(sourceSheetIdx, sourceSlotIdx, sIdx, i);
+                                }
+                              }
                             },
                           };
 
