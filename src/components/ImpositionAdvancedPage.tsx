@@ -1487,83 +1487,175 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
     return globalIndex % allPages.length;
   }, [currentPlan, allPages.length, effectiveDataMode, standardQty, xUpQty, currentSheetIndex, config.is2Sided, config.twoSideMode, previewSide, config.useTotalLimit, config.totalOrder, isMultiShape]);
 
-  const handleSwapSlots = useCallback((fromIdx: number, toIdx: number) => {
+  const handleReorderSlots = useCallback((fromIdx: number, toIdx: number) => {
     if (fromIdx === toIdx || !currentPlan) return;
     setPlans(prevPlans => {
       return prevPlans.map((pl, pIdx) => {
         if (pIdx !== currentPlanIndex) return pl;
-        const newItems = [...pl.items];
-        if (fromIdx < 0 || fromIdx >= newItems.length || toIdx < 0 || toIdx >= newItems.length) {
+        const items = [...pl.items];
+        if (fromIdx < 0 || fromIdx >= items.length || toIdx < 0 || toIdx >= items.length) {
           return pl;
         }
-        const itemA = { ...newItems[fromIdx] };
-        const itemB = { ...newItems[toIdx] };
 
-        // Swap spatial placement (x, y, sheetIndex) between item A and item B
-        const tempX = itemA.x;
-        const tempY = itemA.y;
-        const tempSheet = itemA.sheetIndex ?? 0;
+        // Reorder items in array (dồn thứ tự liên tiếp)
+        const [movedItem] = items.splice(fromIdx, 1);
+        items.splice(toIdx, 0, movedItem);
 
-        itemA.x = itemB.x;
-        itemA.y = itemB.y;
-        itemA.sheetIndex = itemB.sheetIndex ?? 0;
+        // Repack sequentially with multiSizePacker to ensure 100% compact layout across sheets
+        let pw = config.pageW, ph = config.pageH;
+        let ox = 0, oy = 0;
+        if (config.usePrintArea) {
+          pw = config.printAreaW; ph = config.printAreaH;
+          ox = (config.pageW - pw) / 2; oy = (config.pageH - ph) / 2;
+        } else if (config.useMargin) {
+          pw = config.pageW - config.marginLeft - config.marginRight;
+          ph = config.pageH - config.marginTop - config.marginBot;
+          ox = config.marginLeft; oy = config.marginTop;
+        }
 
-        itemB.x = tempX;
-        itemB.y = tempY;
-        itemB.sheetIndex = tempSheet;
+        const packItems = items.map((it, idx) => ({
+          id: idx,
+          w: it.w,
+          h: it.h,
+          tabId: it.tabId,
+          tabName: it.tabName,
+          shape: it.shape,
+          cornerRadius: it.cornerRadius,
+          sourceImage: it.sourceImage,
+          vectorMaskResult: it.vectorMaskResult,
+          customSvgData: it.customSvgData,
+          color: it.color,
+        }));
 
-        newItems[fromIdx] = itemA;
-        newItems[toIdx] = itemB;
+        const packed = packMultiSize(packItems, pw, ph, config.padding, true);
+        const matchPlan = packed.find(p => p.name === pl.name) || packed[0];
+        if (matchPlan && matchPlan.items.length === items.length) {
+          return {
+            ...pl,
+            items: matchPlan.items.map(it => ({
+              ...it,
+              x: it.x + ox,
+              y: it.y + oy,
+              rot: it.rot,
+              sheetIndex: it.sheetIndex ?? 0,
+            })),
+            totalSheets: matchPlan.totalSheets
+          };
+        }
+
+        // Fallback: Preserve slot coordinates in sequence and shift items through positions
+        const slotCoords = pl.items.map(it => ({ x: it.x, y: it.y, rot: it.rot, sheetIndex: it.sheetIndex ?? 0 }));
+        const updatedItems = items.map((it, idx) => ({
+          ...it,
+          x: slotCoords[idx]?.x ?? it.x,
+          y: slotCoords[idx]?.y ?? it.y,
+          rot: slotCoords[idx]?.rot ?? it.rot,
+          sheetIndex: slotCoords[idx]?.sheetIndex ?? it.sheetIndex ?? 0,
+        }));
+
         return {
           ...pl,
-          items: newItems
+          items: updatedItems
         };
       });
     });
-    toast.success('Đã hoán đổi vị trí đối tượng', { id: 'swap-slot', duration: 1500 });
-  }, [currentPlan, currentPlanIndex]);
+    toast.success('Đã chuyển vị trí và tự động dồn trang', { id: 'reorder-slot', duration: 1500 });
+  }, [currentPlan, currentPlanIndex, config]);
+
+  const handleSwapSlots = handleReorderSlots;
 
   const handleMoveItemToSheet = useCallback((
     fromIdx: number,
     targetSheetIdx: number,
-    dropMmX?: number,
-    dropMmY?: number
+    _dropMmX?: number,
+    _dropMmY?: number
   ) => {
     if (!currentPlan) return;
     setPlans(prevPlans => {
       return prevPlans.map((pl, pIdx) => {
         if (pIdx !== currentPlanIndex) return pl;
-        const newItems = [...pl.items];
-        if (fromIdx < 0 || fromIdx >= newItems.length) return pl;
+        const items = [...pl.items];
+        if (fromIdx < 0 || fromIdx >= items.length) return pl;
 
-        const item = { ...newItems[fromIdx] };
-        const itW = item.w !== undefined ? item.w : (item.rot ? config.itemH : config.itemW);
-        const itH = item.h !== undefined ? item.h : (item.rot ? config.itemW : config.itemH);
+        const currentSheetOfItem = items[fromIdx].sheetIndex ?? 0;
+        if (currentSheetOfItem === targetSheetIdx) return pl;
 
-        item.sheetIndex = targetSheetIdx;
-
-        if (dropMmX !== undefined && dropMmY !== undefined) {
-          const minX = config.marginLeft || 0;
-          const maxX = Math.max(minX, config.pageW - itW - (config.marginRight || 0));
-          const minY = config.marginTop || 0;
-          const maxY = Math.max(minY, config.pageH - itH - (config.marginBot || 0));
-
-          item.x = Math.max(minX, Math.min(maxX, dropMmX - itW / 2));
-          item.y = Math.max(minY, Math.min(maxY, dropMmY - itH / 2));
+        let targetIdx = 0;
+        if (targetSheetIdx < currentSheetOfItem) {
+          // Moving up to an earlier sheet: insert at the start of that sheet
+          const firstOnTarget = items.findIndex(it => (it.sheetIndex ?? 0) === targetSheetIdx);
+          targetIdx = firstOnTarget >= 0 ? firstOnTarget : 0;
+        } else {
+          // Moving down to a later sheet: insert at the end of that sheet
+          const lastOnTarget = items.map(it => it.sheetIndex ?? 0).lastIndexOf(targetSheetIdx);
+          targetIdx = lastOnTarget >= 0 ? lastOnTarget : items.length - 1;
         }
 
-        newItems[fromIdx] = item;
+        const [movedItem] = items.splice(fromIdx, 1);
+        items.splice(targetIdx, 0, movedItem);
+
+        // Repack sequentially with multiSizePacker
+        let pw = config.pageW, ph = config.pageH;
+        let ox = 0, oy = 0;
+        if (config.usePrintArea) {
+          pw = config.printAreaW; ph = config.printAreaH;
+          ox = (config.pageW - pw) / 2; oy = (config.pageH - ph) / 2;
+        } else if (config.useMargin) {
+          pw = config.pageW - config.marginLeft - config.marginRight;
+          ph = config.pageH - config.marginTop - config.marginBot;
+          ox = config.marginLeft; oy = config.marginTop;
+        }
+
+        const packItems = items.map((it, idx) => ({
+          id: idx,
+          w: it.w,
+          h: it.h,
+          tabId: it.tabId,
+          tabName: it.tabName,
+          shape: it.shape,
+          cornerRadius: it.cornerRadius,
+          sourceImage: it.sourceImage,
+          vectorMaskResult: it.vectorMaskResult,
+          customSvgData: it.customSvgData,
+          color: it.color,
+        }));
+
+        const packed = packMultiSize(packItems, pw, ph, config.padding, true);
+        const matchPlan = packed.find(p => p.name === pl.name) || packed[0];
+        if (matchPlan && matchPlan.items.length === items.length) {
+          return {
+            ...pl,
+            items: matchPlan.items.map(it => ({
+              ...it,
+              x: it.x + ox,
+              y: it.y + oy,
+              rot: it.rot,
+              sheetIndex: it.sheetIndex ?? 0,
+            })),
+            totalSheets: matchPlan.totalSheets
+          };
+        }
+
+        const slotCoords = pl.items.map(it => ({ x: it.x, y: it.y, rot: it.rot, sheetIndex: it.sheetIndex ?? 0 }));
+        const updatedItems = items.map((it, idx) => ({
+          ...it,
+          x: slotCoords[idx]?.x ?? it.x,
+          y: slotCoords[idx]?.y ?? it.y,
+          rot: slotCoords[idx]?.rot ?? it.rot,
+          sheetIndex: slotCoords[idx]?.sheetIndex ?? it.sheetIndex ?? 0,
+        }));
+
         return {
           ...pl,
-          items: newItems
+          items: updatedItems
         };
       });
     });
     setCurrentSheetIndex(targetSheetIdx);
-    toast.success(`Đã chuyển đối tượng sang Tờ ${targetSheetIdx + 1}`, { id: 'move-sheet', duration: 1500 });
+    toast.success(`Đã chuyển đối tượng sang Tờ ${targetSheetIdx + 1} và dồn trang`, { id: 'move-sheet', duration: 1500 });
   }, [currentPlan, currentPlanIndex, config]);
 
-  const handleSwapDataPages = useCallback((
+  const handleReorderDataPages = useCallback((
     fromSheetIdx: number,
     fromSlotIdx: number,
     toSheetIdx: number,
@@ -1575,14 +1667,37 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
     if (p1 >= 0 && p2 >= 0 && p1 !== p2 && p1 < allPages.length && p2 < allPages.length) {
       setAllPages(prev => {
         const copy = [...prev];
-        const temp = copy[p1];
-        copy[p1] = copy[p2];
-        copy[p2] = temp;
+        const [moved] = copy.splice(p1, 1);
+        copy.splice(p2, 0, moved);
         return copy;
       });
-      toast.success(`Đã đổi trang giữa Tờ ${fromSheetIdx + 1} và Tờ ${toSheetIdx + 1}`, { id: 'swap-page', duration: 1500 });
+      toast.success(`Đã chuyển và tự động dồn trang lên trên`, { id: 'reorder-page', duration: 1500 });
     }
   }, [allPages.length, getPageForSlot]);
+
+  const handleSwapDataPages = handleReorderDataPages;
+
+  const handleMovePageToSheet = useCallback((
+    fromSheetIdx: number,
+    fromSlotIdx: number,
+    toSheetIdx: number
+  ) => {
+    if (allPages.length <= 1 || fromSheetIdx === toSheetIdx || !currentPlan) return;
+    const p1 = getPageForSlot(fromSlotIdx, fromSheetIdx);
+    if (p1 < 0 || p1 >= allPages.length) return;
+    
+    const itemsPerSheet = currentPlan.qty || 1;
+    const targetPageIdx = Math.min(allPages.length - 1, Math.max(0, toSheetIdx * itemsPerSheet));
+    
+    setAllPages(prev => {
+      const copy = [...prev];
+      const [moved] = copy.splice(p1, 1);
+      copy.splice(targetPageIdx, 0, moved);
+      return copy;
+    });
+    setCurrentSheetIndex(toSheetIdx);
+    toast.success(`Đã chuyển sang Tờ ${toSheetIdx + 1} và dồn trang`, { id: 'move-page-sheet', duration: 1500 });
+  }, [allPages.length, currentPlan, getPageForSlot]);
 
   // Reset sheet index when data changes
   useEffect(() => {
@@ -4563,7 +4678,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
                           if (isMultiShape) {
                             handleMoveItemToSheet(sourceGlobalIdx, sIdx, dropMmX, dropMmY);
                           } else if (dragData && dragData.sourceSheetIdx !== sIdx) {
-                            handleSwapDataPages(dragData.sourceSheetIdx, dragData.sourceSlotIdx, sIdx, 0);
+                            handleMovePageToSheet(dragData.sourceSheetIdx, dragData.sourceSlotIdx, sIdx);
                           }
                         }}
                         className={`bg-white rounded-lg relative transition-all ${
