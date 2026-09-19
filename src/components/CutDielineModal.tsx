@@ -274,6 +274,15 @@ export const CutDielineModal: React.FC<CutDielineModalProps> = ({
             const next = pts[(i + 1) % pts.length];
             totalLengthMm += Math.hypot(next[0] - pts[i][0], next[1] - pts[i][1]);
           }
+        } else if (itemShape === 'custom-svg') {
+          const pathD = (item as any).vectorMaskResult?.pathData || (tab as any)?.vectorMaskResult?.pathData || ((item as any).customSvgData ? (item as any).customSvgData.match(/<path[^>]*\bd=["']([^"']+)["']/i)?.[1] : '') || (tab?.customSvgData ? tab.customSvgData.match(/<path[^>]*\bd=["']([^"']+)["']/i)?.[1] : '');
+          if (pathD) {
+            elementsSvg += `<g transform="translate(${x.toFixed(3)}, ${y.toFixed(3)})"><path d="${pathD}" class="cut-dieline" /></g>\n`;
+            totalLengthMm += 2 * (adjW + adjH);
+          } else {
+            elementsSvg += `<rect x="${x.toFixed(3)}" y="${y.toFixed(3)}" width="${adjW.toFixed(3)}" height="${adjH.toFixed(3)}" class="cut-dieline" />\n`;
+            totalLengthMm += 2 * (adjW + adjH);
+          }
         } else {
           // Rectangle with optional rounded corner
           const r = itemRad > 0 ? Math.min(itemRad, adjW / 2, adjH / 2) : 0;
@@ -460,6 +469,17 @@ export const CutDielineModal: React.FC<CutDielineModalProps> = ({
             for (let i = 0; i < pts.length; i++) {
               const next = pts[(i + 1) % pts.length];
               doc.line(pts[i][0], pts[i][1], next[0], next[1]);
+            }
+          } else if (itemShape === 'custom-svg') {
+            const knots = (item as any).vectorMaskResult?.knots || (tab as any)?.vectorMaskResult?.knots;
+            if (Array.isArray(knots) && knots.length >= 3) {
+              for (let i = 0; i < knots.length; i++) {
+                const k1 = knots[i];
+                const k2 = knots[(i + 1) % knots.length];
+                doc.line(x + k1.x, y + k1.y, x + k2.x, y + k2.y);
+              }
+            } else {
+              doc.rect(x, y, adjW, adjH, 'S');
             }
           } else {
             // Rect

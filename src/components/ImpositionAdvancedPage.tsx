@@ -3898,7 +3898,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
                     onClick={() => setIsVectorMaskEditorOpen(true)}
                     className={`w-28 h-full min-h-[62px] rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer border overflow-hidden relative select-none ${
                       (activeTab.vectorMaskResult || vectorMaskResult)
-                        ? 'bg-violet-950 border-violet-500 shadow-sm ring-2 ring-violet-300 text-white'
+                        ? 'bg-violet-50/90 border-violet-400 shadow-sm ring-2 ring-violet-200 text-violet-900'
                         : 'bg-violet-50/70 hover:bg-violet-100/80 border-2 border-dashed border-violet-400 text-violet-700 hover:border-violet-600 shadow-2xs'
                     }`}
                     title={
@@ -3908,13 +3908,13 @@ Chỉ trả về JSON, không giải thích thêm.`;
                     }
                   >
                     {(activeTab.vectorMaskResult || vectorMaskResult) ? (
-                      <div className="relative w-full h-full min-h-[62px] flex flex-col items-center justify-center p-1 bg-violet-950 text-violet-100">
-                        <PenTool size={16} className="text-violet-300 mb-0.5" />
-                        <span className="text-[10px] font-bold text-white truncate max-w-[90px]">Vector Mask</span>
-                        <span className="text-[8px] text-violet-300 font-mono">
+                      <div className="relative w-full h-full min-h-[62px] flex flex-col items-center justify-center p-1 bg-violet-50/90 text-violet-900">
+                        <PenTool size={16} className="text-violet-600 mb-0.5" />
+                        <span className="text-[10px] font-bold text-violet-950 truncate max-w-[90px]">Vector Mask</span>
+                        <span className="text-[8px] text-violet-600 font-mono font-semibold">
                           {(activeTab.vectorMaskResult || vectorMaskResult)?.w_mm}×{(activeTab.vectorMaskResult || vectorMaskResult)?.h_mm}mm
                         </span>
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/vecbtn:opacity-100 transition flex flex-col items-center justify-center text-white">
+                        <div className="absolute inset-0 bg-violet-900/40 opacity-0 group-hover/vecbtn:opacity-100 transition flex flex-col items-center justify-center text-white backdrop-blur-[0.5px]">
                           <PenTool size={16} />
                           <span className="text-[9px] font-bold mt-0.5">Sửa Vector</span>
                         </div>
@@ -4694,7 +4694,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
                           const pageIdx = getPageForSlot(i, sIdx);
                           const page = pageIdx >= 0 ? allPages[pageIdx] : null;
                           const correspondingTab = isMultiShape ? shapeTabs.find(t => t.id === it.tabId || t.name === it.tabName) : null;
-                          const previewSrc = it.sourceImage?.thumb || correspondingTab?.sourceImage?.thumb || (page ? page.thumb : (allPages.length > 0 ? allPages[i % allPages.length]?.thumb : null));
+                          const previewSrc = (it.sourceImage as any)?.thumb || (typeof it.sourceImage === 'string' ? it.sourceImage : null) || (correspondingTab?.sourceImage as any)?.thumb || (typeof correspondingTab?.sourceImage === 'string' ? correspondingTab?.sourceImage : null) || (activeTab?.sourceImage as any)?.thumb || (page ? page.thumb : (allPages.length > 0 ? allPages[i % allPages.length]?.thumb : null));
                           
                           // CSS transform for rotation
                           let pageRotation = page ? page.rotation : 0;
@@ -4867,8 +4867,8 @@ Chỉ trả về JSON, không giải thích thêm.`;
                             const innerMatch = itemCustomSvg.match(/<svg[^>]*>([\s\S]*)<\/svg>/i);
                             const innerSvg = innerMatch ? innerMatch[1] : '';
                             const pathMatch = itemCustomSvg.match(/<path[^>]*\bd=["']([^"']+)["']/i);
-                            const pathD = it.vectorMaskResult?.pathData || (pathMatch ? pathMatch[1] : '');
-                            const clipId = `svg-shape-${sIdx}-${i}`;
+                            const pathD = it.vectorMaskResult?.pathData || correspondingTab?.vectorMaskResult?.pathData || vectorMaskResult?.pathData || (pathMatch ? pathMatch[1] : '');
+                            const clipId = `svg-shape-${sIdx}-${i}-${itemGlobalIdx}`;
                             
                             return (
                               <div
@@ -4904,6 +4904,26 @@ Chỉ trả về JSON, không giải thích thêm.`;
                                     }}
                                   >
                                     <defs>
+                                      {previewSrc && (
+                                        <pattern
+                                          id={`pat-${clipId}`}
+                                          patternUnits="userSpaceOnUse"
+                                          x={vbMinX}
+                                          y={vbMinY}
+                                          width={vbW}
+                                          height={vbH}
+                                        >
+                                          <image
+                                            href={previewSrc}
+                                            xlinkHref={previewSrc}
+                                            x={vbMinX}
+                                            y={vbMinY}
+                                            width={vbW}
+                                            height={vbH}
+                                            preserveAspectRatio={getPreserveAspectRatio()}
+                                          />
+                                        </pattern>
+                                      )}
                                       <clipPath id={clipId}>
                                         {pathD ? (
                                           <path d={pathD} fill="#000000" />
@@ -4913,17 +4933,13 @@ Chỉ trả về JSON, không giải thích thêm.`;
                                       </clipPath>
                                     </defs>
 
-                                    {/* Clipped image artwork or tinted background */}
+                                    {/* 1. Direct Pattern Fill for guaranteed shape artwork painting */}
                                     {previewSrc ? (
-                                      <image 
-                                        href={previewSrc} 
-                                        x={vbMinX}
-                                        y={vbMinY}
-                                        width={vbW} 
-                                        height={vbH} 
-                                        preserveAspectRatio={getPreserveAspectRatio()} 
-                                        clipPath={`url(#${clipId})`} 
-                                      />
+                                      pathD ? (
+                                        <path d={pathD} fill={`url(#pat-${clipId})`} />
+                                      ) : (
+                                        <g fill={`url(#pat-${clipId})`} dangerouslySetInnerHTML={{ __html: innerSvg.replace(/fill=["']none["']/gi, `fill="url(#pat-${clipId})"`) }} />
+                                      )
                                     ) : (
                                       pathD ? (
                                         <path d={pathD} fill={`${itemColor}25`} />
@@ -4932,7 +4948,21 @@ Chỉ trả về JSON, không giải thích thêm.`;
                                       )
                                     )}
 
-                                    {/* Die line / cut contour stroke */}
+                                    {/* 2. Secondary image with clipPath overlay */}
+                                    {previewSrc && (
+                                      <image 
+                                        href={previewSrc} 
+                                        xlinkHref={previewSrc}
+                                        x={vbMinX}
+                                        y={vbMinY}
+                                        width={vbW} 
+                                        height={vbH} 
+                                        preserveAspectRatio={getPreserveAspectRatio()} 
+                                        clipPath={`url(#${clipId})`} 
+                                      />
+                                    )}
+
+                                    {/* 3. Shape contour die-line border */}
                                     {pathD ? (
                                       <path d={pathD} fill="none" stroke={itemColor} strokeWidth={Math.max(0.4, Math.min(vbW, vbH) * 0.008)} />
                                     ) : (
