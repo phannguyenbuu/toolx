@@ -3,7 +3,7 @@ import { LayoutGrid, Upload, Download, X, Check, AlertCircle, RotateCcw, Loader2
 import toast from 'react-hot-toast';
 import { calculateLayout, generateCutSVG, LayoutPlan, PlanItem } from '../utils/layoutSolver';
 import { nestSvgOnSheet } from '../utils/svgNesting';
-import { packMultiSize } from '../utils/multiSizePacker';
+import { packMultiSize, shelfPackSequential, hasOverlap } from '../utils/multiSizePacker';
 import { FilePickerModal } from './FilePickerModal';
 import { SourceImageCropColorModal, CropTransform } from './SourceImageCropColorModal';
 import { VectorMaskEditorModal, VectorMaskResult, VectorKnot } from './VectorMaskEditorModal';
@@ -1501,7 +1501,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
         const [movedItem] = items.splice(fromIdx, 1);
         items.splice(toIdx, 0, movedItem);
 
-        // Repack sequentially with multiSizePacker to ensure 100% compact layout across sheets
+        // Printable area dimensions and offsets
         let pw = config.pageW, ph = config.pageH;
         let ox = 0, oy = 0;
         if (config.usePrintArea) {
@@ -1513,23 +1513,30 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
           ox = config.marginLeft; oy = config.marginTop;
         }
 
-        const packItems = items.map((it, idx) => ({
-          id: idx,
-          w: it.w,
-          h: it.h,
-          tabId: it.tabId,
-          tabName: it.tabName,
-          shape: it.shape,
-          cornerRadius: it.cornerRadius,
-          sourceImage: it.sourceImage,
-          vectorMaskResult: it.vectorMaskResult,
-          customSvgData: it.customSvgData,
-          color: it.color,
-        }));
+        // Map items to base unrotated dimensions using shapeTabs or item dims
+        const packItems = items.map((it, idx) => {
+          const tab = isMultiShape ? shapeTabs.find(t => t.id === it.tabId || t.name === it.tabName) : null;
+          const origW = tab ? tab.itemW : (it.rot ? it.h : it.w);
+          const origH = tab ? (tab.shape === 'circle' ? tab.itemW : tab.itemH) : (it.rot ? it.w : it.h);
+          return {
+            id: idx,
+            w: origW || it.w || config.itemW,
+            h: origH || it.h || config.itemH,
+            tabId: it.tabId,
+            tabName: it.tabName,
+            shape: it.shape || tab?.shape,
+            cornerRadius: it.cornerRadius ?? tab?.cornerRadius,
+            sourceImage: it.sourceImage || tab?.sourceImage,
+            vectorMaskResult: it.vectorMaskResult || tab?.vectorMaskResult,
+            customSvgData: it.customSvgData || tab?.customSvgData,
+            color: it.color || tab?.color,
+          };
+        });
 
+        // Repack sequentially with multiSizePacker to guarantee zero overlaps across sheets
         const packed = packMultiSize(packItems, pw, ph, config.padding, true);
         const matchPlan = packed.find(p => p.name === pl.name) || packed[0];
-        if (matchPlan && matchPlan.items.length === items.length) {
+        if (matchPlan && matchPlan.items.length === items.length && !hasOverlap(matchPlan.items)) {
           return {
             ...pl,
             items: matchPlan.items.map(it => ({
@@ -1543,32 +1550,31 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
           };
         }
 
-        // Fallback: Preserve slot coordinates in sequence and shift items through positions
-        const slotCoords = pl.items.map(it => ({ x: it.x, y: it.y, rot: it.rot, sheetIndex: it.sheetIndex ?? 0 }));
-        const updatedItems = items.map((it, idx) => ({
-          ...it,
-          x: slotCoords[idx]?.x ?? it.x,
-          y: slotCoords[idx]?.y ?? it.y,
-          rot: slotCoords[idx]?.rot ?? it.rot,
-          sheetIndex: slotCoords[idx]?.sheetIndex ?? it.sheetIndex ?? 0,
-        }));
-
+        // Guaranteed non-overlapping sequential shelf pack fallback
+        const sequentialPack = shelfPackSequential(packItems, pw, ph, config.padding, true, true);
         return {
           ...pl,
-          items: updatedItems
+          items: sequentialPack.items.map(it => ({
+            ...it,
+            x: it.x + ox,
+            y: it.y + oy,
+            rot: it.rot,
+            sheetIndex: it.sheetIndex ?? 0,
+          })),
+          totalSheets: sequentialPack.totalSheets
         };
       });
     });
     toast.success('Đã chuyển vị trí và tự động dồn trang', { id: 'reorder-slot', duration: 1500 });
-  }, [currentPlan, currentPlanIndex, config]);
+  }, [currentPlan, currentPlanIndex, config, isMultiShape, shapeTabs]);
 
   const handleSwapSlots = handleReorderSlots;
 
   const handleMoveItemToSheet = useCallback((
     fromIdx: number,
     targetSheetIdx: number,
-    _dropMmX?: number,
-    _dropMmY?: number
+    dropMmX?: number,
+    dropMmY?: number
   ) => {
     if (!currentPlan) return;
     setPlans(prevPlans => {
@@ -1578,23 +1584,47 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
         if (fromIdx < 0 || fromIdx >= items.length) return pl;
 
         const currentSheetOfItem = items[fromIdx].sheetIndex ?? 0;
-        if (currentSheetOfItem === targetSheetIdx) return pl;
+        
+        // Find items currently on target sheet
+        const targetItems = items
+          .map((it, idx) => ({ it, idx }))
+          .filter(({ it, idx }) => idx !== fromIdx && (it.sheetIndex ?? 0) === targetSheetIdx);
 
         let targetIdx = 0;
-        if (targetSheetIdx < currentSheetOfItem) {
-          // Moving up to an earlier sheet: insert at the start of that sheet
-          const firstOnTarget = items.findIndex(it => (it.sheetIndex ?? 0) === targetSheetIdx);
-          targetIdx = firstOnTarget >= 0 ? firstOnTarget : 0;
+        if (targetItems.length === 0) {
+          if (targetSheetIdx < currentSheetOfItem) {
+            targetIdx = 0;
+          } else {
+            targetIdx = items.length - 1;
+          }
+        } else if (dropMmX !== undefined && dropMmY !== undefined) {
+          // Find closest item on target sheet by distance to drop point
+          let closestIdx = targetItems[0].idx;
+          let minDist = Infinity;
+          for (const { it, idx } of targetItems) {
+            const itemW = it.w || config.itemW;
+            const itemH = it.h || config.itemH;
+            const cx = it.x + itemW / 2;
+            const cy = it.y + itemH / 2;
+            const dist = Math.hypot(cx - dropMmX, cy - dropMmY);
+            if (dist < minDist) {
+              minDist = dist;
+              closestIdx = idx;
+            }
+          }
+          targetIdx = closestIdx;
+        } else if (targetSheetIdx < currentSheetOfItem) {
+          // Moving up: insert at the start of that sheet
+          targetIdx = targetItems[0].idx;
         } else {
-          // Moving down to a later sheet: insert at the end of that sheet
-          const lastOnTarget = items.map(it => it.sheetIndex ?? 0).lastIndexOf(targetSheetIdx);
-          targetIdx = lastOnTarget >= 0 ? lastOnTarget : items.length - 1;
+          // Moving down: insert at the end of that sheet
+          targetIdx = targetItems[targetItems.length - 1].idx;
         }
 
         const [movedItem] = items.splice(fromIdx, 1);
         items.splice(targetIdx, 0, movedItem);
 
-        // Repack sequentially with multiSizePacker
+        // Calculate printable area
         let pw = config.pageW, ph = config.pageH;
         let ox = 0, oy = 0;
         if (config.usePrintArea) {
@@ -1606,23 +1636,28 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
           ox = config.marginLeft; oy = config.marginTop;
         }
 
-        const packItems = items.map((it, idx) => ({
-          id: idx,
-          w: it.w,
-          h: it.h,
-          tabId: it.tabId,
-          tabName: it.tabName,
-          shape: it.shape,
-          cornerRadius: it.cornerRadius,
-          sourceImage: it.sourceImage,
-          vectorMaskResult: it.vectorMaskResult,
-          customSvgData: it.customSvgData,
-          color: it.color,
-        }));
+        const packItems = items.map((it, idx) => {
+          const tab = isMultiShape ? shapeTabs.find(t => t.id === it.tabId || t.name === it.tabName) : null;
+          const origW = tab ? tab.itemW : (it.rot ? it.h : it.w);
+          const origH = tab ? (tab.shape === 'circle' ? tab.itemW : tab.itemH) : (it.rot ? it.w : it.h);
+          return {
+            id: idx,
+            w: origW || it.w || config.itemW,
+            h: origH || it.h || config.itemH,
+            tabId: it.tabId,
+            tabName: it.tabName,
+            shape: it.shape || tab?.shape,
+            cornerRadius: it.cornerRadius ?? tab?.cornerRadius,
+            sourceImage: it.sourceImage || tab?.sourceImage,
+            vectorMaskResult: it.vectorMaskResult || tab?.vectorMaskResult,
+            customSvgData: it.customSvgData || tab?.customSvgData,
+            color: it.color || tab?.color,
+          };
+        });
 
         const packed = packMultiSize(packItems, pw, ph, config.padding, true);
         const matchPlan = packed.find(p => p.name === pl.name) || packed[0];
-        if (matchPlan && matchPlan.items.length === items.length) {
+        if (matchPlan && matchPlan.items.length === items.length && !hasOverlap(matchPlan.items)) {
           return {
             ...pl,
             items: matchPlan.items.map(it => ({
@@ -1636,24 +1671,23 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
           };
         }
 
-        const slotCoords = pl.items.map(it => ({ x: it.x, y: it.y, rot: it.rot, sheetIndex: it.sheetIndex ?? 0 }));
-        const updatedItems = items.map((it, idx) => ({
-          ...it,
-          x: slotCoords[idx]?.x ?? it.x,
-          y: slotCoords[idx]?.y ?? it.y,
-          rot: slotCoords[idx]?.rot ?? it.rot,
-          sheetIndex: slotCoords[idx]?.sheetIndex ?? it.sheetIndex ?? 0,
-        }));
-
+        const sequentialPack = shelfPackSequential(packItems, pw, ph, config.padding, true, true);
         return {
           ...pl,
-          items: updatedItems
+          items: sequentialPack.items.map(it => ({
+            ...it,
+            x: it.x + ox,
+            y: it.y + oy,
+            rot: it.rot,
+            sheetIndex: it.sheetIndex ?? 0,
+          })),
+          totalSheets: sequentialPack.totalSheets
         };
       });
     });
     setCurrentSheetIndex(targetSheetIdx);
     toast.success(`Đã chuyển đối tượng sang Tờ ${targetSheetIdx + 1} và dồn trang`, { id: 'move-sheet', duration: 1500 });
-  }, [currentPlan, currentPlanIndex, config]);
+  }, [currentPlan, currentPlanIndex, config, isMultiShape, shapeTabs]);
 
   const handleReorderDataPages = useCallback((
     fromSheetIdx: number,
@@ -1703,6 +1737,13 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
   useEffect(() => {
     setCurrentSheetIndex(0);
   }, [allPages.length, dataMode, standardQty, xUpQty, currentPlanIndex, config.twoSideMode, config.useTotalLimit, config.totalOrder]);
+
+  // Clamp currentSheetIndex when totalSheets decreases
+  useEffect(() => {
+    if (currentSheetIndex >= totalSheets) {
+      setCurrentSheetIndex(Math.max(0, totalSheets - 1));
+    }
+  }, [totalSheets, currentSheetIndex]);
 
   // Fetch server-rendered preview (debounced)
   useEffect(() => {

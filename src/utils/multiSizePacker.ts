@@ -198,7 +198,7 @@ function shelfPackLayerByLayer(
  * Sequential Shelf packing preserving exact Layer (A -> B -> C) order
  * with Anti-Inflation protection (never let a single rotated item inflate the row height)
  */
-function shelfPackSequential(
+export function shelfPackSequential(
   items: PackItem[],
   sheetW: number,
   sheetH: number,
@@ -612,7 +612,10 @@ class MaxRectsSheetPacker {
 
     for (const free of this.freeRectangles) {
       // 1. Check normal orientation
-      if (free.w >= itemW && free.h >= itemH && free.x + itemW <= this.sheetW && free.y + itemH <= this.sheetH) {
+      const neededWNormal = itemW + (free.x + itemW < this.sheetW ? this.padding : 0);
+      const neededHNormal = itemH + (free.y + itemH < this.sheetH ? this.padding : 0);
+
+      if (free.w >= neededWNormal && free.h >= neededHNormal && free.x + itemW <= this.sheetW && free.y + itemH <= this.sheetH) {
         let score1 = 0;
         let score2 = 0;
 
@@ -777,10 +780,27 @@ class MaxRectsSheetPacker {
 }
 
 /**
+ * Check if any two placed items on the same sheet overlap
+ */
+export function hasOverlap(items: PackedItem[]): boolean {
+  for (let i = 0; i < items.length; i++) {
+    for (let j = i + 1; j < items.length; j++) {
+      const a = items[i];
+      const b = items[j];
+      if ((a.sheetIndex ?? 0) !== (b.sheetIndex ?? 0)) continue;
+      const overlapX = a.x < b.x + b.w && a.x + a.w > b.x;
+      const overlapY = a.y < b.y + b.h && a.y + a.h > b.y;
+      if (overlapX && overlapY) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Sequential 2D MaxRects bin packing preserving Layer A -> B -> C order
  * and intelligently inserting items into any open pocket or free rectangular space
  */
-function maxRectsPackSequential(
+export function maxRectsPackSequential(
   items: PackItem[],
   sheetW: number,
   sheetH: number,
@@ -830,8 +850,15 @@ function maxRectsPackSequential(
   const allPlaced: PackedItem[] = [];
   sheets.forEach(s => allPlaced.push(...s.placedItems));
 
+  // Fallback to sequential shelf pack if any overlap is detected
+  if (hasOverlap(allPlaced)) {
+    return shelfPackSequential(items, sheetW, sheetH, padding, allowRotation, allowMultiSheet);
+  }
+
   return { items: allPlaced, totalSheets: sheets.length, skipped };
 }
+
+export { shelfPackLayerByLayer };
 
 /**
  * Main entry: pack multiple items of different sizes onto sheets
@@ -881,26 +908,37 @@ export function packMultiSize(
     });
   }
 
-  // Plan 4: Hàng chuẩn theo từng Layer (A→B→C)
-  const p4 = shelfPackLayerByLayer(items, sheetW, sheetH, padding, true, allowMultiSheet);
+  // Plan 4: Hàng chuẩn theo thứ tự (A→B→C)
+  const p4 = shelfPackSequential(items, sheetW, sheetH, padding, true, allowMultiSheet);
   if (p4.items.length > 0) {
     results.push({
-      name: 'Hàng chuẩn theo Layer (A→B→C)',
+      name: 'Hàng chuẩn theo thứ tự (A→B→C)',
       items: p4.items,
       totalSheets: p4.totalSheets,
       skipped: p4.skipped
     });
   }
 
-  // Plan 5: Tự do tối đa tem (Xếp tự do 2D)
-  const sortedFree = [...items].sort((a, b) => Math.max(b.w, b.h) - Math.max(a.w, a.h));
-  const p5 = maxRectsPackSequential(sortedFree, sheetW, sheetH, padding, true, allowMultiSheet, 'best-short-side');
+  // Plan 5: Hàng chuẩn theo Layer (A→B→C)
+  const p5 = shelfPackLayerByLayer(items, sheetW, sheetH, padding, true, allowMultiSheet);
   if (p5.items.length > 0) {
     results.push({
-      name: 'Tự do tối đa tem (Xếp tự do 2D)',
+      name: 'Hàng chuẩn theo Layer (A→B→C)',
       items: p5.items,
       totalSheets: p5.totalSheets,
       skipped: p5.skipped
+    });
+  }
+
+  // Plan 6: Tự do tối đa tem (Xếp tự do 2D)
+  const sortedFree = [...items].sort((a, b) => Math.max(b.w, b.h) - Math.max(a.w, a.h));
+  const p6 = maxRectsPackSequential(sortedFree, sheetW, sheetH, padding, true, allowMultiSheet, 'best-short-side');
+  if (p6.items.length > 0) {
+    results.push({
+      name: 'Tự do tối đa tem (Xếp tự do 2D)',
+      items: p6.items,
+      totalSheets: p6.totalSheets,
+      skipped: p6.skipped
     });
   }
 
