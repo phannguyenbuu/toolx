@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { LayoutGrid, Upload, Download, X, Check, AlertCircle, RotateCcw, Loader2, Scissors, Grid3X3, Circle, Square, Printer, Package, RectangleHorizontal, RectangleVertical, FileImage, FileText, Info, RefreshCw, Triangle, Hexagon, RotateCw, Eye, EyeOff, Trash2, Layers, Settings2, FolderOpen, ZoomIn, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Sparkles, Save, Expand, ChevronDown, ChevronUp, Clock, History, Search, ImagePlus, PenTool, Plus, Edit3, Play, Zap, CheckCircle2, Cpu, Server, AlertTriangle, FileJson, Copy, ExternalLink, Share2, Send, Database } from 'lucide-react';
+import { LayoutGrid, Upload, Download, X, Check, AlertCircle, RotateCcw, Loader2, Scissors, Grid3X3, Circle, Square, Printer, Package, RectangleHorizontal, RectangleVertical, FileImage, FileText, Info, RefreshCw, Triangle, Hexagon, RotateCw, Eye, EyeOff, Trash2, Layers, Settings2, FolderOpen, ZoomIn, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Sparkles, Save, Expand, ChevronDown, ChevronUp, Clock, History, Search, ImagePlus, PenTool, Plus, Edit3, Play, Zap, CheckCircle2, Cpu, Server, AlertTriangle, FileJson, Copy, ExternalLink, Share2, Send, Database, Move } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { calculateLayout, generateCutSVG, LayoutPlan, PlanItem } from '../utils/layoutSolver';
 import { nestSvgOnSheet } from '../utils/svgNesting';
@@ -1365,103 +1365,6 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
     isMultiShape: boolean;
   } | null>(null);
 
-  const handleSwapSlots = useCallback((fromIdx: number, toIdx: number) => {
-    if (fromIdx === toIdx || !currentPlan) return;
-    setPlans(prevPlans => {
-      return prevPlans.map((pl, pIdx) => {
-        if (pIdx !== currentPlanIndex) return pl;
-        const newItems = [...pl.items];
-        if (fromIdx < 0 || fromIdx >= newItems.length || toIdx < 0 || toIdx >= newItems.length) {
-          return pl;
-        }
-        const itemA = { ...newItems[fromIdx] };
-        const itemB = { ...newItems[toIdx] };
-
-        // Swap spatial placement (x, y, sheetIndex) between item A and item B
-        const tempX = itemA.x;
-        const tempY = itemA.y;
-        const tempSheet = itemA.sheetIndex ?? 0;
-
-        itemA.x = itemB.x;
-        itemA.y = itemB.y;
-        itemA.sheetIndex = itemB.sheetIndex ?? 0;
-
-        itemB.x = tempX;
-        itemB.y = tempY;
-        itemB.sheetIndex = tempSheet;
-
-        newItems[fromIdx] = itemA;
-        newItems[toIdx] = itemB;
-        return {
-          ...pl,
-          items: newItems
-        };
-      });
-    });
-    toast.success('Đã hoán đổi vị trí đối tượng', { id: 'swap-slot', duration: 1500 });
-  }, [currentPlan, currentPlanIndex]);
-
-  const handleMoveItemToSheet = useCallback((
-    fromIdx: number,
-    targetSheetIdx: number,
-    dropMmX?: number,
-    dropMmY?: number
-  ) => {
-    if (!currentPlan) return;
-    setPlans(prevPlans => {
-      return prevPlans.map((pl, pIdx) => {
-        if (pIdx !== currentPlanIndex) return pl;
-        const newItems = [...pl.items];
-        if (fromIdx < 0 || fromIdx >= newItems.length) return pl;
-
-        const item = { ...newItems[fromIdx] };
-        const itW = item.w !== undefined ? item.w : (item.rot ? config.itemH : config.itemW);
-        const itH = item.h !== undefined ? item.h : (item.rot ? config.itemW : config.itemH);
-
-        item.sheetIndex = targetSheetIdx;
-
-        if (dropMmX !== undefined && dropMmY !== undefined) {
-          const minX = config.marginLeft || 0;
-          const maxX = Math.max(minX, config.pageW - itW - (config.marginRight || 0));
-          const minY = config.marginTop || 0;
-          const maxY = Math.max(minY, config.pageH - itH - (config.marginBot || 0));
-
-          item.x = Math.max(minX, Math.min(maxX, dropMmX - itW / 2));
-          item.y = Math.max(minY, Math.min(maxY, dropMmY - itH / 2));
-        }
-
-        newItems[fromIdx] = item;
-        return {
-          ...pl,
-          items: newItems
-        };
-      });
-    });
-    setCurrentSheetIndex(targetSheetIdx);
-    toast.success(`Đã chuyển đối tượng sang Tờ ${targetSheetIdx + 1}`, { id: 'move-sheet', duration: 1500 });
-  }, [currentPlan, currentPlanIndex, config]);
-
-  const handleSwapDataPages = useCallback((
-    fromSheetIdx: number,
-    fromSlotIdx: number,
-    toSheetIdx: number,
-    toSlotIdx: number
-  ) => {
-    if (allPages.length <= 1) return;
-    const p1 = getPageForSlot(fromSlotIdx, fromSheetIdx);
-    const p2 = getPageForSlot(toSlotIdx, toSheetIdx);
-    if (p1 >= 0 && p2 >= 0 && p1 !== p2 && p1 < allPages.length && p2 < allPages.length) {
-      setAllPages(prev => {
-        const copy = [...prev];
-        const temp = copy[p1];
-        copy[p1] = copy[p2];
-        copy[p2] = temp;
-        return copy;
-      });
-      toast.success(`Đã đổi trang giữa Tờ ${fromSheetIdx + 1} và Tờ ${toSheetIdx + 1}`, { id: 'swap-page', duration: 1500 });
-    }
-  }, [allPages.length, getPageForSlot]);
-
   // Áp dụng kiểu trở lên plan hiện tại
   const styledPlan = useMemo(() => {
     if (!currentPlan) return null;
@@ -1575,6 +1478,103 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
     const globalIndex = sheetIdx * itemsPerSheet + slotIndex;
     return globalIndex % allPages.length;
   }, [currentPlan, allPages.length, effectiveDataMode, standardQty, xUpQty, currentSheetIndex, config.is2Sided, config.twoSideMode, previewSide, config.useTotalLimit, config.totalOrder, isMultiShape]);
+
+  const handleSwapSlots = useCallback((fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx || !currentPlan) return;
+    setPlans(prevPlans => {
+      return prevPlans.map((pl, pIdx) => {
+        if (pIdx !== currentPlanIndex) return pl;
+        const newItems = [...pl.items];
+        if (fromIdx < 0 || fromIdx >= newItems.length || toIdx < 0 || toIdx >= newItems.length) {
+          return pl;
+        }
+        const itemA = { ...newItems[fromIdx] };
+        const itemB = { ...newItems[toIdx] };
+
+        // Swap spatial placement (x, y, sheetIndex) between item A and item B
+        const tempX = itemA.x;
+        const tempY = itemA.y;
+        const tempSheet = itemA.sheetIndex ?? 0;
+
+        itemA.x = itemB.x;
+        itemA.y = itemB.y;
+        itemA.sheetIndex = itemB.sheetIndex ?? 0;
+
+        itemB.x = tempX;
+        itemB.y = tempY;
+        itemB.sheetIndex = tempSheet;
+
+        newItems[fromIdx] = itemA;
+        newItems[toIdx] = itemB;
+        return {
+          ...pl,
+          items: newItems
+        };
+      });
+    });
+    toast.success('Đã hoán đổi vị trí đối tượng', { id: 'swap-slot', duration: 1500 });
+  }, [currentPlan, currentPlanIndex]);
+
+  const handleMoveItemToSheet = useCallback((
+    fromIdx: number,
+    targetSheetIdx: number,
+    dropMmX?: number,
+    dropMmY?: number
+  ) => {
+    if (!currentPlan) return;
+    setPlans(prevPlans => {
+      return prevPlans.map((pl, pIdx) => {
+        if (pIdx !== currentPlanIndex) return pl;
+        const newItems = [...pl.items];
+        if (fromIdx < 0 || fromIdx >= newItems.length) return pl;
+
+        const item = { ...newItems[fromIdx] };
+        const itW = item.w !== undefined ? item.w : (item.rot ? config.itemH : config.itemW);
+        const itH = item.h !== undefined ? item.h : (item.rot ? config.itemW : config.itemH);
+
+        item.sheetIndex = targetSheetIdx;
+
+        if (dropMmX !== undefined && dropMmY !== undefined) {
+          const minX = config.marginLeft || 0;
+          const maxX = Math.max(minX, config.pageW - itW - (config.marginRight || 0));
+          const minY = config.marginTop || 0;
+          const maxY = Math.max(minY, config.pageH - itH - (config.marginBot || 0));
+
+          item.x = Math.max(minX, Math.min(maxX, dropMmX - itW / 2));
+          item.y = Math.max(minY, Math.min(maxY, dropMmY - itH / 2));
+        }
+
+        newItems[fromIdx] = item;
+        return {
+          ...pl,
+          items: newItems
+        };
+      });
+    });
+    setCurrentSheetIndex(targetSheetIdx);
+    toast.success(`Đã chuyển đối tượng sang Tờ ${targetSheetIdx + 1}`, { id: 'move-sheet', duration: 1500 });
+  }, [currentPlan, currentPlanIndex, config]);
+
+  const handleSwapDataPages = useCallback((
+    fromSheetIdx: number,
+    fromSlotIdx: number,
+    toSheetIdx: number,
+    toSlotIdx: number
+  ) => {
+    if (allPages.length <= 1) return;
+    const p1 = getPageForSlot(fromSlotIdx, fromSheetIdx);
+    const p2 = getPageForSlot(toSlotIdx, toSheetIdx);
+    if (p1 >= 0 && p2 >= 0 && p1 !== p2 && p1 < allPages.length && p2 < allPages.length) {
+      setAllPages(prev => {
+        const copy = [...prev];
+        const temp = copy[p1];
+        copy[p1] = copy[p2];
+        copy[p2] = temp;
+        return copy;
+      });
+      toast.success(`Đã đổi trang giữa Tờ ${fromSheetIdx + 1} và Tờ ${toSheetIdx + 1}`, { id: 'swap-page', duration: 1500 });
+    }
+  }, [allPages.length, getPageForSlot]);
 
   // Reset sheet index when data changes
   useEffect(() => {
