@@ -648,7 +648,9 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
       }));
       setVectorMaskResult(targetTab.vectorMaskResult);
       setCustomSvgData(targetTab.customSvgData);
-      setAllPages(targetTab.sourceImage ? [targetTab.sourceImage] : []);
+      if (targetTab.sourceImage) {
+        setAllPages([targetTab.sourceImage]);
+      }
     }
   };
 
@@ -657,6 +659,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
     const letter = String.fromCharCode(65 + (nextIndex % 26)) + (nextIndex >= 26 ? Math.floor(nextIndex / 26) : '');
     const newId = `tab-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
     const newColor = TAB_COLORS[nextIndex % TAB_COLORS.length];
+    const defaultSrcImage = activeTab?.sourceImage || (allPages.length > 0 ? allPages[0] : null);
     const newTab: ShapeTabItem = {
       id: newId,
       name: letter,
@@ -667,7 +670,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
       quantity: 10,
       useTotalLimit: true,
       cornerRadius: 0,
-      sourceImage: null,
+      sourceImage: defaultSrcImage,
       vectorMaskResult: null,
       customSvgData: '',
       color: newColor
@@ -690,7 +693,6 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
     }));
     setVectorMaskResult(null);
     setCustomSvgData('');
-    setAllPages([]);
   };
 
   const handleDeleteTab = (tabId: string, e?: React.MouseEvent) => {
@@ -713,7 +715,9 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
       }));
       setVectorMaskResult(nextActive.vectorMaskResult);
       setCustomSvgData(nextActive.customSvgData);
-      setAllPages(nextActive.sourceImage ? [nextActive.sourceImage] : []);
+      if (nextActive.sourceImage) {
+        setAllPages([nextActive.sourceImage]);
+      }
     }
   };
 
@@ -779,6 +783,10 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
         h: config.shape === 'circle' ? config.itemW : config.itemH,
         rotation: 0
       };
+      updateActiveTabProp({
+        sourceImage: newPageItem,
+      });
+      setAllPages(prev => (prev.length === 0 ? [newPageItem] : [newPageItem, ...prev]));
       setEditingSourcePage(newPageItem);
       setIsCropColorModalOpen(true);
     };
@@ -2139,7 +2147,16 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
           fileId: r.file_id,
           rotation: 0
         }));
-        return [...prev, ...newPages];
+        const combined = [...prev, ...newPages];
+        if (combined.length > 0) {
+          setShapeTabs(tabs => tabs.map(t => {
+            if (t.id === activeTabId && !t.sourceImage) {
+              return { ...t, sourceImage: combined[0] };
+            }
+            return t;
+          }));
+        }
+        return combined;
       });
     } catch (uploadErr) {
       console.error('Error uploading files:', uploadErr);
@@ -6902,7 +6919,16 @@ Chỉ trả về JSON, không giải thích thêm.`;
       <VectorMaskEditorModal
         isOpen={isVectorMaskEditorOpen}
         onClose={() => setIsVectorMaskEditorOpen(false)}
-        imageUrl={editingSourcePage?.originalThumb || editingSourcePage?.thumb || activeTab?.sourceImage?.originalThumb || activeTab?.sourceImage?.thumb || (allPages.length > 0 ? allPages[0].originalThumb || allPages[0].thumb : null)}
+        imageUrl={
+          editingSourcePage?.originalThumb || 
+          editingSourcePage?.thumb || 
+          activeTab?.sourceImage?.originalThumb || 
+          activeTab?.sourceImage?.thumb || 
+          (allPages.length > 0 ? (allPages[0].originalThumb || allPages[0].thumb) : null) ||
+          shapeTabs.find(t => t.sourceImage)?.sourceImage?.originalThumb ||
+          shapeTabs.find(t => t.sourceImage)?.sourceImage?.thumb ||
+          null
+        }
         imageName={editingSourcePage?.name || activeTab?.sourceImage?.name || (allPages.length > 0 ? allPages[0].name : 'Ảnh nguồn')}
         itemW={activeTab?.itemW || config.itemW}
         itemH={activeTab?.shape === 'circle' ? activeTab?.itemW : (activeTab?.itemH || (config.shape === 'circle' ? config.itemW : config.itemH))}

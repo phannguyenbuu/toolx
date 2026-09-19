@@ -69,6 +69,7 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
   const [activeTool, setActiveTool] = useState<'select' | 'pen' | 'add_knot' | 'pan'>('select');
 
   // Preview & Visual options
+  const [currentImageUrl, setCurrentImageUrl] = useState<string | null>(imageUrl || null);
   const [bgImageOpacity, setBgImageOpacity] = useState<number>(0.85);
   const [showBgImage, setShowBgImage] = useState<boolean>(true);
   const [showGrid, setShowGrid] = useState<boolean>(true);
@@ -77,6 +78,13 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
   const [dieLineWidth, setDieLineWidth] = useState<number>(1.5);
   const [previewMode, setPreviewMode] = useState<'die_line' | 'mask_overlay' | 'cut_preview'>('die_line');
   const [activeTab, setActiveTab] = useState<'tools' | 'presets' | 'settings'>('tools');
+
+  // Sync image URL when prop changes
+  useEffect(() => {
+    if (imageUrl) {
+      setCurrentImageUrl(imageUrl);
+    }
+  }, [imageUrl]);
 
   // Viewport Transform (Zoom & Pan)
   const [scale, setScale] = useState<number>(4); // pixels per mm (e.g. 4px = 1mm)
@@ -92,6 +100,22 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
   // DOM Refs
   const viewportRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imgFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const dataUrl = ev.target?.result as string;
+      if (dataUrl) {
+        setCurrentImageUrl(dataUrl);
+        setShowBgImage(true);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
   // Push history helper
   const pushHistory = useCallback((newKnots: VectorKnot[]) => {
@@ -669,12 +693,21 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-3 select-none">
-      {/* Hidden File Input */}
+      {/* Hidden File Input for SVG Import */}
       <input
         type="file"
         ref={fileInputRef}
         accept=".svg"
         onChange={handleSvgImport}
+        className="hidden"
+      />
+
+      {/* Hidden File Input for Reference Image */}
+      <input
+        type="file"
+        ref={imgFileInputRef}
+        accept="image/*"
+        onChange={handleImageUpload}
         className="hidden"
       />
 
@@ -694,8 +727,24 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                   Khuôn Bế & Điểm Neo Vector
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500">
-                Kích thước tem: <span className="text-violet-700 font-bold">{maskW} × {maskH} mm</span> • Tổng số điểm neo (Knots): <span className="text-emerald-700 font-bold">{knots.length}</span>
+              <p className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
+                <span>Kích thước: <span className="text-violet-700 font-bold">{maskW} × {maskH} mm</span></span>
+                <span className="text-slate-300">•</span>
+                <span>Điểm neo: <span className="text-emerald-700 font-bold">{knots.length}</span></span>
+                <span className="text-slate-300">•</span>
+                {currentImageUrl ? (
+                  <span className="text-emerald-700 font-semibold inline-flex items-center gap-1 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                    <Check size={11} /> {imageName}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => imgFileInputRef.current?.click()}
+                    className="text-violet-600 hover:text-violet-800 font-semibold underline decoration-violet-300 cursor-pointer text-[10px]"
+                  >
+                    + Tải ảnh nguồn
+                  </button>
+                )}
               </p>
             </div>
           </div>
@@ -798,15 +847,16 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                   strokeDasharray={`${3 / scale}, ${3 / scale}`}
                 />
 
-                {/* Background Image Reference (if present) */}
-                {imageUrl && showBgImage && (
+                {/* Background Image Reference (Normal/Die Line & Mask Overlay modes) */}
+                {currentImageUrl && showBgImage && previewMode !== 'cut_preview' && (
                   <image
-                    href={imageUrl}
+                    href={currentImageUrl}
+                    xlinkHref={currentImageUrl}
                     x={0}
                     y={0}
                     width={maskW}
                     height={maskH}
-                    preserveAspectRatio="none"
+                    preserveAspectRatio="xMidYMid slice"
                     opacity={bgImageOpacity}
                   />
                 )}
@@ -818,6 +868,27 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                     fill="rgba(15, 23, 42, 0.6)"
                     fillRule="evenodd"
                   />
+                )}
+
+                {/* Cut Preview Mode - Clip Image strictly to Vector Mask Shape */}
+                {previewMode === 'cut_preview' && currentImageUrl && (
+                  <g>
+                    <defs>
+                      <clipPath id="editor-cut-preview-clip">
+                        <path d={pathData} />
+                      </clipPath>
+                    </defs>
+                    <image
+                      href={currentImageUrl}
+                      xlinkHref={currentImageUrl}
+                      x={0}
+                      y={0}
+                      width={maskW}
+                      height={maskH}
+                      preserveAspectRatio="xMidYMid slice"
+                      clipPath="url(#editor-cut-preview-clip)"
+                    />
+                  </g>
                 )}
 
                 {/* The Vector Shape Fill / Stroke */}
@@ -1231,14 +1302,24 @@ export const VectorMaskEditorModal: React.FC<VectorMaskEditorModalProps> = ({
                     <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                       Ảnh nguồn tham chiếu
                     </label>
-                    <button
-                      type="button"
-                      onClick={() => setShowBgImage(!showBgImage)}
-                      className="text-xs text-violet-600 hover:text-violet-700 flex items-center gap-1 font-medium cursor-pointer"
-                    >
-                      {showBgImage ? <Eye size={13} /> : <EyeOff size={13} />}
-                      <span>{showBgImage ? 'Đang bật' : 'Đã ẩn'}</span>
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => imgFileInputRef.current?.click()}
+                        className="text-[10px] px-2 py-0.5 rounded-md bg-violet-100 hover:bg-violet-200 text-violet-700 font-semibold flex items-center gap-1 cursor-pointer transition"
+                      >
+                        <Upload size={10} />
+                        <span>{currentImageUrl ? 'Đổi ảnh' : 'Tải ảnh'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowBgImage(!showBgImage)}
+                        className="text-xs text-violet-600 hover:text-violet-700 flex items-center gap-1 font-medium cursor-pointer p-1 rounded hover:bg-violet-50"
+                        title={showBgImage ? 'Ẩn ảnh nền' : 'Hiện ảnh nền'}
+                      >
+                        {showBgImage ? <Eye size={14} /> : <EyeOff size={14} />}
+                      </button>
+                    </div>
                   </div>
 
                   {showBgImage && (
