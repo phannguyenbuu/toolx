@@ -47,6 +47,7 @@ export interface SolverConfig {
   printH: number;
   pageW: number;
   pageH: number;
+  autoRotate?: boolean;
 }
 
 class LayoutSolver {
@@ -58,6 +59,7 @@ class LayoutSolver {
   private pageW: number;
   private pageH: number;
   private shape: string;
+  private autoRotate: boolean;
 
   constructor(config: SolverConfig) {
     this.iW = config.itemW + config.padding;
@@ -68,6 +70,7 @@ class LayoutSolver {
     this.pageW = config.pageW;
     this.pageH = config.pageH;
     this.shape = config.shape;
+    this.autoRotate = config.autoRotate !== false;
   }
 
   /**
@@ -289,7 +292,7 @@ class LayoutSolver {
    * Calculate all layout plans
    */
   solve(): LayoutPlan[] {
-    const plans: LayoutPlan[] = [];
+    let plans: LayoutPlan[] = [];
     const isSquare = Math.abs(this.iW - this.iH) < 0.01;
 
     // Plan 1: Straight grid
@@ -465,6 +468,10 @@ class LayoutSolver {
     for (const p of plans) {
       p.qty = p.items.length;
       p.items = this.center(p.items);
+    }
+
+    if (!this.autoRotate) {
+      plans = plans.filter(p => !p.items.some(it => it.rot || it.rot45));
     }
 
     // Sort by quantity (desc), then priority (asc)

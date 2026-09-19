@@ -15,6 +15,7 @@ export interface PackItem {
   vectorMaskResult?: any;
   customSvgData?: string;
   color?: string;
+  canRotate?: boolean;
 }
 
 export interface PackedItem {
@@ -76,7 +77,7 @@ function shelfPackLayerByLayer(
     if (group.items.length === 0) continue;
     const first = group.items[0];
     const isSpecialShape = ['trapezoid', 'triangle', 'hexagon'].includes(first.shape || '');
-    const canRotate = allowRotation && !isSpecialShape;
+    const canRotate = allowRotation && !isSpecialShape && (first.canRotate !== false);
 
     // Determine optimal orientation for this entire layer
     const w1 = first.w + padding, h1 = first.h + padding;
@@ -215,7 +216,7 @@ export function shelfPackSequential(
 
   for (const item of items) {
     const isSpecialShape = ['trapezoid', 'triangle', 'hexagon'].includes(item.shape || '');
-    const canRotate = allowRotation && !isSpecialShape;
+    const canRotate = allowRotation && !isSpecialShape && (item.canRotate !== false);
 
     const wNormal = item.w + padding;
     const hNormal = item.h + padding;
@@ -469,7 +470,8 @@ function shelfPackRotated(
   sheetW: number,
   sheetH: number,
   padding: number,
-  allowMultiSheet: boolean = true
+  allowMultiSheet: boolean = true,
+  allowRotation: boolean = true
 ): { items: PackedItem[]; totalSheets: number; skipped: number } {
   const sorted = [...items].sort((a, b) => Math.max(b.w, b.h) - Math.max(a.w, a.h));
   const placed: PackedItem[] = [];
@@ -481,7 +483,7 @@ function shelfPackRotated(
 
   for (const item of sorted) {
     const isSpecialShape = ['trapezoid', 'triangle', 'hexagon'].includes(item.shape || '');
-    const allowRot = !isSpecialShape;
+    const allowRot = allowRotation && !isSpecialShape && (item.canRotate !== false);
 
     const w1 = item.w + padding, h1 = item.h + padding;
     const w2 = allowRot ? item.h + padding : w1, h2 = allowRot ? item.w + padding : h1;
@@ -623,12 +625,12 @@ class MaxRectsSheetPacker {
           score1 = free.y + itemH;
           score2 = free.x;
         } else if (heuristic === 'best-short-side') {
-          const leftoverW = Math.abs(free.w - itemW);
-          const leftoverH = Math.abs(free.h - itemH);
+          const leftoverW = Math.abs(free.w - neededWNormal);
+          const leftoverH = Math.abs(free.h - neededHNormal);
           score1 = Math.min(leftoverW, leftoverH);
           score2 = Math.max(leftoverW, leftoverH);
         } else {
-          score1 = free.w * free.h - itemW * itemH;
+          score1 = free.w * free.h - neededWNormal * neededHNormal;
           score2 = free.y;
         }
 
@@ -646,33 +648,38 @@ class MaxRectsSheetPacker {
       }
 
       // 2. Check rotated orientation
-      if (canRotate && free.w >= itemH && free.h >= itemW && free.x + itemH <= this.sheetW && free.y + itemW <= this.sheetH) {
-        let score1 = 0;
-        let score2 = 0;
+      if (canRotate) {
+        const neededWRot = itemH + (free.x + itemH < this.sheetW ? this.padding : 0);
+        const neededHRot = itemW + (free.y + itemH < this.sheetH ? this.padding : 0);
 
-        if (heuristic === 'bottom-left') {
-          score1 = free.y + itemW;
-          score2 = free.x;
-        } else if (heuristic === 'best-short-side') {
-          const leftoverW = Math.abs(free.w - itemH);
-          const leftoverH = Math.abs(free.h - itemW);
-          score1 = Math.min(leftoverW, leftoverH);
-          score2 = Math.max(leftoverW, leftoverH);
-        } else {
-          score1 = free.w * free.h - itemH * itemW;
-          score2 = free.y;
-        }
+        if (free.w >= neededWRot && free.h >= neededHRot && free.x + itemH <= this.sheetW && free.y + itemH <= this.sheetH) {
+          let score1 = 0;
+          let score2 = 0;
 
-        if (score1 < bestScore1 || (score1 === bestScore1 && score2 < bestScore2)) {
-          bestScore1 = score1;
-          bestScore2 = score2;
-          bestNode = {
-            x: free.x,
-            y: free.y,
-            w: itemH,
-            h: itemW,
-            rot: true,
-          };
+          if (heuristic === 'bottom-left') {
+            score1 = free.y + itemW;
+            score2 = free.x;
+          } else if (heuristic === 'best-short-side') {
+            const leftoverW = Math.abs(free.w - neededWRot);
+            const leftoverH = Math.abs(free.h - neededHRot);
+            score1 = Math.min(leftoverW, leftoverH);
+            score2 = Math.max(leftoverW, leftoverH);
+          } else {
+            score1 = free.w * free.h - neededWRot * neededHRot;
+            score2 = free.y;
+          }
+
+          if (score1 < bestScore1 || (score1 === bestScore1 && score2 < bestScore2)) {
+            bestScore1 = score1;
+            bestScore2 = score2;
+            bestNode = {
+              x: free.x,
+              y: free.y,
+              w: itemH,
+              h: itemW,
+              rot: true,
+            };
+          }
         }
       }
     }
@@ -681,8 +688,8 @@ class MaxRectsSheetPacker {
   }
 
   public placeRect(rect: { x: number; y: number; w: number; h: number; rot: boolean }, item: PackItem, sheetIndex: number): void {
-    const totalW = Math.min(rect.w + this.padding, this.sheetW - rect.x);
-    const totalH = Math.min(rect.h + this.padding, this.sheetH - rect.y);
+    const totalW = Math.min(rect.w + (rect.x + rect.w < this.sheetW ? this.padding : 0), this.sheetW - rect.x);
+    const totalH = Math.min(rect.h + (rect.y + rect.h < this.sheetH ? this.padding : 0), this.sheetH - rect.y);
     const placeBox = { x: rect.x, y: rect.y, w: totalW, h: totalH };
 
     const newFree: Rect[] = [];
@@ -704,7 +711,7 @@ class MaxRectsSheetPacker {
         });
       }
       // Bottom slice
-      if (placeBox.y + placeBox.h < free.y + free.h) {
+      if (placeBox.y + placeBox.h < free.y + free.h && placeBox.y + placeBox.h > free.y) {
         newFree.push({
           x: free.x,
           y: placeBox.y + placeBox.h,
@@ -722,7 +729,7 @@ class MaxRectsSheetPacker {
         });
       }
       // Right slice
-      if (placeBox.x + placeBox.w < free.x + free.w) {
+      if (placeBox.x + placeBox.w < free.x + free.w && placeBox.x + placeBox.w > free.x) {
         newFree.push({
           x: placeBox.x + placeBox.w,
           y: free.y,
@@ -814,7 +821,7 @@ export function maxRectsPackSequential(
 
   for (const item of items) {
     const isSpecialShape = ['trapezoid', 'triangle', 'hexagon'].includes(item.shape || '');
-    const canRotate = allowRotation && !isSpecialShape;
+    const canRotate = allowRotation && !isSpecialShape && (item.canRotate !== false);
 
     let placed = false;
 
@@ -869,17 +876,19 @@ export function packMultiSize(
   sheetW: number,
   sheetH: number,
   padding: number,
-  allowMultiSheet: boolean = true
+  allowMultiSheet: boolean = true,
+  allowRotation: boolean = true
 ): PackResult[] {
   if (items.length === 0) return [];
 
   const results: PackResult[] = [];
+  const canRot = allowRotation;
 
-  // Plan 1: Điểm chèn tối ưu 2D (A→B→C + Lấp đầy khoảng trống) (Ưu tiên số 1: Tận dụng mọi khe hở, không lãng phí giấy)
-  const p1 = maxRectsPackSequential(items, sheetW, sheetH, padding, true, allowMultiSheet, 'bottom-left');
+  // Plan 1: Điểm chèn tối ưu 2D (A→B→C + Lấp đầy khoảng trống)
+  const p1 = maxRectsPackSequential(items, sheetW, sheetH, padding, canRot, allowMultiSheet, 'bottom-left');
   if (p1.items.length > 0) {
     results.push({
-      name: 'Điểm chèn tối ưu 2D (A→B→C + Lấp đầy khoảng trống)',
+      name: canRot ? 'Điểm chèn tối ưu 2D (A→B→C + Lấp đầy khoảng trống)' : 'Điểm chèn tối ưu 2D (Giữ nguyên hướng)',
       items: p1.items,
       totalSheets: p1.totalSheets,
       skipped: p1.skipped
@@ -887,10 +896,10 @@ export function packMultiSize(
   }
 
   // Plan 2: Điểm chèn khít cạnh 2D (A→B→C + Xoay tối ưu)
-  const p2 = maxRectsPackSequential(items, sheetW, sheetH, padding, true, allowMultiSheet, 'best-short-side');
+  const p2 = maxRectsPackSequential(items, sheetW, sheetH, padding, canRot, allowMultiSheet, 'best-short-side');
   if (p2.items.length > 0) {
     results.push({
-      name: 'Điểm chèn khít cạnh 2D (A→B→C + Xoay tối ưu)',
+      name: canRot ? 'Điểm chèn khít cạnh 2D (A→B→C + Xoay tối ưu)' : 'Điểm chèn khít cạnh 2D (Giữ nguyên hướng)',
       items: p2.items,
       totalSheets: p2.totalSheets,
       skipped: p2.skipped
@@ -909,10 +918,10 @@ export function packMultiSize(
   }
 
   // Plan 4: Hàng chuẩn theo thứ tự (A→B→C)
-  const p4 = shelfPackSequential(items, sheetW, sheetH, padding, true, allowMultiSheet);
+  const p4 = shelfPackSequential(items, sheetW, sheetH, padding, canRot, allowMultiSheet);
   if (p4.items.length > 0) {
     results.push({
-      name: 'Hàng chuẩn theo thứ tự (A→B→C)',
+      name: canRot ? 'Hàng chuẩn theo thứ tự (A→B→C)' : 'Hàng chuẩn theo thứ tự (Giữ nguyên hướng)',
       items: p4.items,
       totalSheets: p4.totalSheets,
       skipped: p4.skipped
@@ -920,10 +929,10 @@ export function packMultiSize(
   }
 
   // Plan 5: Hàng chuẩn theo Layer (A→B→C)
-  const p5 = shelfPackLayerByLayer(items, sheetW, sheetH, padding, true, allowMultiSheet);
+  const p5 = shelfPackLayerByLayer(items, sheetW, sheetH, padding, canRot, allowMultiSheet);
   if (p5.items.length > 0) {
     results.push({
-      name: 'Hàng chuẩn theo Layer (A→B→C)',
+      name: canRot ? 'Hàng chuẩn theo Layer (A→B→C)' : 'Hàng chuẩn theo Layer (Giữ nguyên hướng)',
       items: p5.items,
       totalSheets: p5.totalSheets,
       skipped: p5.skipped
@@ -932,10 +941,10 @@ export function packMultiSize(
 
   // Plan 6: Tự do tối đa tem (Xếp tự do 2D)
   const sortedFree = [...items].sort((a, b) => Math.max(b.w, b.h) - Math.max(a.w, a.h));
-  const p6 = maxRectsPackSequential(sortedFree, sheetW, sheetH, padding, true, allowMultiSheet, 'best-short-side');
+  const p6 = maxRectsPackSequential(sortedFree, sheetW, sheetH, padding, canRot, allowMultiSheet, 'best-short-side');
   if (p6.items.length > 0) {
     results.push({
-      name: 'Tự do tối đa tem (Xếp tự do 2D)',
+      name: canRot ? 'Tự do tối đa tem (Xếp tự do 2D)' : 'Tự do tối đa tem (Giữ nguyên hướng)',
       items: p6.items,
       totalSheets: p6.totalSheets,
       skipped: p6.skipped

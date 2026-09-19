@@ -65,6 +65,7 @@ export interface ShapeTabItem {
   vectorMaskResult: VectorMaskResult | null;
   customSvgData: string;
   color: string;
+  autoRotate?: boolean;
 }
 
 const TAB_COLORS = ['#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#3b82f6', '#84cc16', '#6366f1'];
@@ -645,6 +646,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
         cornerRadius: targetTab.cornerRadius,
         totalOrder: activeCount > 1 ? c.totalOrder : targetTab.quantity,
         useTotalLimit: shouldLimit,
+        autoRotate: targetTab.autoRotate !== undefined ? targetTab.autoRotate : c.autoRotate,
       }));
       setVectorMaskResult(targetTab.vectorMaskResult);
       setCustomSvgData(targetTab.customSvgData);
@@ -668,6 +670,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
       itemW: 50,
       itemH: 50,
       quantity: 10,
+      autoRotate: config.autoRotate,
       useTotalLimit: true,
       cornerRadius: 0,
       sourceImage: defaultSrcImage,
@@ -1518,6 +1521,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
           const tab = isMultiShape ? shapeTabs.find(t => t.id === it.tabId || t.name === it.tabName) : null;
           const origW = tab ? tab.itemW : (it.rot ? it.h : it.w);
           const origH = tab ? (tab.shape === 'circle' ? tab.itemW : tab.itemH) : (it.rot ? it.w : it.h);
+          const tabCanRotate = tab?.autoRotate !== undefined ? tab.autoRotate : config.autoRotate;
           return {
             id: idx,
             w: origW || it.w || config.itemW,
@@ -1530,11 +1534,12 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
             vectorMaskResult: it.vectorMaskResult || tab?.vectorMaskResult,
             customSvgData: it.customSvgData || tab?.customSvgData,
             color: it.color || tab?.color,
+            canRotate: tabCanRotate,
           };
         });
 
         // Repack sequentially with multiSizePacker to guarantee zero overlaps across sheets
-        const packed = packMultiSize(packItems, pw, ph, config.padding, true);
+        const packed = packMultiSize(packItems, pw, ph, config.padding, true, config.autoRotate);
         const matchPlan = packed.find(p => p.name === pl.name) || packed[0];
         if (matchPlan && matchPlan.items.length === items.length && !hasOverlap(matchPlan.items)) {
           return {
@@ -1640,6 +1645,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
           const tab = isMultiShape ? shapeTabs.find(t => t.id === it.tabId || t.name === it.tabName) : null;
           const origW = tab ? tab.itemW : (it.rot ? it.h : it.w);
           const origH = tab ? (tab.shape === 'circle' ? tab.itemW : tab.itemH) : (it.rot ? it.w : it.h);
+          const tabCanRotate = tab?.autoRotate !== undefined ? tab.autoRotate : config.autoRotate;
           return {
             id: idx,
             w: origW || it.w || config.itemW,
@@ -1652,10 +1658,11 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
             vectorMaskResult: it.vectorMaskResult || tab?.vectorMaskResult,
             customSvgData: it.customSvgData || tab?.customSvgData,
             color: it.color || tab?.color,
+            canRotate: tabCanRotate,
           };
         });
 
-        const packed = packMultiSize(packItems, pw, ph, config.padding, true);
+        const packed = packMultiSize(packItems, pw, ph, config.padding, true, config.autoRotate);
         const matchPlan = packed.find(p => p.name === pl.name) || packed[0];
         if (matchPlan && matchPlan.items.length === items.length && !hasOverlap(matchPlan.items)) {
           return {
@@ -1938,6 +1945,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
         const qty = Math.max(1, tab.quantity || 1);
         const w = tab.itemW;
         const h = tab.shape === 'circle' ? tab.itemW : tab.itemH;
+        const tabCanRotate = tab.autoRotate !== undefined ? tab.autoRotate : config.autoRotate;
         for (let k = 0; k < qty; k++) {
           multiItems.push({
             id: itemId++,
@@ -1951,11 +1959,12 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
             vectorMaskResult: tab.vectorMaskResult,
             customSvgData: tab.customSvgData,
             color: tab.color,
+            canRotate: tabCanRotate,
           });
         }
       });
 
-      const results = packMultiSize(multiItems, pw, ph, config.padding, true);
+      const results = packMultiSize(multiItems, pw, ph, config.padding, true, config.autoRotate);
       const plans: LayoutPlan[] = results.map(r => ({
         name: r.name,
         qty: r.items.length,
@@ -1995,8 +2004,8 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
         ph = config.pageH - config.marginTop - config.marginBot;
         ox = config.marginLeft; oy = config.marginTop;
       }
-      const packItems = allPages.map((p, i) => ({ w: p.w, h: p.h, id: i }));
-      const results = packMultiSize(packItems, pw, ph, config.padding);
+      const packItems = allPages.map((p, i) => ({ w: p.w, h: p.h, id: i, canRotate: config.autoRotate }));
+      const results = packMultiSize(packItems, pw, ph, config.padding, true, config.autoRotate);
       const plans: LayoutPlan[] = results.map(r => ({
         name: r.name,
         qty: r.items.length,
@@ -2043,7 +2052,8 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
       printW: effectivePrintW, 
       printH: effectivePrintH,
       pageW: config.pageW, 
-      pageH: config.pageH 
+      pageH: config.pageH,
+      autoRotate: config.autoRotate,
     });
     
     // Apply alignment offset to all items - ALIGN TO PAGE, not print area
@@ -4386,19 +4396,32 @@ Chỉ trả về JSON, không giải thích thêm.`;
                   })}
 
                   {/* 5th Button: Tự xoay ảnh vừa khung (Auto Rotate) */}
-                  <button
-                    type="button"
-                    onClick={() => setConfig(c => ({ ...c, autoRotate: !c.autoRotate }))}
-                    className={`h-7 px-1 rounded-lg border flex items-center justify-center gap-1 transition-all cursor-pointer select-none whitespace-nowrap ${
-                      config.autoRotate
-                        ? 'border-emerald-600 bg-emerald-600 text-white shadow-2xs font-medium ring-2 ring-emerald-200'
-                        : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 shadow-2xs'
-                    }`}
-                    title="Tự động xoay ảnh vừa khung"
-                  >
-                    <RotateCw size={12} className={config.autoRotate ? 'text-white' : 'text-slate-500'} />
-                    <span className="text-[10px] font-medium whitespace-nowrap">Tự xoay</span>
-                  </button>
+                  {(() => {
+                    const isTabAutoRotate = isMultiShape
+                      ? (activeTab.autoRotate !== undefined ? activeTab.autoRotate : config.autoRotate)
+                      : config.autoRotate;
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextAutoRotate = !isTabAutoRotate;
+                          setConfig(c => ({ ...c, autoRotate: nextAutoRotate }));
+                          if (isMultiShape) {
+                            updateActiveTabProp({ autoRotate: nextAutoRotate });
+                          }
+                        }}
+                        className={`h-7 px-1 rounded-lg border flex items-center justify-center gap-1 transition-all cursor-pointer select-none whitespace-nowrap ${
+                          isTabAutoRotate
+                            ? 'border-emerald-600 bg-emerald-600 text-white shadow-2xs font-medium ring-2 ring-emerald-200'
+                            : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 shadow-2xs'
+                        }`}
+                        title="Tự động xoay ảnh vừa khung và hướng tem"
+                      >
+                        <RotateCw size={12} className={isTabAutoRotate ? 'text-white' : 'text-slate-500'} />
+                        <span className="text-[10px] font-medium whitespace-nowrap">Tự xoay</span>
+                      </button>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -4874,7 +4897,11 @@ Chỉ trả về JSON, không giải thích thêm.`;
                           const isRotatedItem = !!it.rot;
                           
                           // Auto-rotate: compare image orientation with ORIGINAL slot dimensions
-                          if (config.autoRotate && page) {
+                          const isTabAutoRotate = isMultiShape 
+                            ? (correspondingTab?.autoRotate !== undefined ? correspondingTab.autoRotate : config.autoRotate)
+                            : config.autoRotate;
+
+                          if (isTabAutoRotate && page) {
                             const srcRatio = page.w / page.h;
                             const originalItemH = itemShape === 'circle' ? itW : itH;
                             const dstRatio = itW / originalItemH;
