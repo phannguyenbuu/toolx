@@ -4311,7 +4311,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
                             const ah = Math.max(2, itH * sc);
                             const itemColor = it.color || '#8b5cf6';
                             const cornerR = it.cornerRadius !== undefined ? it.cornerRadius : config.cornerRadius;
-                            const thumb = it.sourceImage?.thumb || (allPages.length > 0 ? allPages[j % allPages.length]?.thumb : null);
+                            const thumb = it.sourceImage?.thumb || (isMultiShape ? shapeTabs.find(t => t.id === it.tabId || t.name === it.tabName)?.sourceImage?.thumb : null) || (allPages.length > 0 ? allPages[j % allPages.length]?.thumb : null);
 
                             let borderRadius = '0px';
                             if (itemShape === 'circle' || itemShape === 'oval') borderRadius = '50%';
@@ -4852,14 +4852,22 @@ Chỉ trả về JSON, không giải thích thêm.`;
                             },
                           };
 
-                          // For custom SVG shape
+                          // For custom SVG shape / Vector mask
                           if (itemShape === 'custom-svg' && itemCustomSvg) {
                             const w = actualW * scale;
                             const h = actualH * scale;
                             const svgMatch = itemCustomSvg.match(/viewBox=["']([^"']+)["']/);
                             const vb = svgMatch ? svgMatch[1] : `0 0 ${itW} ${itH}`;
+                            const vbParts = vb.trim().split(/[\s,]+/).map(Number);
+                            const vbMinX = isNaN(vbParts[0]) ? 0 : vbParts[0];
+                            const vbMinY = isNaN(vbParts[1]) ? 0 : vbParts[1];
+                            const vbW = isNaN(vbParts[2]) || vbParts[2] <= 0 ? itW : vbParts[2];
+                            const vbH = isNaN(vbParts[3]) || vbParts[3] <= 0 ? itH : vbParts[3];
+
                             const innerMatch = itemCustomSvg.match(/<svg[^>]*>([\s\S]*)<\/svg>/i);
                             const innerSvg = innerMatch ? innerMatch[1] : '';
+                            const pathMatch = itemCustomSvg.match(/<path[^>]*\bd=["']([^"']+)["']/i);
+                            const pathD = it.vectorMaskResult?.pathData || (pathMatch ? pathMatch[1] : '');
                             const clipId = `svg-shape-${sIdx}-${i}`;
                             
                             return (
@@ -4885,32 +4893,64 @@ Chỉ trả về JSON, không giải thích thêm.`;
                                     transition: 'transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease',
                                   }}
                                 >
-                                  <svg className="absolute inset-0 w-full h-full" style={{ 
-                                    overflow: 'visible',
-                                    transform: totalRotation !== 0 ? `rotate(${totalRotation}deg)` : undefined,
-                                    transformOrigin: 'center center',
-                                  }}>
+                                  <svg 
+                                    viewBox={vb} 
+                                    width="100%" 
+                                    height="100%"
+                                    className="absolute inset-0 w-full h-full overflow-visible"
+                                    style={{ 
+                                      transform: totalRotation !== 0 ? `rotate(${totalRotation}deg)` : undefined,
+                                      transformOrigin: 'center center',
+                                    }}
+                                  >
                                     <defs>
                                       <clipPath id={clipId}>
-                                        <g dangerouslySetInnerHTML={{ __html: innerSvg }} />
+                                        {pathD ? (
+                                          <path d={pathD} fill="#000000" />
+                                        ) : (
+                                          <g dangerouslySetInnerHTML={{ __html: innerSvg.replace(/fill=["']none["']/gi, 'fill="#000000"') }} />
+                                        )}
                                       </clipPath>
                                     </defs>
-                                    <svg viewBox={vb} width="100%" height="100%">
-                                      {previewSrc ? (
-                                        <image href={previewSrc} width="100%" height="100%" preserveAspectRatio={getPreserveAspectRatio()} clipPath={`url(#${clipId})`} />
+
+                                    {/* Clipped image artwork or tinted background */}
+                                    {previewSrc ? (
+                                      <image 
+                                        href={previewSrc} 
+                                        x={vbMinX}
+                                        y={vbMinY}
+                                        width={vbW} 
+                                        height={vbH} 
+                                        preserveAspectRatio={getPreserveAspectRatio()} 
+                                        clipPath={`url(#${clipId})`} 
+                                      />
+                                    ) : (
+                                      pathD ? (
+                                        <path d={pathD} fill={`${itemColor}25`} />
                                       ) : (
-                                        <g fill={`${itemColor}25`} dangerouslySetInnerHTML={{ __html: innerSvg }} />
-                                      )}
+                                        <g fill={`${itemColor}25`} dangerouslySetInnerHTML={{ __html: innerSvg.replace(/fill=["']none["']/gi, `fill="${itemColor}25"`) }} />
+                                      )
+                                    )}
+
+                                    {/* Die line / cut contour stroke */}
+                                    {pathD ? (
+                                      <path d={pathD} fill="none" stroke={itemColor} strokeWidth={Math.max(0.4, Math.min(vbW, vbH) * 0.008)} />
+                                    ) : (
                                       <g fill="none" stroke={itemColor} strokeWidth="0.8" dangerouslySetInnerHTML={{ __html: innerSvg }} />
-                                    </svg>
+                                    )}
                                   </svg>
+
                                   {numberHandle}
                                   {pageOverlay}
                                 </div>
 
                                 {isDragOver && (
                                   <svg viewBox={vb} className="absolute inset-0 w-full h-full pointer-events-none z-30 overflow-visible animate-pulse">
-                                    <g fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="6 3" style={{ filter: 'drop-shadow(0 0 4px #ef4444)' }} dangerouslySetInnerHTML={{ __html: innerSvg }} />
+                                    {pathD ? (
+                                      <path d={pathD} fill="none" stroke="#ef4444" strokeWidth={Math.max(1.5, Math.min(vbW, vbH) * 0.03)} strokeDasharray="6 3" style={{ filter: 'drop-shadow(0 0 4px #ef4444)' }} />
+                                    ) : (
+                                      <g fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="6 3" style={{ filter: 'drop-shadow(0 0 4px #ef4444)' }} dangerouslySetInnerHTML={{ __html: innerSvg }} />
+                                    )}
                                   </svg>
                                 )}
                               </div>
@@ -6832,12 +6872,12 @@ Chỉ trả về JSON, không giải thích thêm.`;
       <VectorMaskEditorModal
         isOpen={isVectorMaskEditorOpen}
         onClose={() => setIsVectorMaskEditorOpen(false)}
-        imageUrl={editingSourcePage?.originalThumb || editingSourcePage?.thumb || (allPages.length > 0 ? allPages[0].originalThumb || allPages[0].thumb : null)}
-        imageName={editingSourcePage?.name || (allPages.length > 0 ? allPages[0].name : 'Ảnh nguồn')}
-        itemW={config.itemW}
-        itemH={config.shape === 'circle' ? config.itemW : config.itemH}
-        initialKnots={vectorMaskResult?.knots}
-        initialSvgPath={vectorMaskResult?.pathData}
+        imageUrl={editingSourcePage?.originalThumb || editingSourcePage?.thumb || activeTab?.sourceImage?.originalThumb || activeTab?.sourceImage?.thumb || (allPages.length > 0 ? allPages[0].originalThumb || allPages[0].thumb : null)}
+        imageName={editingSourcePage?.name || activeTab?.sourceImage?.name || (allPages.length > 0 ? allPages[0].name : 'Ảnh nguồn')}
+        itemW={activeTab?.itemW || config.itemW}
+        itemH={activeTab?.shape === 'circle' ? activeTab?.itemW : (activeTab?.itemH || (config.shape === 'circle' ? config.itemW : config.itemH))}
+        initialKnots={activeTab?.vectorMaskResult?.knots || vectorMaskResult?.knots}
+        initialSvgPath={activeTab?.vectorMaskResult?.pathData || vectorMaskResult?.pathData}
         onApply={handleApplyVectorMask}
       />
 
