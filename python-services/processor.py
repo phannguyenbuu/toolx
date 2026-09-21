@@ -1832,6 +1832,15 @@ def generate_pdf_multipage(
             rotation_deg = pages_meta[i]['rotation']
             print(f"[DEBUG] Page {i}: Applying rotation {rotation_deg}°")
             img = img.rotate(-rotation_deg, expand=True)  # CSS -> PIL: đảo dấu
+        elif auto_rotate:
+            src_ratio = img.width / img.height
+            eff_h = item_w if shape == 'circle' else item_h
+            dst_ratio = item_w / eff_h
+            if (src_ratio > 1 and dst_ratio < 1) or (src_ratio < 1 and dst_ratio > 1):
+                print(f"[DEBUG] Page {i}: Auto-rotating 90° based on aspect ratio")
+                img = img.rotate(-90, expand=True)
+            else:
+                print(f"[DEBUG] Page {i}: No rotation (meta={pages_meta[i] if i < len(pages_meta) else 'missing'})")
         else:
             print(f"[DEBUG] Page {i}: No rotation (meta={pages_meta[i] if i < len(pages_meta) else 'missing'})")
         

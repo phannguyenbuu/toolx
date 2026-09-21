@@ -2710,11 +2710,184 @@ Chỉ trả về JSON, không giải thích thêm.`;
     handleMultiFileUpload(fakeEvent);
   };
 
+  // Bộ đệm cache hình ảnh và slot đã biến đổi xoay/fit/clip cho PDF render
+  const imageElementCache = useRef<Map<string, HTMLImageElement>>(new Map());
+  const transformedSlotCache = useRef<Map<string, { dataUrl: string; format: 'JPEG' | 'PNG' }>>(new Map());
+
+  const loadHtmlImage = (src: string): Promise<HTMLImageElement> => {
+    if (imageElementCache.current.has(src)) {
+      const cached = imageElementCache.current.get(src)!;
+      if (cached.complete && cached.naturalWidth > 0) {
+        return Promise.resolve(cached);
+      }
+    }
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        imageElementCache.current.set(src, img);
+        resolve(img);
+      };
+      img.onerror = (e) => reject(e);
+      img.src = src;
+    });
+  };
+
+  const renderTransformedSlotImage = async (
+    src: string,
+    actualW_mm: number,
+    actualH_mm: number,
+    totalRotation: number,
+    fitMode: string,
+    shape: string,
+    cornerRadius_mm: number,
+    isSpecialShape: boolean,
+    isRotatedItem: boolean,
+    dpi: number = 300,
+    customScalePct: number = 100
+  ): Promise<{ dataUrl: string; format: 'JPEG' | 'PNG' }> => {
+    const normRot = ((totalRotation % 360) + 360) % 360;
+    const isRotated90 = (normRot % 180) !== 0;
+
+    const cacheKey = `${src}_${Math.round(actualW_mm * 10)}_${Math.round(actualH_mm * 10)}_${normRot}_${fitMode}_${shape}_${Math.round(cornerRadius_mm * 10)}_${isSpecialShape ? 1 : 0}_${isRotatedItem ? 1 : 0}_${customScalePct}_${dpi}`;
+    if (transformedSlotCache.current.has(cacheKey)) {
+      return transformedSlotCache.current.get(cacheKey)!;
+    }
+
+    const img = await loadHtmlImage(src);
+
+    const pxPerMm = (dpi || 300) / 25.4;
+    let canvasW = Math.round(actualW_mm * pxPerMm);
+    let canvasH = Math.round(actualH_mm * pxPerMm);
+    const maxDim = Math.max(canvasW, canvasH);
+    if (maxDim > 4096) {
+      const s = 4096 / maxDim;
+      canvasW = Math.round(canvasW * s);
+      canvasH = Math.round(canvasH * s);
+    }
+    canvasW = Math.max(1, canvasW);
+    canvasH = Math.max(1, canvasH);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = canvasW;
+    canvas.height = canvasH;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Canvas 2D context not available');
+    }
+
+    const hasTransparency = shape === 'circle' || shape === 'oval' || cornerRadius_mm > 0 || isSpecialShape;
+
+    // Clip shape tương ứng với canvas preview
+    if (shape === 'circle' || shape === 'oval') {
+      ctx.beginPath();
+      ctx.ellipse(canvasW / 2, canvasH / 2, canvasW / 2, canvasH / 2, 0, 0, Math.PI * 2);
+      ctx.clip();
+    } else if (shape === 'trapezoid') {
+      ctx.beginPath();
+      if (isRotatedItem) {
+        ctx.moveTo(0, 0);
+        ctx.lineTo(canvasW, 0);
+        ctx.lineTo(canvasW * 0.85, canvasH);
+        ctx.lineTo(canvasW * 0.15, canvasH);
+      } else {
+        ctx.moveTo(canvasW * 0.15, 0);
+        ctx.lineTo(canvasW * 0.85, 0);
+        ctx.lineTo(canvasW, canvasH);
+        ctx.lineTo(0, canvasH);
+      }
+      ctx.closePath();
+      ctx.clip();
+    } else if (shape === 'triangle') {
+      ctx.beginPath();
+      if (isRotatedItem) {
+        ctx.moveTo(0, 0);
+        ctx.lineTo(canvasW, 0);
+        ctx.lineTo(canvasW / 2, canvasH);
+      } else {
+        ctx.moveTo(canvasW / 2, 0);
+        ctx.lineTo(canvasW, canvasH);
+        ctx.lineTo(0, canvasH);
+      }
+      ctx.closePath();
+      ctx.clip();
+    } else if (shape === 'hexagon') {
+      ctx.beginPath();
+      ctx.moveTo(canvasW * 0.25, 0);
+      ctx.lineTo(canvasW * 0.75, 0);
+      ctx.lineTo(canvasW, canvasH * 0.5);
+      ctx.lineTo(canvasW * 0.75, canvasH);
+      ctx.lineTo(canvasW * 0.25, canvasH);
+      ctx.lineTo(0, canvasH * 0.5);
+      ctx.closePath();
+      ctx.clip();
+    } else if (cornerRadius_mm > 0) {
+      const r = Math.min(canvasW / 2, canvasH / 2, cornerRadius_mm * pxPerMm);
+      ctx.beginPath();
+      if (typeof (ctx as any).roundRect === 'function') {
+        (ctx as any).roundRect(0, 0, canvasW, canvasH, r);
+      } else {
+        ctx.rect(0, 0, canvasW, canvasH);
+      }
+      ctx.clip();
+    }
+
+    // Biến đổi xoay ảnh khớp 100% với CSS transform preview
+    ctx.save();
+    ctx.translate(canvasW / 2, canvasH / 2);
+    if (normRot !== 0) {
+      ctx.rotate((normRot * Math.PI) / 180);
+    }
+
+    // Khi xoay 90 hoặc 270 độ, kích thước khung chứa đảo ngược chiều ngang/dọc giống CSS
+    const elemW = isRotated90 ? canvasH : canvasW;
+    const elemH = isRotated90 ? canvasW : canvasH;
+
+    const nw = img.naturalWidth || elemW;
+    const nh = img.naturalHeight || elemH;
+
+    const scaleFactor = customScalePct !== 100 ? (customScalePct / 100) : 1;
+
+    if (fitMode === 'stretch') {
+      const dw = elemW * scaleFactor;
+      const dh = elemH * scaleFactor;
+      ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+    } else if (fitMode === 'fit') {
+      // CSS object-fit: contain
+      const fitScale = Math.min(elemW / nw, elemH / nh) * scaleFactor;
+      const dw = nw * fitScale;
+      const dh = nh * fitScale;
+      ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+    } else if (fitMode === 'actual') {
+      // CSS object-fit: none (100% kích thước gốc)
+      const dw = nw * scaleFactor;
+      const dh = nh * scaleFactor;
+      ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+    } else {
+      // CSS object-fit: cover ('fill') - mặc định
+      const fillScale = Math.max(elemW / nw, elemH / nh) * scaleFactor;
+      const dw = nw * fillScale;
+      const dh = nh * fillScale;
+      ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+    }
+
+    ctx.restore();
+
+    const format: 'JPEG' | 'PNG' = hasTransparency ? 'PNG' : 'JPEG';
+    const dataUrl = canvas.toDataURL(format === 'PNG' ? 'image/png' : 'image/jpeg', 0.95);
+    const result = { dataUrl, format };
+    transformedSlotCache.current.set(cacheKey, result);
+    return result;
+  };
+
   // Hàm vẽ nội dung của một tờ in cụ thể lên tài liệu jsPDF
-  const drawSheetOnDoc = (doc: jsPDF, sIdx: number, itemsForSheet: PlanItem[]) => {
+  const drawSheetOnDoc = async (doc: jsPDF, sIdx: number, itemsForSheet: PlanItem[]) => {
     // 1. Nền trắng trang in
     doc.setFillColor(255, 255, 255);
     doc.rect(0, 0, config.pageW, config.pageH, 'F');
+
+    const isBackSide = config.is2Sided && (sIdx % 2 === 1);
+    const effectiveFitMode = (customScale !== 100) ? 'actual' : config.fitMode;
 
     // 2. Vẽ từng con tem thuộc tờ này
     for (let i = 0; i < itemsForSheet.length; i++) {
@@ -2726,23 +2899,71 @@ Chỉ trả về JSON, không giải thích thêm.`;
       }
 
       const itemShape = (it.shape || config.shape) as string;
+      const isSpecialShape = ['trapezoid', 'triangle', 'hexagon'].includes(itemShape);
+      const isRotatedItem = !!it.rot;
+      const itemCornerRadius = it.cornerRadius !== undefined ? it.cornerRadius : (config.cornerRadius || 0);
+
       const actualW = it.w !== undefined ? it.w : (it.rot ? config.itemH : config.itemW);
       const actualH = itemShape === 'circle' ? actualW : (it.h !== undefined ? it.h : (it.rot ? config.itemW : config.itemH));
-      const itemX = it.x;
+      const itemX = isBackSide ? (config.pageW - it.x - actualW) : it.x;
       const itemY = it.y;
       
       const pageIdx = getPageForSlot(i, sIdx);
       const page = pageIdx >= 0 ? allPages[pageIdx] : null;
       const correspondingTab = isMultiShape ? shapeTabs.find(t => t.id === it.tabId || t.name === it.tabName) : null;
-      const previewSrc = (it.sourceImage as any)?.thumb || (typeof it.sourceImage === 'string' ? it.sourceImage : null) || (correspondingTab?.sourceImage as any)?.thumb || (typeof correspondingTab?.sourceImage === 'string' ? correspondingTab?.sourceImage : null) || (activeTab?.sourceImage as any)?.thumb || (page ? page.thumb : (allPages.length > 0 ? allPages[i % allPages.length]?.thumb : null));
+      const previewSrc = (it.sourceImage as any)?.thumb || (typeof it.sourceImage === 'string' ? it.sourceImage : null) || (correspondingTab?.sourceImage as any)?.thumb || (typeof correspondingTab?.sourceImage === 'string' ? correspondingTab?.sourceImage : null) || (activeTab?.sourceImage as any)?.thumb || (page ? (page.originalThumb || page.thumb) : (allPages.length > 0 ? (allPages[i % allPages.length]?.originalThumb || allPages[i % allPages.length]?.thumb) : null));
+
+      // Tính góc xoay totalRotation chuẩn xác 100% như canvas preview
+      let pageRotation = page ? (page.rotation || 0) : 0;
+      const isTabAutoRotate = isMultiShape 
+        ? (correspondingTab?.autoRotate !== undefined ? correspondingTab.autoRotate : config.autoRotate)
+        : config.autoRotate;
+
+      if (isTabAutoRotate && page) {
+        const srcRatio = page.w / page.h;
+        const originalItemH = itemShape === 'circle' ? actualW : (it.h !== undefined ? it.h : (it.rot ? config.itemW : config.itemH));
+        const dstRatio = actualW / originalItemH;
+        
+        if ((srcRatio > 1 && dstRatio < 1) || (srcRatio < 1 && dstRatio > 1)) {
+          pageRotation += isRotatedItem ? -90 : 90;
+        }
+      }
+      
+      if (isRotatedItem && !isSpecialShape) {
+        pageRotation += 90;
+      }
+      
+      const itemRotation = (isSpecialShape && isRotatedItem) ? 180 : 0;
+      const flipRotation = it.flipped ? 180 : 0;
+      const rot45Rotation = it.rot45 ? 45 : 0;
+      const backRotation = (isBackSide && config.rot180Back) ? 180 : 0;
+      const totalRotation = ((pageRotation + itemRotation + flipRotation + rot45Rotation + backRotation) % 360 + 360) % 360;
 
       if (previewSrc) {
         try {
-          doc.addImage(previewSrc, 'JPEG', itemX, itemY, actualW, actualH, undefined, 'FAST');
-        } catch {
-          doc.setFillColor(245, 243, 255);
-          doc.setDrawColor(139, 92, 246);
-          doc.rect(itemX, itemY, actualW, actualH, 'FD');
+          const { dataUrl, format } = await renderTransformedSlotImage(
+            previewSrc,
+            actualW,
+            actualH,
+            totalRotation,
+            effectiveFitMode,
+            itemShape,
+            itemCornerRadius,
+            isSpecialShape,
+            isRotatedItem,
+            config.dpi || 300,
+            customScale
+          );
+          doc.addImage(dataUrl, format, itemX, itemY, actualW, actualH, undefined, 'FAST');
+        } catch (imgErr) {
+          console.warn('[PDF] Error rendering transformed slot image, using fallback:', imgErr);
+          try {
+            doc.addImage(previewSrc, 'JPEG', itemX, itemY, actualW, actualH, undefined, 'FAST');
+          } catch {
+            doc.setFillColor(245, 243, 255);
+            doc.setDrawColor(139, 92, 246);
+            doc.rect(itemX, itemY, actualW, actualH, 'FD');
+          }
         }
       } else {
         doc.setFillColor(245, 243, 255);
@@ -2769,7 +2990,8 @@ Chỉ trả về JSON, không giải thích thêm.`;
         const itemShape = (item.shape || config.shape) as string;
         const w = item.w !== undefined ? item.w : (item.rot ? config.itemH : config.itemW);
         const h = itemShape === 'circle' ? w : (item.h !== undefined ? item.h : (item.rot ? config.itemW : config.itemH));
-        const x = item.x;
+        const isBack = config.is2Sided && (sIdx % 2 === 1);
+        const x = isBack ? (config.pageW - item.x - w) : item.x;
         const y = item.y;
         doc.line(x - d - l, y, x - d, y);
         doc.line(x, y - d - l, x, y - d);
@@ -2861,11 +3083,22 @@ Chỉ trả về JSON, không giải thích thêm.`;
           }
         }
 
-        const pagesDataWithFinalRotation = allPages.map(p => ({
-          rotation: p.rotation || 0,
-          w: p.w,
-          h: p.h
-        }));
+        const pagesDataWithFinalRotation = allPages.map(p => {
+          let pageRotation = p.rotation || 0;
+          if (config.autoRotate && p.w && p.h) {
+            const srcRatio = p.w / p.h;
+            const originalItemH = config.shape === 'circle' ? config.itemW : config.itemH;
+            const dstRatio = config.itemW / originalItemH;
+            if ((srcRatio > 1 && dstRatio < 1) || (srcRatio < 1 && dstRatio > 1)) {
+              pageRotation += 90;
+            }
+          }
+          return {
+            rotation: pageRotation,
+            w: p.w,
+            h: p.h
+          };
+        });
         fd.append('pagesData', JSON.stringify(pagesDataWithFinalRotation));
         fd.append('planData', JSON.stringify(impositionStyleEnabled && styledPlan ? styledPlan.items : currentPlan.items));
         fd.append('pageW', String(config.pageW)); fd.append('pageH', String(config.pageH));
@@ -2926,7 +3159,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
       const sheetItems = isMultiShape
         ? allPlanItems.filter(it => (it.sheetIndex ?? 0) === targetSheetIndex)
         : allPlanItems;
-      drawSheetOnDoc(doc, targetSheetIndex, sheetItems);
+      await drawSheetOnDoc(doc, targetSheetIndex, sheetItems);
     } else {
       // Kết xuất toàn bộ các tờ thành PDF đa trang (Mỗi tờ 1 trang riêng biệt, không chồng lấn)
       const sheetsCount = Math.max(1, totalSheets);
@@ -2937,7 +3170,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
         const sheetItems = isMultiShape
           ? allPlanItems.filter(it => (it.sheetIndex ?? 0) === sIdx)
           : allPlanItems;
-        drawSheetOnDoc(doc, sIdx, sheetItems);
+        await drawSheetOnDoc(doc, sIdx, sheetItems);
       }
     }
 
@@ -3463,11 +3696,22 @@ Chỉ trả về JSON, không giải thích thêm.`;
           }
         }
         
-        const pagesDataWithFinalRotation = allPages.map(p => ({
-          rotation: p.rotation || 0,
-          w: p.w,
-          h: p.h
-        }));
+        const pagesDataWithFinalRotation = allPages.map(p => {
+          let pageRotation = p.rotation || 0;
+          if (config.autoRotate && p.w && p.h) {
+            const srcRatio = p.w / p.h;
+            const originalItemH = config.shape === 'circle' ? config.itemW : config.itemH;
+            const dstRatio = config.itemW / originalItemH;
+            if ((srcRatio > 1 && dstRatio < 1) || (srcRatio < 1 && dstRatio > 1)) {
+              pageRotation += 90;
+            }
+          }
+          return {
+            rotation: pageRotation,
+            w: p.w,
+            h: p.h
+          };
+        });
         
         fd.append('pagesData', JSON.stringify(pagesDataWithFinalRotation));
         fd.append('planData', JSON.stringify(impositionStyleEnabled && styledPlan ? styledPlan.items : currentPlan.items));
