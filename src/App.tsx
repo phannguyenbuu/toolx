@@ -636,13 +636,15 @@ function App() {
       if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) { e.preventDefault(); setZoom(z => Math.min(5, z + 0.1)); return; }
       if ((e.ctrlKey || e.metaKey) && e.key === '-') { e.preventDefault(); setZoom(z => Math.max(0.2, z - 0.1)); return; }
 
-      if (!selectedId) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
+
       const el = elements.find(e => e.id === selectedId);
       if (el?.isLocked) return;
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        const tag = (e.target as HTMLElement).tagName;
-        if (tag !== 'INPUT' && tag !== 'TEXTAREA') deleteElement(selectedId);
+        deleteElement(selectedId);
       }
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
          e.preventDefault();
@@ -752,7 +754,7 @@ function App() {
 
   const handleWheel = (e: React.WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
-          e.preventDefault();
+          try { e.preventDefault(); } catch {}
           const scale = e.deltaY > 0 ? 0.9 : 1.1;
           setZoom(z => Math.min(Math.max(z * scale, 0.2), 5));
       }

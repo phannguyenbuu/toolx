@@ -309,8 +309,8 @@ const PAPER_PRESETS = PAPER_PRESET_GROUPS.flatMap(g => g.items.map(it => ({
   category: it.category
 })));
 
-// Debounced number input component for performance
-// Uses smart debounce: longer delay for small numbers (likely still typing)
+// Debounced number input component for performance and seamless UX
+// Handles immediate commit on blur/Enter, preserves active typing against background re-renders
 const DebouncedNumberInput: React.FC<{
   value: number;
   onChange: (value: number) => void;
@@ -319,39 +319,89 @@ const DebouncedNumberInput: React.FC<{
   max?: number;
   className?: string;
   disabled?: boolean;
-  shortDebounceMs?: number;  // For 2+ digit numbers
-  longDebounceMs?: number;   // For 1 digit numbers
-}> = ({ value, onChange, step = 1, min, max, className = '', disabled, shortDebounceMs = 300, longDebounceMs = 1000 }) => {
-  const [localValue, setLocalValue] = useState(String(value));
+  shortDebounceMs?: number;
+  longDebounceMs?: number;
+  inputRef?: React.Ref<HTMLInputElement>;
+}> = ({ value, onChange, step = 1, min, max, className = '', disabled, shortDebounceMs = 250, longDebounceMs = 350, inputRef }) => {
+  const [localValue, setLocalValue] = useState(value !== undefined && value !== null ? String(value) : '');
+  const isFocusedRef = useRef(false);
+  const internalRef = useRef<HTMLInputElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // Sync local value when external value changes (e.g., from preset buttons)
+
+  const targetRef = (inputRef || internalRef) as React.MutableRefObject<HTMLInputElement | null>;
+
+  // Sync local value when external value changes ONLY if not actively editing
   useEffect(() => {
-    setLocalValue(String(value));
+    if (!isFocusedRef.current) {
+      setLocalValue(value !== undefined && value !== null ? String(value) : '');
+    }
   }, [value]);
-  
+
+  const commitValue = (valStr: string) => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    const cleanStr = String(valStr).replace(',', '.').trim();
+    if (cleanStr === '') {
+      const fallback = min !== undefined ? min : (value ?? 0);
+      setLocalValue(String(fallback));
+      onChange(fallback);
+      return;
+    }
+    const parsed = parseFloat(cleanStr);
+    if (isNaN(parsed)) {
+      setLocalValue(String(value ?? 0));
+      return;
+    }
+    const clamped = max !== undefined ? Math.min(parsed, max) : parsed;
+    const final = min !== undefined ? Math.max(clamped, min) : clamped;
+    const rounded = Math.round(final * 100) / 100;
+    setLocalValue(String(rounded));
+    onChange(rounded);
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value;
-    setLocalValue(newValue);
-    
-    // Clear previous timeout
+    const raw = e.target.value;
+    setLocalValue(raw);
+
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
-    
-    // Smart debounce: longer delay for small numbers (1 digit = likely still typing)
-    const numericPart = newValue.replace(/[^0-9]/g, '');
+
+    const cleanStr = raw.replace(',', '.').trim();
+    if (cleanStr === '') return; // Let user finish typing
+
+    const numericPart = cleanStr.replace(/[^0-9]/g, '');
     const debounceTime = numericPart.length <= 1 ? longDebounceMs : shortDebounceMs;
-    
-    // Debounce the actual config update
+
     timeoutRef.current = setTimeout(() => {
-      const parsed = parseFloat(newValue) || 0;
-      const clamped = max !== undefined ? Math.min(parsed, max) : parsed;
-      const final = min !== undefined ? Math.max(clamped, min) : clamped;
-      onChange(final);
+      const parsed = parseFloat(cleanStr);
+      if (!isNaN(parsed)) {
+        const clamped = max !== undefined ? Math.min(parsed, max) : parsed;
+        const final = min !== undefined ? Math.max(clamped, min) : clamped;
+        onChange(Math.round(final * 100) / 100);
+      }
     }, debounceTime);
   };
-  
+
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    isFocusedRef.current = true;
+    e.target.select();
+  };
+
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    isFocusedRef.current = false;
+    commitValue(e.target.value);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      commitValue(localValue);
+      e.currentTarget.blur();
+    }
+  };
+
   // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
@@ -360,15 +410,19 @@ const DebouncedNumberInput: React.FC<{
       }
     };
   }, []);
-  
+
   return (
     <input
+      ref={targetRef}
       type="number"
       step={step}
       min={min}
       max={max}
       value={localValue}
       onChange={handleChange}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
       className={`[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${className}`}
       disabled={disabled}
     />
@@ -492,6 +546,9 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
   const [isCropColorModalOpen, setIsCropColorModalOpen] = useState(false);
   const [editingSourcePage, setEditingSourcePage] = useState<PageItem | null>(null);
   const sourceImageInputRef = useRef<HTMLInputElement>(null);
+  const soLuongInputRef = useRef<HTMLInputElement>(null);
+  const rongInputRef = useRef<HTMLInputElement>(null);
+  const caoInputRef = useRef<HTMLInputElement>(null);
 
   // Vector Mask Editor modal state
   const [isVectorMaskEditorOpen, setIsVectorMaskEditorOpen] = useState(false);
@@ -1036,11 +1093,14 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
       updateThumbnails();
     } else if ((config.fitMode !== 'actual' || customScale === 100) && allPages.length > 0) {
       // Restore original thumbnails when not in 'actual' mode OR scale is 100%
-      console.log('🔄 Restoring original thumbnails (fitMode:', config.fitMode, ', scale:', customScale, ')');
-      setAllPages(prev => prev.map(page => ({
-        ...page,
-        thumb: page.originalThumb || page.thumb
-      })));
+      const needsRestore = allPages.some(page => page.originalThumb && page.thumb !== page.originalThumb);
+      if (needsRestore) {
+        console.log('🔄 Restoring original thumbnails (fitMode:', config.fitMode, ', scale:', customScale, ')');
+        setAllPages(prev => prev.map(page => ({
+          ...page,
+          thumb: page.originalThumb || page.thumb
+        })));
+      }
     }
   }, [customScale, backgroundColor, config.fitMode, config.itemW, config.itemH]);
   
@@ -4365,10 +4425,10 @@ Chỉ trả về JSON, không giải thích thêm.`;
                   <Sparkles size={16} className="text-amber-500" /> AI Sắp xếp
                 </button>
                 <button
-                  onClick={() => { setIsOutpaintPanelOpen(true); setIsAiMenuOpen(false); }}
+                  onClick={() => { setIsOutpaintPanelOpen(true); setIsRightSidebarCollapsed(false); setIsAiMenuOpen(false); }}
                   className="w-full px-4 py-3 text-left text-sm font-medium text-gray-700 hover:bg-blue-50 flex items-center gap-2 border-t"
                 >
-                  <Expand size={16} className="text-blue-500" /> Mở rộng ảnh
+                  <Expand size={16} className="text-blue-500" /> Mở rộng ảnh (AI Bleed)
                 </button>
               </div>
             )}
@@ -4698,8 +4758,11 @@ Chỉ trả về JSON, không giải thích thêm.`;
               {/* Input Row 1: Số lượng (Quantity) / Rộng (W) / Cao (H) */}
               <div className="grid grid-cols-3 gap-1.5 mb-2">
                 {/* Cột 1: Số lượng - Màu xanh lá cây, nằm đầu dòng */}
-                <div className="flex items-center justify-between bg-emerald-50/80 hover:bg-emerald-100/90 border border-emerald-300/90 rounded-xl px-2 py-1.5 transition-all focus-within:ring-2 focus-within:ring-emerald-400 focus-within:border-emerald-600 focus-within:bg-white shadow-2xs min-w-0">
-                  <div className="flex items-center gap-1 shrink-0 pr-0.5">
+                <div 
+                  onClick={() => soLuongInputRef.current?.focus()}
+                  className="flex items-center justify-between bg-emerald-50/80 hover:bg-emerald-100/90 border border-emerald-300/90 rounded-xl px-2 py-1.5 transition-all focus-within:ring-2 focus-within:ring-emerald-400 focus-within:border-emerald-600 focus-within:bg-white shadow-2xs min-w-0 cursor-text"
+                >
+                  <div className="flex items-center gap-1 shrink-0 pr-0.5" onClick={e => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       id="useTotalLimit"
@@ -4711,42 +4774,49 @@ Chỉ trả về JSON, không giải thích thêm.`;
                       }}
                       className="w-3.5 h-3.5 rounded text-emerald-600 focus:ring-emerald-400 border-emerald-400 cursor-pointer shrink-0"
                     />
-                    <span className="text-[10px] font-bold text-emerald-800 shrink-0" title="Giới hạn số lượng tem đặt in">
+                    <span 
+                      className="text-[10px] font-bold text-emerald-800 shrink-0 cursor-pointer select-none" 
+                      onClick={() => {
+                        const checked = !config.useTotalLimit;
+                        setConfig(c => ({ ...c, useTotalLimit: checked }));
+                        updateActiveTabProp({ useTotalLimit: checked });
+                      }}
+                      title="Giới hạn số lượng tem đặt in"
+                    >
                       Số lượng
                     </span>
                   </div>
 
                   <div className="flex items-center gap-0.5 min-w-0 justify-end flex-1">
-                    {(isMultiShape || config.useTotalLimit) ? (
-                      <DebouncedNumberInput
-                        min={1}
-                        step={1}
-                        value={isMultiShape ? activeTab.quantity : config.totalOrder}
-                        onChange={v => {
-                          const q = Math.max(1, Math.round(v));
-                          if (!isMultiShape) {
-                            setConfig(c => ({ ...c, totalOrder: q }));
-                          }
-                          updateActiveTabProp({ quantity: q });
-                        }}
-                        className="w-full min-w-[38px] max-w-[58px] bg-transparent text-right font-bold text-xs text-emerald-700 focus:outline-none"
-                      />
-                    ) : (
-                      <span className="text-xs font-bold text-slate-700 text-right w-full min-w-[38px] max-w-[58px] truncate">
-                        {currentPlan ? (allPages.length > 0 ? allPages.length * standardQty : currentPlan.qty) : 0}
-                      </span>
-                    )}
-                    <span className="text-[9px] text-slate-400 font-medium shrink-0">tem</span>
+                    <DebouncedNumberInput
+                      inputRef={soLuongInputRef}
+                      min={1}
+                      step={1}
+                      value={isMultiShape ? activeTab.quantity : (config.useTotalLimit ? config.totalOrder : (currentPlan ? (allPages.length > 0 ? allPages.length * standardQty : currentPlan.qty) : config.totalOrder))}
+                      onChange={v => {
+                        const q = Math.max(1, Math.round(v));
+                        if (!isMultiShape) {
+                          setConfig(c => ({ ...c, totalOrder: q, useTotalLimit: true }));
+                        }
+                        updateActiveTabProp({ quantity: q, useTotalLimit: true });
+                      }}
+                      className="w-full min-w-[38px] max-w-[62px] bg-transparent text-right font-bold text-xs text-emerald-700 focus:outline-none"
+                    />
+                    <span className="text-[9px] text-slate-400 font-medium shrink-0 select-none">tem</span>
                   </div>
                 </div>
 
                 {/* Cột 2: Rộng / Đường kính */}
-                <div className="flex items-center justify-between bg-slate-50 hover:bg-slate-100/80 border border-slate-200/90 rounded-xl px-2 py-1.5 transition-all focus-within:ring-2 focus-within:ring-violet-300 focus-within:border-violet-500 focus-within:bg-white shadow-2xs">
-                  <span className="text-[10px] font-semibold text-slate-600 truncate pr-0.5">
+                <div 
+                  onClick={() => rongInputRef.current?.focus()}
+                  className="flex items-center justify-between bg-slate-50 hover:bg-slate-100/80 border border-slate-200/90 rounded-xl px-2 py-1.5 transition-all focus-within:ring-2 focus-within:ring-violet-300 focus-within:border-violet-500 focus-within:bg-white shadow-2xs cursor-text"
+                >
+                  <span className="text-[10px] font-semibold text-slate-600 truncate pr-0.5 select-none">
                     {config.shape === 'circle' ? 'Đ.kính (Dia)' : 'Rộng (W)'}
                   </span>
                   <div className="flex items-center gap-0.5 shrink-0">
                     <DebouncedNumberInput
+                      inputRef={rongInputRef}
                       step={0.1}
                       value={config.itemW}
                       onChange={v => {
@@ -4760,39 +4830,43 @@ Chỉ trả về JSON, không giải thích thêm.`;
                           ...(activeTab.shape === 'circle' ? { itemH: v } : {}),
                         });
                       }}
-                      className="w-12 bg-transparent text-right font-bold text-xs text-slate-800 focus:outline-none"
+                      className="w-14 sm:w-16 min-w-[44px] bg-transparent text-right font-bold text-xs text-slate-800 focus:outline-none"
                       disabled={
                         (config.shape === 'custom-svg' && !!customSvgData) ||
                         config.shape === 'svg-image' ||
                         config.shape === 'pdf-source'
                       }
                     />
-                    <span className="text-[9px] text-slate-400 font-medium">mm</span>
+                    <span className="text-[9px] text-slate-400 font-medium select-none">mm</span>
                   </div>
                 </div>
 
                 {/* Cột 3: Cao */}
                 {config.shape !== 'circle' ? (
-                  <div className="flex items-center justify-between bg-slate-50 hover:bg-slate-100/80 border border-slate-200/90 rounded-xl px-2 py-1.5 transition-all focus-within:ring-2 focus-within:ring-violet-300 focus-within:border-violet-500 focus-within:bg-white shadow-2xs">
-                    <span className="text-[10px] font-semibold text-slate-600 truncate pr-0.5">
+                  <div 
+                    onClick={() => caoInputRef.current?.focus()}
+                    className="flex items-center justify-between bg-slate-50 hover:bg-slate-100/80 border border-slate-200/90 rounded-xl px-2 py-1.5 transition-all focus-within:ring-2 focus-within:ring-violet-300 focus-within:border-violet-500 focus-within:bg-white shadow-2xs cursor-text"
+                  >
+                    <span className="text-[10px] font-semibold text-slate-600 truncate pr-0.5 select-none">
                       Cao (H)
                     </span>
                     <div className="flex items-center gap-0.5 shrink-0">
                       <DebouncedNumberInput
+                        inputRef={caoInputRef}
                         step={0.1}
                         value={config.itemH}
                         onChange={v => {
                           setConfig(c => ({ ...c, itemH: v }));
                           updateActiveTabProp({ itemH: v });
                         }}
-                        className="w-12 bg-transparent text-right font-bold text-xs text-slate-800 focus:outline-none"
+                        className="w-14 sm:w-16 min-w-[44px] bg-transparent text-right font-bold text-xs text-slate-800 focus:outline-none"
                         disabled={
                           (config.shape === 'custom-svg' && !!customSvgData) ||
                           config.shape === 'svg-image' ||
                           config.shape === 'pdf-source'
                         }
                       />
-                      <span className="text-[9px] text-slate-400 font-medium">mm</span>
+                      <span className="text-[9px] text-slate-400 font-medium select-none">mm</span>
                     </div>
                   </div>
                 ) : (
@@ -6882,22 +6956,33 @@ Chỉ trả về JSON, không giải thích thêm.`;
                   
                   {/* Preset buttons */}
                   <div className="mb-3">
-                    <label className="block text-[10px] font-medium text-gray-500 uppercase mb-2">Preset nhanh</label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-[10px] font-medium text-gray-500 uppercase">Preset nhanh</label>
+                      <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">LaMa CPU Model</span>
+                    </div>
                     <div className="grid grid-cols-4 gap-1">
-                      {[1, 2, 3, 4].map(mm => (
+                      {[
+                        { label: '2mm', val: 2 },
+                        { label: '3mm', val: 3 },
+                        { label: '4mm', val: 4 },
+                        { label: '30% (~5mm)', val: 5 },
+                      ].map(item => (
                         <button
-                          key={mm}
-                          onClick={() => setOutpaintConfig({ top: mm, bottom: mm, left: mm, right: mm })}
+                          key={item.val}
+                          onClick={() => setOutpaintConfig({ top: item.val, bottom: item.val, left: item.val, right: item.val })}
                           className={`py-2 rounded-lg text-xs font-medium transition cursor-pointer ${
-                            outpaintConfig.top === mm && outpaintConfig.bottom === mm && outpaintConfig.left === mm && outpaintConfig.right === mm
-                              ? 'bg-blue-500 text-white'
+                            outpaintConfig.top === item.val && outpaintConfig.bottom === item.val && outpaintConfig.left === item.val && outpaintConfig.right === item.val
+                              ? 'bg-blue-500 text-white shadow-sm'
                               : 'bg-white border border-blue-200 text-blue-700 hover:bg-blue-100'
                           }`}
                         >
-                          {mm}mm
+                          {item.label}
                         </button>
                       ))}
                     </div>
+                    <p className="text-[9px] text-blue-600/90 mt-1.5 leading-relaxed">
+                      💡 <strong>Chuyên dùng cho hình thẻ học sinh:</strong> Tự động mở rộng nền và thân áo/vai bằng AI CPU để cắt bế không bị phạm lề.
+                    </p>
                   </div>
                   
                   {/* Custom inputs */}
