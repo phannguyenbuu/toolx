@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { LayoutGrid, Upload, Download, X, Check, AlertCircle, RotateCcw, Loader2, Scissors, Grid3X3, Circle, Square, Printer, Package, RectangleHorizontal, RectangleVertical, FileImage, FileText, Info, RefreshCw, Triangle, Hexagon, RotateCw, Eye, EyeOff, Trash2, Layers, Settings2, FolderOpen, ZoomIn, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Sparkles, Save, Expand, ChevronDown, ChevronUp, Clock, History, Search, ImagePlus, PenTool, Plus, Edit3, Play, Zap, CheckCircle2, Cpu, Server, AlertTriangle, FileJson, Copy, ExternalLink, Share2, Send, Database, Move } from 'lucide-react';
+import { LayoutGrid, Upload, Download, X, Check, AlertCircle, RotateCcw, Loader2, Scissors, Grid3X3, Circle, Square, Printer, Package, RectangleHorizontal, RectangleVertical, FileImage, FileText, Info, RefreshCw, Triangle, Hexagon, RotateCw, Eye, EyeOff, Trash2, Layers, Settings2, FolderOpen, ZoomIn, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Sparkles, Save, Expand, ChevronDown, ChevronUp, Clock, History, Search, ImagePlus, PenTool, Plus, Edit3, Play, Zap, CheckCircle2, Cpu, Server, AlertTriangle, FileJson, Copy, ExternalLink, Share2, Send, Database, Move, Power } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { calculateLayout, generateCutSVG, LayoutPlan, PlanItem } from '../utils/layoutSolver';
 import { nestSvgOnSheet } from '../utils/svgNesting';
@@ -5511,15 +5511,15 @@ Chỉ trả về JSON, không giải thích thêm.`;
           
           {/* Bottom Floating Control Dock on Canvas: 3 Mark Buttons (No fill when inactive, Signature Violet when active) + Page Navigation */}
           {currentPlan && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-white/95 backdrop-blur-md px-3.5 py-1.5 rounded-2xl shadow-xl border border-slate-200/90 whitespace-nowrap select-none">
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 sm:gap-2 bg-white/95 backdrop-blur-md px-3 sm:px-3.5 py-1.5 rounded-2xl shadow-xl border border-slate-200/90 whitespace-nowrap select-none max-w-[calc(100%-1rem)]">
               {/* 1. Page Corner Crop Marks Toggle & Settings Popover */}
               <div className="relative" ref={pageCropPopoverRef}>
                 {isPageCropPopoverOpen && (
-                  <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 z-50 bg-white/95 backdrop-blur-md border border-violet-200/90 rounded-2xl shadow-2xl p-3.5 w-64 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="absolute bottom-full mb-3 left-0 z-50 bg-white/95 backdrop-blur-md border border-violet-200/90 rounded-2xl shadow-2xl p-3.5 w-72 animate-in fade-in zoom-in-95 duration-150">
                     <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-slate-100">
                       <div className="flex items-center gap-1.5">
                         <span className="w-2.5 h-2.5 rounded-full bg-violet-600" />
-                        <span className="text-xs font-medium text-slate-800">Đánh dấu cắt (Góc trang)</span>
+                        <span className="text-xs font-bold text-slate-800">Đánh dấu cắt (Góc trang)</span>
                       </div>
                       <button
                         type="button"
@@ -5535,7 +5535,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
                     <div className="grid grid-cols-2 gap-2 mb-3">
                       <div className="space-y-1">
                         <div className="flex items-center justify-between text-[10px]">
-                          <span className="font-medium text-slate-500 uppercase">Độ dài</span>
+                          <span className="font-semibold text-slate-600 uppercase">Độ dài</span>
                           <span className="text-slate-400 font-medium">mm</span>
                         </div>
                         <input
@@ -5544,12 +5544,12 @@ Chỉ trả về JSON, không giải thích thêm.`;
                           min={0}
                           value={config.pageCropLen}
                           onChange={e => setConfig(c => ({ ...c, pageCropLen: Math.max(0, parseFloat(e.target.value) || 0) }))}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-medium text-violet-800 text-center focus:outline-none focus:border-violet-400"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-semibold text-violet-800 text-center focus:outline-none focus:border-violet-400"
                         />
                       </div>
                       <div className="space-y-1">
                         <div className="flex items-center justify-between text-[10px]">
-                          <span className="font-medium text-slate-500 uppercase">Khoảng cách</span>
+                          <span className="font-semibold text-slate-600 uppercase">Khoảng cách</span>
                           <span className="text-slate-400 font-medium">mm</span>
                         </div>
                         <input
@@ -5558,12 +5558,12 @@ Chỉ trả về JSON, không giải thích thêm.`;
                           min={0}
                           value={config.pageCropDist}
                           onChange={e => setConfig(c => ({ ...c, pageCropDist: Math.max(0, parseFloat(e.target.value) || 0) }))}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-medium text-violet-800 text-center focus:outline-none focus:border-violet-400"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-semibold text-violet-800 text-center focus:outline-none focus:border-violet-400"
                         />
                       </div>
                       <div className="space-y-1">
                         <div className="flex items-center justify-between text-[10px]">
-                          <span className="font-medium text-slate-500 uppercase">Độ dày</span>
+                          <span className="font-semibold text-slate-600 uppercase">Độ dày</span>
                           <span className="text-slate-400 font-medium">mm</span>
                         </div>
                         <input
@@ -5572,12 +5572,12 @@ Chỉ trả về JSON, không giải thích thêm.`;
                           min={0.01}
                           value={config.pageCropThick}
                           onChange={e => setConfig(c => ({ ...c, pageCropThick: Math.max(0.01, parseFloat(e.target.value) || 0.1) }))}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-medium text-violet-800 text-center focus:outline-none focus:border-violet-400"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-semibold text-violet-800 text-center focus:outline-none focus:border-violet-400"
                         />
                       </div>
                       <div className="space-y-1">
                         <div className="flex items-center justify-between text-[10px]">
-                          <span className="font-medium text-slate-500 uppercase">Màu sắc</span>
+                          <span className="font-semibold text-slate-600 uppercase">Màu sắc</span>
                         </div>
                         <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl p-1 h-[34px]">
                           <input
@@ -5597,18 +5597,19 @@ Chỉ trả về JSON, không giải thích thêm.`;
                         onClick={() => {
                           setConfig(c => ({ ...c, usePageCrop: !c.usePageCrop }));
                         }}
-                        className={`text-[10px] font-medium px-2.5 py-1 rounded-xl transition cursor-pointer border ${
+                        className={`text-xs font-semibold px-3 py-1.5 rounded-xl transition cursor-pointer border flex items-center gap-1.5 shadow-2xs ${
                           config.usePageCrop
                             ? 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100'
                             : 'bg-violet-50 border-violet-200 text-violet-700 hover:bg-violet-100'
                         }`}
                       >
-                        {config.usePageCrop ? 'Tắt dấu cắt' : 'Bật dấu cắt'}
+                        <Power size={13} />
+                        <span>{config.usePageCrop ? 'Tắt dấu cắt' : 'Bật dấu cắt'}</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => setIsPageCropPopoverOpen(false)}
-                        className="text-[10px] font-medium px-3 py-1 bg-slate-800 text-white rounded-xl hover:bg-slate-900 transition cursor-pointer shadow-2xs"
+                        className="text-xs font-semibold px-3.5 py-1.5 bg-slate-800 text-white rounded-xl hover:bg-slate-900 transition cursor-pointer shadow-2xs"
                       >
                         Xong
                       </button>
@@ -5626,6 +5627,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
                   }`}
                   title="Cấu hình Đánh dấu cắt (Góc trang)"
                 >
+                  <span className={`w-2 h-2 rounded-full ${config.usePageCrop ? 'bg-white shadow-xs' : 'bg-slate-300'}`} />
                   <span className="text-xs font-medium whitespace-nowrap">Đánh dấu cắt</span>
                   <span className={`text-[10px] whitespace-nowrap ${config.usePageCrop ? 'text-violet-100 font-medium bg-violet-700/80 px-1.5 py-0.5 rounded' : 'text-slate-400'}`}>
                     {config.usePageCrop ? `${config.pageCropLen}mm • ${config.pageCropDist}mm` : '(Góc trang)'}
@@ -5712,24 +5714,25 @@ Chỉ trả về JSON, không giải thích thêm.`;
                     </div>
 
                     {/* Bottom Actions: Tắt / Bật & Đóng */}
-                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
                       <button
                         type="button"
                         onClick={() => {
                           setConfig(c => ({ ...c, useCrop: !c.useCrop }));
                         }}
-                        className={`text-[10px] font-medium px-2.5 py-1 rounded-xl transition cursor-pointer border ${
+                        className={`text-xs font-semibold px-3 py-1.5 rounded-xl transition cursor-pointer border flex items-center gap-1.5 shadow-2xs ${
                           config.useCrop
                             ? 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100'
                             : 'bg-violet-50 border-violet-200 text-violet-700 hover:bg-violet-100'
                         }`}
                       >
-                        {config.useCrop ? 'Tắt dấu xén' : 'Bật dấu xén'}
+                        <Power size={13} />
+                        <span>{config.useCrop ? 'Tắt dấu xén' : 'Bật dấu xén'}</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => setIsCropPopoverOpen(false)}
-                        className="text-[10px] font-medium px-3 py-1 bg-slate-800 text-white rounded-xl hover:bg-slate-900 transition cursor-pointer shadow-2xs"
+                        className="text-xs font-semibold px-3.5 py-1.5 bg-slate-800 text-white rounded-xl hover:bg-slate-900 transition cursor-pointer shadow-2xs"
                       >
                         Xong
                       </button>
@@ -5747,6 +5750,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
                   }`}
                   title="Cấu hình Dấu xén (Tem)"
                 >
+                  <span className={`w-2 h-2 rounded-full ${config.useCrop ? 'bg-white shadow-xs' : 'bg-slate-300'}`} />
                   <span className="text-xs font-medium whitespace-nowrap">Dấu xén</span>
                   <span className={`text-[10px] whitespace-nowrap ${config.useCrop ? 'text-violet-100 font-medium bg-violet-700/80 px-1.5 py-0.5 rounded' : 'text-slate-400'}`}>
                     {config.useCrop ? `${config.cropLen}mm • ${config.cropDist}mm` : '(Tem)'}
@@ -5830,24 +5834,25 @@ Chỉ trả về JSON, không giải thích thêm.`;
                     </div>
 
                     {/* Bottom Actions: Tắt / Bật & Đóng */}
-                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
                       <button
                         type="button"
                         onClick={() => {
                           setConfig(c => ({ ...c, useColorBar: !c.useColorBar }));
                         }}
-                        className={`text-[10px] font-medium px-2.5 py-1 rounded-xl transition cursor-pointer border ${
+                        className={`text-xs font-semibold px-3 py-1.5 rounded-xl transition cursor-pointer border flex items-center gap-1.5 shadow-2xs ${
                           config.useColorBar
                             ? 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100'
                             : 'bg-violet-50 border-violet-200 text-violet-700 hover:bg-violet-100'
                         }`}
                       >
-                        {config.useColorBar ? 'Tắt dải màu' : 'Bật dải màu'}
+                        <Power size={13} />
+                        <span>{config.useColorBar ? 'Tắt dải màu' : 'Bật dải màu'}</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => setIsColorBarPopoverOpen(false)}
-                        className="text-[10px] font-medium px-3 py-1 bg-slate-800 text-white rounded-xl hover:bg-slate-900 transition cursor-pointer shadow-2xs"
+                        className="text-xs font-semibold px-3.5 py-1.5 bg-slate-800 text-white rounded-xl hover:bg-slate-900 transition cursor-pointer shadow-2xs"
                       >
                         Xong
                       </button>
@@ -5867,6 +5872,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
                   }`}
                   title="Cấu hình vị trí và khoảng cách Dải màu CMYK"
                 >
+                  <span className={`w-2 h-2 rounded-full ${config.useColorBar ? 'bg-white shadow-xs' : 'bg-slate-300'}`} />
                   <span className="text-xs font-medium whitespace-nowrap">Dải màu</span>
                   <span className={`text-[10px] whitespace-nowrap ${config.useColorBar ? 'text-violet-100 font-medium bg-violet-700/80 px-1.5 py-0.5 rounded' : 'text-slate-400'}`}>
                     {config.useColorBar
