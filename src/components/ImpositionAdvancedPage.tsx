@@ -75,7 +75,9 @@ export interface ShapeTabItem {
   vectorMaskResult: VectorMaskResult | null;
   customSvgData: string;
   color: string;
-  autoRotate?: boolean;
+  autoRotate?: boolean; // legacy / packing canRotate
+  autoRotateImage?: boolean; // Tự xoay ảnh vừa khung tem cho riêng layer này
+  canRotate?: boolean; // Cho phép thuật toán xoay tem khi xếp khổ
 }
 
 const TAB_COLORS = ['#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#3b82f6', '#84cc16', '#6366f1'];
@@ -102,7 +104,7 @@ interface ImpositionConfig {
   useCrop: boolean; cropLen: number; cropDist: number; cropThick: number; cropColor: string;
   fitMode: 'stretch' | 'fill' | 'fit' | 'actual';
   colorMode: 'original' | 'cmyk' | 'cmyk_k100' | 'rgb' | 'konica';
-  dpi: number; autoRotate: boolean; processMode: 'vector' | 'raster';
+  dpi: number; autoRotate: boolean; autoRotateImage?: boolean; processMode: 'vector' | 'raster';
   cutBleed: number;
   // Advanced features
   usePrintArea: boolean; printAreaW: number; printAreaH: number;
@@ -468,7 +470,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
     pageW: 330, pageH: 480, printW: 310, printH: 450, totalOrder: 1000,
     useTotalLimit: false,
     useCrop: false, cropLen: 5, cropDist: 3, cropThick: 0.25, cropColor: '#000000',
-    fitMode: 'fill', colorMode: 'original', dpi: 300, autoRotate: true, processMode: 'vector',
+    fitMode: 'fill', colorMode: 'original', dpi: 300, autoRotate: true, autoRotateImage: true, processMode: 'vector',
     cutBleed: 0,
     // Advanced features
     usePrintArea: false, printAreaW: 320, printAreaH: 470,
@@ -549,6 +551,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
   const soLuongInputRef = useRef<HTMLInputElement>(null);
   const rongInputRef = useRef<HTMLInputElement>(null);
   const caoInputRef = useRef<HTMLInputElement>(null);
+  const layoutFingerprintRef = useRef<string>('');
 
   // Vector Mask Editor modal state
   const [isVectorMaskEditorOpen, setIsVectorMaskEditorOpen] = useState(false);
@@ -577,7 +580,9 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
         sourceImage: null,
         vectorMaskResult: null,
         customSvgData: '',
-        color: '#8b5cf6'
+        color: '#8b5cf6',
+        autoRotateImage: true,
+        canRotate: true,
       }
     ];
   });
@@ -767,7 +772,8 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
         cornerRadius: targetTab.cornerRadius,
         totalOrder: activeCount > 1 ? c.totalOrder : targetTab.quantity,
         useTotalLimit: shouldLimit,
-        autoRotate: targetTab.autoRotate !== undefined ? targetTab.autoRotate : c.autoRotate,
+        autoRotate: targetTab.canRotate !== undefined ? targetTab.canRotate : (targetTab.autoRotate !== undefined ? targetTab.autoRotate : c.autoRotate),
+        autoRotateImage: targetTab.autoRotateImage !== undefined ? targetTab.autoRotateImage : c.autoRotateImage,
       }));
       setVectorMaskResult(targetTab.vectorMaskResult);
       setCustomSvgData(targetTab.customSvgData);
@@ -792,6 +798,8 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
       itemH: 50,
       quantity: 10,
       autoRotate: config.autoRotate,
+      canRotate: config.autoRotate,
+      autoRotateImage: config.autoRotateImage ?? true,
       useTotalLimit: true,
       cornerRadius: 0,
       sourceImage: defaultSrcImage,
@@ -1699,8 +1707,8 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
     
     const correspondingTab = isMultiShape ? shapeTabs.find(t => t.id === it.tabId || t.name === it.tabName) : null;
     const isTabAutoRotate = isMultiShape 
-      ? (correspondingTab?.autoRotate !== undefined ? correspondingTab.autoRotate : config.autoRotate)
-      : config.autoRotate;
+      ? (correspondingTab?.autoRotateImage !== undefined ? correspondingTab.autoRotateImage : (correspondingTab?.autoRotate !== undefined ? correspondingTab.autoRotate : (config.autoRotateImage ?? true)))
+      : (config.autoRotateImage ?? true);
 
     const actualW = it.w !== undefined ? it.w : (it.rot ? config.itemH : config.itemW);
     const originalItemH = itemShape === 'circle' ? actualW : (it.h !== undefined ? it.h : (it.rot ? config.itemW : config.itemH));
@@ -1778,7 +1786,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
           const tab = isMultiShape ? shapeTabs.find(t => t.id === it.tabId || t.name === it.tabName) : null;
           const origW = tab ? tab.itemW : (it.rot ? it.h : it.w);
           const origH = tab ? (tab.shape === 'circle' ? tab.itemW : tab.itemH) : (it.rot ? it.w : it.h);
-          const tabCanRotate = tab?.autoRotate !== undefined ? tab.autoRotate : config.autoRotate;
+          const tabCanRotate = tab?.canRotate !== undefined ? tab.canRotate : (tab?.autoRotate !== undefined ? tab.autoRotate : config.autoRotate);
           return {
             id: idx,
             w: origW || it.w || config.itemW,
@@ -1902,7 +1910,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
           const tab = isMultiShape ? shapeTabs.find(t => t.id === it.tabId || t.name === it.tabName) : null;
           const origW = tab ? tab.itemW : (it.rot ? it.h : it.w);
           const origH = tab ? (tab.shape === 'circle' ? tab.itemW : tab.itemH) : (it.rot ? it.w : it.h);
-          const tabCanRotate = tab?.autoRotate !== undefined ? tab.autoRotate : config.autoRotate;
+          const tabCanRotate = tab?.canRotate !== undefined ? tab.canRotate : (tab?.autoRotate !== undefined ? tab.autoRotate : config.autoRotate);
           return {
             id: idx,
             w: origW || it.w || config.itemW,
@@ -2230,8 +2238,40 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
   };
 
   const runCalc = useCallback(async () => {
-    // Multi-Shape packing when multiple shape tabs are enabled
     const enabledTabs = shapeTabs.filter(t => t.enabled);
+
+    // Tính fingerprint hình học bố cục: chỉ tính lại khi kích thước/hình dạng/sắp xếp thật sự thay đổi
+    const currentFingerprint = JSON.stringify({
+      pw: config.pageW,
+      ph: config.pageH,
+      printArea: config.usePrintArea ? [config.printAreaW, config.printAreaH] : null,
+      margin: config.useMargin ? [config.marginLeft, config.marginRight, config.marginTop, config.marginBot] : null,
+      pad: config.padding,
+      shape: config.shape,
+      w: config.itemW,
+      h: config.itemH,
+      autoRotate: config.autoRotate,
+      alignX: config.alignX,
+      alignY: config.alignY,
+      flowDir: config.flowDir,
+      tabs: enabledTabs.map(t => ({
+        id: t.id,
+        w: t.itemW,
+        h: t.shape === 'circle' ? t.itemW : t.itemH,
+        qty: t.quantity,
+        shape: t.shape,
+        canRotate: t.canRotate !== undefined ? t.canRotate : (t.autoRotate !== undefined ? t.autoRotate : config.autoRotate)
+      })),
+      allPagesLen: (config.shape === 'svg-image' || config.shape === 'pdf-source') ? allPages.length : 0,
+      customSvgLen: customSvgData ? customSvgData.length : 0,
+    });
+
+    if (layoutFingerprintRef.current && currentFingerprint === layoutFingerprintRef.current) {
+      return;
+    }
+    layoutFingerprintRef.current = currentFingerprint;
+
+    // Multi-Shape packing when multiple shape tabs are enabled
     if (enabledTabs.length > 1) {
       let pw = config.pageW, ph = config.pageH;
       let ox = 0, oy = 0;
@@ -2250,7 +2290,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
         const qty = Math.max(1, tab.quantity || 1);
         const w = tab.itemW;
         const h = tab.shape === 'circle' ? tab.itemW : tab.itemH;
-        const tabCanRotate = tab.autoRotate !== undefined ? tab.autoRotate : config.autoRotate;
+        const tabCanRotate = tab.canRotate !== undefined ? tab.canRotate : (tab.autoRotate !== undefined ? tab.autoRotate : config.autoRotate);
         for (let k = 0; k < qty; k++) {
           multiItems.push({
             id: itemId++,
@@ -5051,30 +5091,34 @@ Chỉ trả về JSON, không giải thích thêm.`;
                     );
                   })}
 
-                  {/* 5th Button: Tự xoay ảnh vừa khung (Auto Rotate) */}
+                  {/* 5th Button: Tự xoay ảnh vừa khung (Auto Rotate Image) */}
                   {(() => {
-                    const isTabAutoRotate = isMultiShape
-                      ? (activeTab.autoRotate !== undefined ? activeTab.autoRotate : config.autoRotate)
-                      : config.autoRotate;
+                    const isTabAutoRotateImage = isMultiShape
+                      ? (activeTab.autoRotateImage !== undefined ? activeTab.autoRotateImage : (activeTab.autoRotate !== undefined ? activeTab.autoRotate : (config.autoRotateImage ?? true)))
+                      : (config.autoRotateImage ?? true);
                     return (
                       <button
                         type="button"
                         onClick={() => {
-                          const nextAutoRotate = !isTabAutoRotate;
-                          setConfig(c => ({ ...c, autoRotate: nextAutoRotate }));
+                          const nextVal = !isTabAutoRotateImage;
+                          setConfig(c => ({ ...c, autoRotateImage: nextVal }));
                           if (isMultiShape) {
-                            updateActiveTabProp({ autoRotate: nextAutoRotate });
+                            updateActiveTabProp({ autoRotateImage: nextVal });
                           }
                         }}
-                        className={`h-7 px-1 rounded-lg border flex items-center justify-center gap-1 transition-all cursor-pointer select-none whitespace-nowrap ${
-                          isTabAutoRotate
+                        className={`h-7 px-1.5 rounded-lg border flex items-center justify-center gap-1 transition-all cursor-pointer select-none whitespace-nowrap ${
+                          isTabAutoRotateImage
                             ? 'border-emerald-600 bg-emerald-600 text-white shadow-2xs font-medium ring-2 ring-emerald-200'
                             : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 shadow-2xs'
                         }`}
-                        title="Tự động xoay ảnh vừa khung và hướng tem"
+                        title={
+                          isTabAutoRotateImage
+                            ? "Tự xoay ảnh vừa khung: Đang BẬT (Ảnh tự xoay 90° khi tỷ lệ ngược khung - bấm để tắt)"
+                            : "Tự xoay ảnh vừa khung: Đang TẮT (Giữ nguyên chiều ảnh gốc - bấm để bật)"
+                        }
                       >
-                        <RotateCw size={12} className={isTabAutoRotate ? 'text-white' : 'text-slate-500'} />
-                        <span className="text-[10px] font-medium whitespace-nowrap">Tự xoay</span>
+                        <RotateCw size={12} className={isTabAutoRotateImage ? 'text-white' : 'text-slate-500'} />
+                        <span className="text-[10px] font-medium whitespace-nowrap">Tự xoay ảnh</span>
                       </button>
                     );
                   })()}
@@ -5086,9 +5130,31 @@ Chỉ trả về JSON, không giải thích thêm.`;
           {/* Plan selector */}
           <div className="p-3 border-b flex-1 flex flex-col min-h-0">
             <div className="flex items-center justify-between mb-2 flex-shrink-0">
-              <h3 className="text-[11px] font-medium text-gray-500 uppercase flex items-center gap-1">
-                <LayoutGrid size={13} className="text-violet-500" /> Sắp xếp ({plans.length})
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-[11px] font-medium text-gray-500 uppercase flex items-center gap-1">
+                  <LayoutGrid size={13} className="text-violet-500" /> Sắp xếp ({plans.length})
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    layoutFingerprintRef.current = '';
+                    setConfig(c => ({ ...c, autoRotate: !c.autoRotate }));
+                  }}
+                  className={`px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1 border transition select-none cursor-pointer ${
+                    config.autoRotate
+                      ? 'bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100 font-medium'
+                      : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+                  }`}
+                  title={
+                    config.autoRotate
+                      ? "Đang cho phép xoay tem 90° để tối ưu số lượng tem trên khổ in (Bấm để khoá chiều đứng)"
+                      : "Đang khoá hướng tem cố định (Bấm để cho phép xoay tem 90°)"
+                  }
+                >
+                  <RotateCw size={10} className={config.autoRotate ? 'text-violet-600' : 'text-slate-400'} />
+                  <span>{config.autoRotate ? 'Xoay tối ưu' : 'Khoá hướng'}</span>
+                </button>
+              </div>
               <div className="flex items-center gap-1.5">
                 {currentPlan && (
                   <span className="text-[10px] font-medium text-violet-700 bg-violet-100 px-2 py-0.5 rounded-full">
@@ -7378,15 +7444,15 @@ Chỉ trả về JSON, không giải thích thêm.`;
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-xs text-gray-500">Danh sách trang ({allPages.length})</span>
                   <div className="flex gap-2">
-                    {config.autoRotate ? (
+                    {(config.autoRotateImage ?? true) ? (
                       <span className="text-[10px] px-2 py-1 bg-amber-100 text-amber-700 rounded border border-amber-300">
-                        ✓ Tự động xoay đang bật
+                        ✓ Tự động xoay ảnh đang bật
                       </span>
                     ) : (
                       <>
                         <button onClick={() => rotateAllPages('auto')} className="text-[10px] px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded">Tự động Xoay</button>
                         <button onClick={() => rotateAllPages('left')} className="text-[10px] px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded">Xoay Trái</button>
-                        <button onClick={() => rotateAllPages('right')} className="text-[10px] px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded">Xoay Phải</button>
+                        <button onClick={() => rotateAllPages('right')} className="text-[10px] px-2 py-1 bg-gray-100 hover:bg-200 rounded">Xoay Phải</button>
                       </>
                     )}
                     <button onClick={() => setAllPages([])} className="text-[10px] px-2 py-1 text-red-500 hover:bg-red-50 rounded">Xóa tất cả</button>
@@ -7416,7 +7482,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
                             />
                             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-1">
                               <button onClick={() => { setLightboxImage(page.thumb); setIsLightboxOpen(true); }} className="p-1 bg-white rounded hover:bg-gray-100"><ZoomIn size={12} /></button>
-                              {!config.autoRotate && (
+                              {!(config.autoRotateImage ?? true) && (
                                 <button onClick={() => rotatePage(idx, 'left')} className="p-1 bg-white rounded hover:bg-gray-100"><RotateCcw size={12} /></button>
                               )}
                               <button onClick={() => removePage(idx)} className="p-1 bg-white rounded hover:bg-red-100 text-red-500"><Trash2 size={12} /></button>
@@ -7424,7 +7490,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
                           </div>
                           <div className="px-1.5 py-1 flex items-center justify-between text-[10px]">
                             <span className="w-4 h-4 bg-pink-500 text-white rounded-full flex items-center justify-center font-medium">{idx + 1}</span>
-                            {config.autoRotate ? (
+                            {(config.autoRotateImage ?? true) ? (
                               <span className="text-amber-600 font-medium text-[8px]">AUTO</span>
                             ) : page.rotation !== 0 ? (
                               <span className="text-pink-600 font-medium">{page.rotation}°</span>
