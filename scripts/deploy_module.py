@@ -20,6 +20,11 @@ import time
 import stat
 import paramiko
 
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+except Exception:
+    pass
+
 VPS_HOST = '157.66.80.125'
 VPS_PORT = 22
 VPS_USER = 'root'
