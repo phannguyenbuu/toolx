@@ -1627,6 +1627,66 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
     return globalIndex % allPages.length;
   }, [currentPlan, allPages.length, effectiveDataMode, standardQty, xUpQty, currentSheetIndex, config.is2Sided, config.twoSideMode, previewSide, config.useTotalLimit, config.totalOrder, isMultiShape]);
 
+  const calculateSlotTotalRotation = (
+    it: PlanItem,
+    page: PageItem | null | undefined,
+    isBackSide: boolean = false
+  ): number => {
+    let pageRotation = page ? (page.rotation || 0) : 0;
+    const isRotatedItem = !!it.rot;
+    const itemShape = (it.shape || config.shape) as string;
+    const isSpecialShape = ['trapezoid', 'triangle', 'hexagon'].includes(itemShape);
+    
+    const correspondingTab = isMultiShape ? shapeTabs.find(t => t.id === it.tabId || t.name === it.tabName) : null;
+    const isTabAutoRotate = isMultiShape 
+      ? (correspondingTab?.autoRotate !== undefined ? correspondingTab.autoRotate : config.autoRotate)
+      : config.autoRotate;
+
+    const actualW = it.w !== undefined ? it.w : (it.rot ? config.itemH : config.itemW);
+    const originalItemH = itemShape === 'circle' ? actualW : (it.h !== undefined ? it.h : (it.rot ? config.itemW : config.itemH));
+
+    if (isTabAutoRotate && page && page.w && page.h) {
+      const srcRatio = page.w / page.h;
+      const dstRatio = actualW / originalItemH;
+      
+      if ((srcRatio > 1 && dstRatio < 1) || (srcRatio < 1 && dstRatio > 1)) {
+        pageRotation += isRotatedItem ? -90 : 90;
+      }
+    }
+    
+    if (isRotatedItem && !isSpecialShape) {
+      pageRotation += 90;
+    }
+    
+    const itemRotation = (isSpecialShape && isRotatedItem) ? 180 : 0;
+    const flipRotation = it.flipped ? 180 : 0;
+    const rot45Rotation = it.rot45 ? 45 : 0;
+    const backRotation = (isBackSide && config.rot180Back) ? 180 : 0;
+    return ((pageRotation + itemRotation + flipRotation + rot45Rotation + backRotation) % 360 + 360) % 360;
+  };
+
+  const enrichPlanItemsWithRotation = (items: PlanItem[]): (PlanItem & { totalRotation: number; pageIndex: number; w: number; h: number })[] => {
+    return items.map((it, i) => {
+      const sheetIdx = it.sheetIndex ?? 0;
+      const isBackSide = config.is2Sided && (sheetIdx % 2 === 1);
+      const pageIdx = getPageForSlot(i, sheetIdx, isBackSide ? 'back' : 'front');
+      const page = pageIdx >= 0 && pageIdx < allPages.length ? allPages[pageIdx] : null;
+      const totRot = calculateSlotTotalRotation(it, page, isBackSide);
+      
+      const itemShape = (it.shape || config.shape) as string;
+      const actualW = it.w !== undefined ? it.w : (it.rot ? config.itemH : config.itemW);
+      const actualH = itemShape === 'circle' ? actualW : (it.h !== undefined ? it.h : (it.rot ? config.itemW : config.itemH));
+
+      return {
+        ...it,
+        w: actualW,
+        h: actualH,
+        pageIndex: pageIdx >= 0 ? pageIdx : 0,
+        totalRotation: totRot,
+      };
+    });
+  };
+
   const handleReorderSlots = useCallback((fromIdx: number, toIdx: number) => {
     if (fromIdx === toIdx || !currentPlan) return;
     setPlans(prevPlans => {
@@ -1901,8 +1961,10 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
         const plan = impositionStyleEnabled && styledPlan ? styledPlan : currentPlan;
         const fileIds = allPages.map(p => p.fileId).filter(Boolean);
         if (fileIds.length === 0) { setIsLoadingServerPreview(false); return; }
+        const rawPlanItems = plan ? plan.items : [];
+        const enrichedPlanItems = enrichPlanItemsWithRotation(rawPlanItems);
         const fd = new FormData();
-        fd.append('planData', JSON.stringify(plan.items));
+        fd.append('planData', JSON.stringify(enrichedPlanItems));
         fd.append('fileIds', JSON.stringify(fileIds));
         fd.append('pagesData', JSON.stringify(allPages.map(p => ({ rotation: p.rotation || 0, w: p.w, h: p.h }))));
         fd.append('pageW', String(config.pageW));
@@ -2747,78 +2809,17 @@ Chỉ trả về JSON, không giải thích thêm.`;
         }
       }
       
-      // Calculate final rotation for each page (including auto-rotate)
-      const pagesDataWithFinalRotation = allPages.map(p => {
-        let finalRotation = p.rotation; // Bắt đầu với manual rotation
-        
-        // Apply auto-rotate logic if enabled
-        if (config.autoRotate) {
-          // Auto-rotate: BỎ QUA manual rotation, chỉ tính từ ảnh gốc
-          
-          const originalItemH = config.shape === 'circle' ? config.itemW : config.itemH;
-          const itemW = config.itemW;
-          const itemH = originalItemH;
-          console.log(`[AUTO-ROTATE] Image: ${p.w}x${p.h}, Item: ${itemW}x${itemH}, Manual: ${p.rotation}°`);
-          
-          // Thử 4 góc với ảnh GỐC (p.w, p.h)
-          const rotations = [0, 90, -90, 180];
-          let bestRotation = 0;
-          let minWaste = Infinity;
-          
-          for (const rot of rotations) {
-            // Tính kích thước ảnh GỐC sau khi xoay
-            const rotAbs = Math.abs(rot) % 180;
-            const isRotated90 = rotAbs === 90;
-            const rotatedW = isRotated90 ? p.h : p.w; // Dùng p.w, p.h gốc
-            const rotatedH = isRotated90 ? p.w : p.h;
-            
-            // Scale để fit vào item
-            const scaleW = itemW / rotatedW;
-            const scaleH = itemH / rotatedH;
-            const scale = Math.min(scaleW, scaleH);
-            
-            // Kích thước ảnh sau khi scale
-            const scaledW = rotatedW * scale;
-            const scaledH = rotatedH * scale;
-            
-            // Khoảng trắng thừa
-            const wasteW = itemW - scaledW;
-            const wasteH = itemH - scaledH;
-            const totalWaste = wasteW + wasteH;
-            console.log(`  Rot ${rot}°: waste=${totalWaste.toFixed(2)}`);
-            
-            // Chọn góc có khoảng trắng ít nhất
-            if (totalWaste < minWaste) {
-              minWaste = totalWaste;
-              bestRotation = rot;
-            }
-          }
-          
-          console.log(`  → Best: ${bestRotation}°`);
-          finalRotation = bestRotation; // Ghi đè hoàn toàn manual rotation
-        }
-        
-        // NOTE: Do NOT add layout rotation compensation here
-        // Python will handle item['rot'] separately
-        
-        return {
-          rotation: finalRotation,
-          w: p.w,
-          h: p.h
-        };
-      });
+      // Send clean raw page rotation (preserving manual user rotation without double-rotation)
+      const pagesDataRaw = allPages.map(p => ({
+        rotation: p.rotation || 0,
+        w: p.w,
+        h: p.h
+      }));
+      fd.append('pagesData', JSON.stringify(pagesDataRaw));
       
-      
-      // DEBUG: Log rotation calculations
-      console.log('=== PREVIEW ROTATION CALCULATION ===');
-      pagesDataWithFinalRotation.forEach((p, i) => {
-        console.log(`Page ${i}: rotation=${p.rotation}°, w=${p.w}, h=${p.h}`);
-      });
-      console.log('=== END PREVIEW CALCULATION ===');
-      
-      fd.append('pagesData', JSON.stringify(pagesDataWithFinalRotation));
-      
-      fd.append('planData', JSON.stringify(impositionStyleEnabled && styledPlan ? styledPlan.items : currentPlan.items));
+      const rawPlanItems = (impositionStyleEnabled && styledPlan ? styledPlan.items : (currentPlan?.items || []));
+      const enrichedPlanItems = enrichPlanItemsWithRotation(rawPlanItems);
+      fd.append('planData', JSON.stringify(enrichedPlanItems));
       fd.append('pageW', String(config.pageW)); fd.append('pageH', String(config.pageH));
       fd.append('itemW', String(config.itemW)); fd.append('itemH', String(config.itemH));
       // Only use 'actual' mode if BOTH: fitMode is 'actual' AND customScale is not 100
@@ -3112,30 +3113,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
       const previewSrc = (it.sourceImage as any)?.thumb || (typeof it.sourceImage === 'string' ? it.sourceImage : null) || (correspondingTab?.sourceImage as any)?.thumb || (typeof correspondingTab?.sourceImage === 'string' ? correspondingTab?.sourceImage : null) || (activeTab?.sourceImage as any)?.thumb || (page ? (page.originalThumb || page.thumb) : (allPages.length > 0 ? (allPages[i % allPages.length]?.originalThumb || allPages[i % allPages.length]?.thumb) : null));
 
       // Tính góc xoay totalRotation chuẩn xác 100% như canvas preview
-      let pageRotation = page ? (page.rotation || 0) : 0;
-      const isTabAutoRotate = isMultiShape 
-        ? (correspondingTab?.autoRotate !== undefined ? correspondingTab.autoRotate : config.autoRotate)
-        : config.autoRotate;
-
-      if (isTabAutoRotate && page) {
-        const srcRatio = page.w / page.h;
-        const originalItemH = itemShape === 'circle' ? actualW : (it.h !== undefined ? it.h : (it.rot ? config.itemW : config.itemH));
-        const dstRatio = actualW / originalItemH;
-        
-        if ((srcRatio > 1 && dstRatio < 1) || (srcRatio < 1 && dstRatio > 1)) {
-          pageRotation += isRotatedItem ? -90 : 90;
-        }
-      }
-      
-      if (isRotatedItem && !isSpecialShape) {
-        pageRotation += 90;
-      }
-      
-      const itemRotation = (isSpecialShape && isRotatedItem) ? 180 : 0;
-      const flipRotation = it.flipped ? 180 : 0;
-      const rot45Rotation = it.rot45 ? 45 : 0;
-      const backRotation = (isBackSide && config.rot180Back) ? 180 : 0;
-      const totalRotation = ((pageRotation + itemRotation + flipRotation + rot45Rotation + backRotation) % 360 + 360) % 360;
+      const totalRotation = calculateSlotTotalRotation(it, page, isBackSide);
 
       if (previewSrc) {
         try {
@@ -3282,24 +3260,15 @@ Chỉ trả về JSON, không giải thích thêm.`;
           }
         }
 
-        const pagesDataWithFinalRotation = allPages.map(p => {
-          let pageRotation = p.rotation || 0;
-          if (config.autoRotate && p.w && p.h) {
-            const srcRatio = p.w / p.h;
-            const originalItemH = config.shape === 'circle' ? config.itemW : config.itemH;
-            const dstRatio = config.itemW / originalItemH;
-            if ((srcRatio > 1 && dstRatio < 1) || (srcRatio < 1 && dstRatio > 1)) {
-              pageRotation += 90;
-            }
-          }
-          return {
-            rotation: pageRotation,
-            w: p.w,
-            h: p.h
-          };
-        });
-        fd.append('pagesData', JSON.stringify(pagesDataWithFinalRotation));
-        fd.append('planData', JSON.stringify(impositionStyleEnabled && styledPlan ? styledPlan.items : currentPlan.items));
+        const pagesDataRaw = allPages.map(p => ({
+          rotation: p.rotation || 0,
+          w: p.w,
+          h: p.h
+        }));
+        fd.append('pagesData', JSON.stringify(pagesDataRaw));
+        const rawPlanItems = (impositionStyleEnabled && styledPlan ? styledPlan.items : (currentPlan?.items || []));
+        const enrichedPlanItems = enrichPlanItemsWithRotation(rawPlanItems);
+        fd.append('planData', JSON.stringify(enrichedPlanItems));
         fd.append('pageW', String(config.pageW)); fd.append('pageH', String(config.pageH));
         fd.append('itemW', String(config.itemW)); fd.append('itemH', String(config.itemH));
         const effectiveFitMode = (customScale !== 100) ? 'actual' : config.fitMode;
@@ -3922,25 +3891,15 @@ Chỉ trả về JSON, không giải thích thêm.`;
           }
         }
         
-        const pagesDataWithFinalRotation = allPages.map(p => {
-          let pageRotation = p.rotation || 0;
-          if (config.autoRotate && p.w && p.h) {
-            const srcRatio = p.w / p.h;
-            const originalItemH = config.shape === 'circle' ? config.itemW : config.itemH;
-            const dstRatio = config.itemW / originalItemH;
-            if ((srcRatio > 1 && dstRatio < 1) || (srcRatio < 1 && dstRatio > 1)) {
-              pageRotation += 90;
-            }
-          }
-          return {
-            rotation: pageRotation,
-            w: p.w,
-            h: p.h
-          };
-        });
-        
-        fd.append('pagesData', JSON.stringify(pagesDataWithFinalRotation));
-        fd.append('planData', JSON.stringify(impositionStyleEnabled && styledPlan ? styledPlan.items : currentPlan.items));
+        const pagesDataRaw = allPages.map(p => ({
+          rotation: p.rotation || 0,
+          w: p.w,
+          h: p.h
+        }));
+        fd.append('pagesData', JSON.stringify(pagesDataRaw));
+        const rawPlanItems = (impositionStyleEnabled && styledPlan ? styledPlan.items : (currentPlan?.items || []));
+        const enrichedPlanItems = enrichPlanItemsWithRotation(rawPlanItems);
+        fd.append('planData', JSON.stringify(enrichedPlanItems));
         fd.append('pageW', String(config.pageW)); fd.append('pageH', String(config.pageH));
         fd.append('itemW', String(config.itemW)); fd.append('itemH', String(config.itemH));
         const effectiveFitMode2 = (customScale !== 100) ? 'actual' : config.fitMode;
@@ -5516,33 +5475,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
                           const previewSrc = (it.sourceImage as any)?.thumb || (typeof it.sourceImage === 'string' ? it.sourceImage : null) || (correspondingTab?.sourceImage as any)?.thumb || (typeof correspondingTab?.sourceImage === 'string' ? correspondingTab?.sourceImage : null) || (activeTab?.sourceImage as any)?.thumb || (page ? page.thumb : (allPages.length > 0 ? allPages[i % allPages.length]?.thumb : null));
                           
                           // CSS transform for rotation
-                          let pageRotation = page ? page.rotation : 0;
-                          const isRotatedItem = !!it.rot;
-                          
-                          // Auto-rotate: compare image orientation with ORIGINAL slot dimensions
-                          const isTabAutoRotate = isMultiShape 
-                            ? (correspondingTab?.autoRotate !== undefined ? correspondingTab.autoRotate : config.autoRotate)
-                            : config.autoRotate;
-
-                          if (isTabAutoRotate && page) {
-                            const srcRatio = page.w / page.h;
-                            const originalItemH = itemShape === 'circle' ? itW : itH;
-                            const dstRatio = itW / originalItemH;
-                            
-                            if ((srcRatio > 1 && dstRatio < 1) || (srcRatio < 1 && dstRatio > 1)) {
-                              pageRotation += isRotatedItem ? -90 : 90;
-                            }
-                          }
-                          
-                          if (isRotatedItem && !isSpecialShape) {
-                            pageRotation += 90;
-                          }
-                          
-                          const itemRotation = (isSpecialShape && isRotatedItem) ? 180 : 0;
-                          const flipRotation = it.flipped ? 180 : 0;
-                          const rot45Rotation = it.rot45 ? 45 : 0;
-                          const backRotation = (isBackSide && config.rot180Back) ? 180 : 0;
-                          const totalRotation = pageRotation + itemRotation + flipRotation + rot45Rotation + backRotation;
+                          const totalRotation = calculateSlotTotalRotation(it, page, isBackSide);
                           const imgTransform = totalRotation !== 0 ? `rotate(${totalRotation}deg)` : 'none';
                           
                           const getPreserveAspectRatio = () => {

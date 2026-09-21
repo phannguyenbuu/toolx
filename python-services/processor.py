@@ -856,7 +856,9 @@ def generate_pdf_vector(
     rot_180_back: bool = False,
     # Output settings
     dpi: int = 300,
-    color_mode: str = 'original'
+    color_mode: str = 'original',
+    custom_scale: float = 100.0,
+    background_color: str = '#ffffff'
 ) -> bytes:
     """
     Generate PDF in vector mode using ReportLab with native PDF Clipping Path.
@@ -896,23 +898,31 @@ def generate_pdf_vector(
     elif color_mode == 'rgb':
         src_img = src_img.convert('RGB')
     
-    # Apply rotation from frontend (manual or auto-calculated)
-    if rotation != 0:
-        print(f"[DEBUG] Vector mode: Applying rotation {rotation}° (auto_rotate={auto_rotate})")
+    has_total_rotation = any(item.get('totalRotation') is not None for item in plan_items)
+    
+    # Apply rotation from frontend (manual or auto-calculated) only for legacy mode
+    if rotation != 0 and not has_total_rotation:
+        print(f"[DEBUG] Vector mode: Applying legacy rotation {rotation}° (auto_rotate={auto_rotate})")
         src_img = src_img.rotate(-rotation, expand=True)  # CSS -> PIL: đảo dấu
     
-    # Fit image to item dimensions
-    # For circle shape, use itemW for both dimensions
+    # Fit image to item dimensions (legacy mode)
     effective_item_h = item_w if shape == 'circle' else item_h
     target_w_px = mm_to_px(item_w, dpi)
     target_h_px = mm_to_px(effective_item_h, dpi)
-    processed_img = process_image_fit_mode(src_img, target_w_px, target_h_px, fit_mode, False)
+    processed_img = process_image_fit_mode(src_img, target_w_px, target_h_px, fit_mode, False, custom_scale, background_color)
     
     # Convert to bytes for ReportLab
     img_buffer = BytesIO()
     processed_img.save(img_buffer, format='PNG')
     img_buffer.seek(0)
     img_reader = ImageReader(img_buffer)
+    
+    raw_img_reader = None
+    if has_total_rotation:
+        raw_buffer = BytesIO()
+        src_img.save(raw_buffer, format='PNG')
+        raw_buffer.seek(0)
+        raw_img_reader = ImageReader(raw_buffer)
     
     # Helper function to get clipping path points for a shape
     def get_clip_path_points(shape_type: str, x: float, y: float, w: float, h: float, rotated: bool = False):
@@ -1001,20 +1011,32 @@ def generate_pdf_vector(
         # y_pt should be from bottom, but our data is from top
         # page_h * mm - item['y'] * mm - item_h * mm (for non-rotated)
         
+        eff_item_h = item_w if shape == 'circle' else item_h
         if is_flip_shape:
             # For flip shapes, dimensions don't swap
             w_mm = item_w
-            h_mm = item_h
-            is_rotated = item['rot']
+            h_mm = eff_item_h
+            is_rotated = item.get('rot', False)
+        elif shape == 'circle':
+            w_mm = item_w
+            h_mm = item_w
+            is_rotated = False
         else:
             # For rect/oval/circle, dimensions swap when rotated
-            if item['rot']:
-                w_mm = item_h
+            if item.get('rot'):
+                w_mm = eff_item_h
                 h_mm = item_w
             else:
                 w_mm = item_w
-                h_mm = item_h
-            is_rotated = item['rot']
+                h_mm = eff_item_h
+            is_rotated = item.get('rot', False)
+        
+        if 'w' in item and item['w'] is not None:
+            w_mm = float(item['w'])
+        if 'h' in item and item['h'] is not None:
+            h_mm = float(item['h'])
+        if shape == 'circle':
+            h_mm = w_mm
         
         w_pt = w_mm * mm
         h_pt = h_mm * mm
@@ -1043,13 +1065,61 @@ def generate_pdf_vector(
                 for px, py in points[1:]:
                     path.lineTo(px, py)
                 path.close()
+            else:
+                path.rect(x_pt, y_pt, w_pt, h_pt)
         
         # Apply clipping path
         c.clipPath(path, stroke=0, fill=0)
         
         # Draw the image inside the clipped area
-        # For rotated items (non-flip shapes), we need to rotate the image
-        if not is_flip_shape and item['rot']:
+        if has_total_rotation and raw_img_reader is not None:
+            tot_rot = float(item.get('totalRotation', 0)) % 360
+            is_odd_90 = (tot_rot % 180) != 0
+            
+            elem_w_pt = h_pt if is_odd_90 else w_pt
+            elem_h_pt = w_pt if is_odd_90 else h_pt
+            
+            scale_factor = (custom_scale / 100.0) if custom_scale != 100 else 1.0
+            img_w = src_img.width
+            img_h = src_img.height
+            
+            if fit_mode == 'stretch':
+                dw = elem_w_pt * scale_factor
+                dh = elem_h_pt * scale_factor
+            elif fit_mode == 'fit':
+                s = min(elem_w_pt / img_w, elem_h_pt / img_h) * scale_factor
+                dw = img_w * s
+                dh = img_h * s
+            elif fit_mode == 'actual':
+                s = (72.0 / dpi) * scale_factor
+                dw = img_w * s
+                dh = img_h * s
+            else:  # 'fill' (cover)
+                s = max(elem_w_pt / img_w, elem_h_pt / img_h) * scale_factor
+                dw = img_w * s
+                dh = img_h * s
+                
+            c.saveState()
+            cx = x_pt + w_pt / 2
+            cy = y_pt + h_pt / 2
+            c.translate(cx, cy)
+            if tot_rot != 0:
+                c.rotate(-tot_rot)
+                
+            if background_color and background_color.lower() not in ('#ffffff', 'white', '') and fit_mode in ('fit', 'actual'):
+                try:
+                    hex_c = background_color.lstrip('#')
+                    r = int(hex_c[0:2], 16) / 255.0
+                    g = int(hex_c[2:4], 16) / 255.0
+                    b = int(hex_c[4:6], 16) / 255.0
+                    c.setFillColorRGB(r, g, b)
+                    c.rect(-elem_w_pt/2, -elem_h_pt/2, elem_w_pt, elem_h_pt, fill=1, stroke=0)
+                except:
+                    pass
+                    
+            c.drawImage(raw_img_reader, -dw/2, -dh/2, width=dw, height=dh, mask='auto')
+            c.restoreState()
+        elif not is_flip_shape and item['rot']:
             # Slot is rotated: container is h×w, image is processed as w×h
             # Rotate -90° to fit image into rotated slot
             c.saveState()
@@ -1095,16 +1165,26 @@ def generate_pdf_vector(
         # Draw crop marks for each item
         for item in plan_items:
             # Get item dimensions
+            eff_item_h = item_w if shape == 'circle' else item_h
             if is_flip_shape:
                 w_mm = item_w
-                h_mm = item_h
+                h_mm = eff_item_h
+            elif shape == 'circle':
+                w_mm = item_w
+                h_mm = item_w
             else:
-                if item['rot']:
-                    w_mm = item_h
+                if item.get('rot'):
+                    w_mm = eff_item_h
                     h_mm = item_w
                 else:
                     w_mm = item_w
-                    h_mm = item_h
+                    h_mm = eff_item_h
+            if 'w' in item and item['w'] is not None:
+                w_mm = float(item['w'])
+            if 'h' in item and item['h'] is not None:
+                h_mm = float(item['h'])
+            if shape == 'circle':
+                h_mm = w_mm
             
             # Item position in points (ReportLab Y from bottom)
             ix_pt = item['x'] * mm
@@ -1377,7 +1457,9 @@ def generate_pdf(
                 rot_180_back=rot_180_back,
                 # Output settings
                 dpi=dpi,
-                color_mode=color_mode
+                color_mode=color_mode,
+                custom_scale=custom_scale,
+                background_color=background_color
             )
         except Exception as e:
             print(f"Vector mode failed, falling back to raster: {e}")
@@ -1827,22 +1909,25 @@ def generate_pdf_multipage(
             original_mode = 'RGB'
         # color_mode == 'original': keep as-is
         
-        # Apply rotation from metadata
-        if i < len(pages_meta) and pages_meta[i].get('rotation', 0) != 0:
-            rotation_deg = pages_meta[i]['rotation']
-            print(f"[DEBUG] Page {i}: Applying rotation {rotation_deg}°")
-            img = img.rotate(-rotation_deg, expand=True)  # CSS -> PIL: đảo dấu
-        elif auto_rotate:
-            src_ratio = img.width / img.height
-            eff_h = item_w if shape == 'circle' else item_h
-            dst_ratio = item_w / eff_h
-            if (src_ratio > 1 and dst_ratio < 1) or (src_ratio < 1 and dst_ratio > 1):
-                print(f"[DEBUG] Page {i}: Auto-rotating 90° based on aspect ratio")
-                img = img.rotate(-90, expand=True)
+        has_total_rotation = any(item.get('totalRotation') is not None for item in plan_items)
+        
+        # Apply rotation from metadata only for legacy mode (when totalRotation is not in plan_items)
+        if not has_total_rotation:
+            if i < len(pages_meta) and pages_meta[i].get('rotation', 0) != 0:
+                rotation_deg = pages_meta[i]['rotation']
+                print(f"[DEBUG] Page {i}: Applying legacy rotation {rotation_deg}°")
+                img = img.rotate(-rotation_deg, expand=True)  # CSS -> PIL: đảo dấu
+            elif auto_rotate:
+                src_ratio = img.width / img.height
+                eff_h = item_w if shape == 'circle' else item_h
+                dst_ratio = item_w / eff_h
+                if (src_ratio > 1 and dst_ratio < 1) or (src_ratio < 1 and dst_ratio > 1):
+                    print(f"[DEBUG] Page {i}: Auto-rotating 90° based on aspect ratio")
+                    img = img.rotate(-90, expand=True)
+                else:
+                    print(f"[DEBUG] Page {i}: No rotation (meta={pages_meta[i] if i < len(pages_meta) else 'missing'})")
             else:
                 print(f"[DEBUG] Page {i}: No rotation (meta={pages_meta[i] if i < len(pages_meta) else 'missing'})")
-        else:
-            print(f"[DEBUG] Page {i}: No rotation (meta={pages_meta[i] if i < len(pages_meta) else 'missing'})")
         
         source_images.append(img)
         source_modes.append(original_mode if original_mode else img.mode)
@@ -1876,6 +1961,18 @@ def generate_pdf_multipage(
             processed.save(img_buffer, format='PNG')
         img_buffer.seek(0)
         processed_images.append(ImageReader(img_buffer))
+    
+    raw_img_readers = []
+    if has_total_rotation:
+        for idx, img in enumerate(source_images):
+            raw_buf = BytesIO()
+            if img.mode == 'CMYK':
+                img.save(raw_buf, format='TIFF', compression='none')
+            else:
+                save_img = img if img.mode == 'RGB' else img.convert('RGB')
+                save_img.save(raw_buf, format='PNG')
+            raw_buf.seek(0)
+            raw_img_readers.append(ImageReader(raw_buf))
     
     # Helper function to get page index for a slot based on data_mode
     def get_page_for_slot(sheet_index: int, slot_index: int) -> int:
@@ -1970,20 +2067,30 @@ def generate_pdf_multipage(
             img_reader = processed_images[page_idx]
             
             # Calculate dimensions
-            # Note: for rect/oval/circle, dimensions are swapped when item['rot'] = true
-            # The image is already auto-rotated to match this swapped slot
+            eff_item_h = item_w if shape == 'circle' else item_h
             if is_flip_shape:
                 w_mm = item_w
-                h_mm = item_h
-                is_rotated = item['rot']
+                h_mm = eff_item_h
+                is_rotated = item.get('rot', False)
+            elif shape == 'circle':
+                w_mm = item_w
+                h_mm = item_w
+                is_rotated = False
             else:
-                if item['rot']:
-                    w_mm = item_h
+                if item.get('rot'):
+                    w_mm = eff_item_h
                     h_mm = item_w
                 else:
                     w_mm = item_w
-                    h_mm = item_h
-                is_rotated = item['rot']
+                    h_mm = eff_item_h
+                is_rotated = item.get('rot', False)
+            
+            if 'w' in item and item['w'] is not None:
+                w_mm = float(item['w'])
+            if 'h' in item and item['h'] is not None:
+                h_mm = float(item['h'])
+            if shape == 'circle':
+                h_mm = w_mm
             
             w_pt = w_mm * mm
             h_pt = h_mm * mm
@@ -2003,13 +2110,62 @@ def generate_pdf_multipage(
                     for px, py in points[1:]:
                         path.lineTo(px, py)
                     path.close()
+                else:
+                    path.rect(x_pt, y_pt, w_pt, h_pt)
             
             c.clipPath(path, stroke=0, fill=0)
             
             # Draw image
-            # For special shapes (triangle, trapezoid, hexagon) with rot: need 180° flip
-            # For rect/oval/circle with rot: need 90° CW rotation to compensate layout swap
-            if is_flip_shape and item['rot']:
+            if has_total_rotation and page_idx < len(raw_img_readers) and raw_img_readers[page_idx] is not None:
+                raw_reader = raw_img_readers[page_idx]
+                src_raw = source_images[page_idx]
+                tot_rot = float(item.get('totalRotation', 0)) % 360
+                is_odd_90 = (tot_rot % 180) != 0
+                
+                elem_w_pt = h_pt if is_odd_90 else w_pt
+                elem_h_pt = w_pt if is_odd_90 else h_pt
+                
+                scale_factor = (custom_scale / 100.0) if custom_scale != 100 else 1.0
+                img_w = src_raw.width
+                img_h = src_raw.height
+                
+                if fit_mode == 'stretch':
+                    dw = elem_w_pt * scale_factor
+                    dh = elem_h_pt * scale_factor
+                elif fit_mode == 'fit':
+                    s = min(elem_w_pt / img_w, elem_h_pt / img_h) * scale_factor
+                    dw = img_w * s
+                    dh = img_h * s
+                elif fit_mode == 'actual':
+                    s = (72.0 / dpi) * scale_factor
+                    dw = img_w * s
+                    dh = img_h * s
+                else:  # 'fill' (cover)
+                    s = max(elem_w_pt / img_w, elem_h_pt / img_h) * scale_factor
+                    dw = img_w * s
+                    dh = img_h * s
+                    
+                c.saveState()
+                cx = x_pt + w_pt / 2
+                cy = y_pt + h_pt / 2
+                c.translate(cx, cy)
+                if tot_rot != 0:
+                    c.rotate(-tot_rot)
+                    
+                if background_color and background_color.lower() not in ('#ffffff', 'white', '') and fit_mode in ('fit', 'actual'):
+                    try:
+                        hex_c = background_color.lstrip('#')
+                        r = int(hex_c[0:2], 16) / 255.0
+                        g = int(hex_c[2:4], 16) / 255.0
+                        b = int(hex_c[4:6], 16) / 255.0
+                        c.setFillColorRGB(r, g, b)
+                        c.rect(-elem_w_pt/2, -elem_h_pt/2, elem_w_pt, elem_h_pt, fill=1, stroke=0)
+                    except:
+                        pass
+                        
+                c.drawImage(raw_reader, -dw/2, -dh/2, width=dw, height=dh, mask='auto')
+                c.restoreState()
+            elif is_flip_shape and item.get('rot'):
                 # Special shapes: 180° flip
                 c.saveState()
                 cx = x_pt + w_pt / 2
@@ -2018,7 +2174,7 @@ def generate_pdf_multipage(
                 c.rotate(180)
                 c.drawImage(img_reader, -w_pt/2, -h_pt/2, width=w_pt, height=h_pt, mask='auto')
                 c.restoreState()
-            elif item['rot'] and not is_flip_shape:
+            elif item.get('rot') and not is_flip_shape:
                 # Rect/oval/circle with layout rotation
                 c.saveState()
                 cx = x_pt + w_pt / 2
@@ -2045,12 +2201,22 @@ def generate_pdf_multipage(
                 if item.get('sheetIndex') is not None and item.get('sheetIndex') != sheet_idx:
                     continue
 
+                eff_item_h = item_w if shape == 'circle' else item_h
                 if is_flip_shape:
                     w_mm = item_w
-                    h_mm = item_h
+                    h_mm = eff_item_h
+                elif shape == 'circle':
+                    w_mm = item_w
+                    h_mm = item_w
                 else:
-                    w_mm = item_h if item['rot'] else item_w
-                    h_mm = item_w if item['rot'] else item_h
+                    w_mm = eff_item_h if item.get('rot') else item_w
+                    h_mm = item_w if item.get('rot') else eff_item_h
+                if 'w' in item and item['w'] is not None:
+                    w_mm = float(item['w'])
+                if 'h' in item and item['h'] is not None:
+                    h_mm = float(item['h'])
+                if shape == 'circle':
+                    h_mm = w_mm
                 
                 ix_pt = item['x'] * mm
                 iy_pt = page_h * mm - item['y'] * mm - h_mm * mm

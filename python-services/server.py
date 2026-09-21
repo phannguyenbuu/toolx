@@ -1618,47 +1618,75 @@ def render_sheet_preview():
             src = source_images[page_idx]
             
             # Calculate slot dimensions
+            eff_item_h = item_w if shape == 'circle' else item_h
             if is_flip_shape:
-                sw, sh = item_w, effective_item_h
+                sw, sh = item_w, eff_item_h
             elif item.get('rot', False):
-                sw, sh = effective_item_h, item_w
+                sw, sh = eff_item_h, item_w
             else:
-                sw, sh = item_w, effective_item_h
+                sw, sh = item_w, eff_item_h
+            if 'w' in item and item['w'] is not None:
+                sw = float(item['w'])
+            if 'h' in item and item['h'] is not None:
+                sh = float(item['h'])
+            if shape == 'circle':
+                sh = sw
             
             tw = int(sw * scale)
             th = int(sh * scale)
             if tw <= 0 or th <= 0: continue
             
-            # Auto rotate if needed
             img = src.copy()
-            if auto_rotate:
-                src_ratio = img.width / img.height
-                dst_ratio = tw / th
-                if (src_ratio > 1 and dst_ratio < 1) or (src_ratio < 1 and dst_ratio > 1):
-                    img = img.rotate(-90, expand=True)
-            
-            # Apply fit mode
             from PIL import ImageOps
-            if fit_mode == 'stretch':
-                img = img.resize((tw, th), Image.Resampling.LANCZOS)
-            elif fit_mode == 'fill':
-                img = ImageOps.fit(img, (tw, th), method=Image.Resampling.LANCZOS)
-            elif fit_mode == 'fit':
-                img = ImageOps.contain(img, (tw, th), method=Image.Resampling.LANCZOS)
-                bg = Image.new('RGB', (tw, th), (r, g, b))
-                bg.paste(img, ((tw - img.width) // 2, (th - img.height) // 2))
-                img = bg
-            else:
-                img = img.resize((tw, th), Image.Resampling.LANCZOS)
             
-            # Handle rotation for special shapes
-            if is_flip_shape and item.get('rot', False):
-                img = img.rotate(180, expand=False)
-            elif item.get('rot', False) and not is_flip_shape:
-                img = img.rotate(90, expand=True)
-                # Crop to target size after rotation
+            if item.get('totalRotation') is not None:
+                tot_rot = float(item['totalRotation']) % 360
+                is_odd_90 = (tot_rot % 180) != 0
+                elem_tw = th if is_odd_90 else tw
+                elem_th = tw if is_odd_90 else th
+                
+                if fit_mode == 'stretch':
+                    img = img.resize((elem_tw, elem_th), Image.Resampling.LANCZOS)
+                elif fit_mode == 'fill':
+                    img = ImageOps.fit(img, (elem_tw, elem_th), method=Image.Resampling.LANCZOS)
+                elif fit_mode == 'fit':
+                    img = ImageOps.contain(img, (elem_tw, elem_th), method=Image.Resampling.LANCZOS)
+                    bg = Image.new('RGB', (elem_tw, elem_th), (r, g, b))
+                    bg.paste(img, ((elem_tw - img.width) // 2, (elem_th - img.height) // 2))
+                    img = bg
+                else:
+                    img = img.resize((elem_tw, elem_th), Image.Resampling.LANCZOS)
+                
+                if tot_rot != 0:
+                    img = img.rotate(-tot_rot, expand=True)
                 if img.size != (tw, th):
                     img = ImageOps.fit(img, (tw, th), method=Image.Resampling.LANCZOS)
+            else:
+                # Legacy fallback
+                if auto_rotate:
+                    src_ratio = img.width / img.height
+                    dst_ratio = tw / th
+                    if (src_ratio > 1 and dst_ratio < 1) or (src_ratio < 1 and dst_ratio > 1):
+                        img = img.rotate(-90, expand=True)
+                
+                if fit_mode == 'stretch':
+                    img = img.resize((tw, th), Image.Resampling.LANCZOS)
+                elif fit_mode == 'fill':
+                    img = ImageOps.fit(img, (tw, th), method=Image.Resampling.LANCZOS)
+                elif fit_mode == 'fit':
+                    img = ImageOps.contain(img, (tw, th), method=Image.Resampling.LANCZOS)
+                    bg = Image.new('RGB', (tw, th), (r, g, b))
+                    bg.paste(img, ((tw - img.width) // 2, (th - img.height) // 2))
+                    img = bg
+                else:
+                    img = img.resize((tw, th), Image.Resampling.LANCZOS)
+                
+                if is_flip_shape and item.get('rot', False):
+                    img = img.rotate(180, expand=False)
+                elif item.get('rot', False) and not is_flip_shape:
+                    img = img.rotate(90, expand=True)
+                    if img.size != (tw, th):
+                        img = ImageOps.fit(img, (tw, th), method=Image.Resampling.LANCZOS)
             
             # Paste onto canvas
             x = int(item['x'] * scale)
