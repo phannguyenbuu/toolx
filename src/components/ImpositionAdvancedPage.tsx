@@ -51,6 +51,16 @@ const safeToastError = (msg: string) => {
   }
 };
 
+const safeToastInfo = (msg: string) => {
+  try {
+    if (typeof (toast as any) === 'function') {
+      (toast as any)(msg);
+    }
+  } catch (e) {
+    console.log('[Toast Info]', msg);
+  }
+};
+
 export interface ShapeTabItem {
   id: string;
   name: string; // 'A', 'B', 'C', 'D' or custom name
@@ -369,6 +379,7 @@ const AUTOSAVE_STORAGE_KEY = 'toolx_imposition_autosave';
 
 interface ImpositionAutoSavedState {
   config?: Partial<ImpositionConfig>;
+  currentPlanIndex?: number;
   shapeTabs?: ShapeTabItem[];
   activeTabId?: string;
   allPages?: PageItem[];
@@ -419,7 +430,10 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
   }));
 
   const [plans, setPlans] = useState<LayoutPlan[]>([]);
-  const [currentPlanIndex, setCurrentPlanIndex] = useState(0);
+  const [currentPlanIndex, setCurrentPlanIndex] = useState<number>(() => {
+    const idx = savedState?.currentPlanIndex;
+    return (typeof idx === 'number' && !isNaN(idx)) ? idx : 0;
+  });
   const [manualRotate, setManualRotate] = useState<'auto' | 'portrait' | 'landscape'>('auto');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [containerSize, setContainerSize] = useState({ w: 600, h: 500 });
@@ -437,7 +451,12 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
   
   // Advanced states
   const [allPages, setAllPages] = useState<PageItem[]>(() => savedState?.allPages || []);
-  const [dataMode, setDataMode] = useState<DataMode>(() => (savedState?.dataMode as DataMode) ?? 1);
+  const [dataMode, setDataMode] = useState<DataMode>(() => {
+    const dm = savedState?.dataMode;
+    if (dm === undefined || dm === null) return 1;
+    const num = typeof dm === 'string' ? parseInt(dm, 10) : Number(dm);
+    return (isNaN(num) ? 1 : num) as DataMode;
+  });
   const [impositionStyle, setImpositionStyle] = useState<ImpositionStyle>(() => savedState?.impositionStyle || 'sheetwise');
   const [dataModeEnabled, setDataModeEnabled] = useState<boolean>(() => savedState?.dataModeEnabled ?? true);
   const [impositionStyleEnabled, setImpositionStyleEnabled] = useState<boolean>(() => savedState?.impositionStyleEnabled ?? false);
@@ -483,17 +502,21 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
     if (savedState?.shapeTabs && Array.isArray(savedState.shapeTabs) && savedState.shapeTabs.length > 0) {
       return savedState.shapeTabs;
     }
+    const initShape = savedState?.config?.shape || 'rect';
+    const initItemW = savedState?.config?.itemW ?? 100;
+    const initItemH = initShape === 'circle' ? initItemW : (savedState?.config?.itemH ?? 120);
+    const initCorner = savedState?.config?.cornerRadius ?? 0;
     return [
       {
         id: 'tab-a',
         name: 'A',
         enabled: true,
-        shape: 'rect',
-        itemW: 100,
-        itemH: 120,
+        shape: initShape,
+        itemW: initItemW,
+        itemH: initItemH,
         quantity: 11,
         useTotalLimit: false,
-        cornerRadius: 0,
+        cornerRadius: initCorner,
         sourceImage: null,
         vectorMaskResult: null,
         customSvgData: '',
@@ -577,6 +600,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
       try {
         const stateToSave = {
           config,
+          currentPlanIndex,
           shapeTabs,
           activeTabId,
           allPages,
@@ -591,15 +615,55 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
           backgroundColor,
           vectorMaskResult,
         };
-        localStorage.setItem(AUTOSAVE_STORAGE_KEY, JSON.stringify(stateToSave));
+        try {
+          localStorage.setItem(AUTOSAVE_STORAGE_KEY, JSON.stringify(stateToSave));
+        } catch (quotaErr) {
+          // Tier 1 Fallback: Quota exceeded, gọt bỏ originalThumb (ảnh gốc dung lượng lớn) chỉ giữ thumb
+          try {
+            const lightAllPages = allPages.map(p => ({
+              ...p,
+              originalThumb: undefined
+            }));
+            const lightShapeTabs = shapeTabs.map(t => ({
+              ...t,
+              sourceImage: t.sourceImage ? {
+                ...t.sourceImage,
+                originalThumb: undefined
+              } : null
+            }));
+            const lightState = {
+              ...stateToSave,
+              allPages: lightAllPages,
+              shapeTabs: lightShapeTabs,
+            };
+            localStorage.setItem(AUTOSAVE_STORAGE_KEY, JSON.stringify(lightState));
+          } catch (quotaErr2) {
+            // Tier 2 Fallback: Nếu vẫn quá quota, chỉ lưu toàn bộ cấu hình, kích thước, số lượng & layer (bỏ ảnh base64)
+            const minimalAllPages = allPages.map(p => ({
+              ...p,
+              thumb: '',
+              originalThumb: undefined
+            }));
+            const minimalShapeTabs = shapeTabs.map(t => ({
+              ...t,
+              sourceImage: null
+            }));
+            localStorage.setItem(AUTOSAVE_STORAGE_KEY, JSON.stringify({
+              ...stateToSave,
+              allPages: minimalAllPages,
+              shapeTabs: minimalShapeTabs,
+            }));
+          }
+        }
       } catch (err) {
-        console.warn('[AutoSave] Quota exceeded or failed to save state to localStorage:', err);
+        console.warn('[AutoSave] Failed to save state to localStorage:', err);
       }
     }, 300);
 
     return () => clearTimeout(timer);
   }, [
     config,
+    currentPlanIndex,
     shapeTabs,
     activeTabId,
     allPages,
@@ -1025,10 +1089,15 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
     status: 'completed' | 'failed' | 'generating';
     thumbnail?: string;
     configSnapshot?: Partial<ImpositionConfig>;
+    currentPlanIndexSnapshot?: number;
     shapeTabsSnapshot?: ShapeTabItem[];
     allPagesSnapshot?: PageItem[];
     dataModeSnapshot?: DataMode;
+    dataModeEnabledSnapshot?: boolean;
     impositionStyleSnapshot?: ImpositionStyle;
+    impositionStyleEnabledSnapshot?: boolean;
+    xUpQtySnapshot?: number;
+    standardQtySnapshot?: number;
     customScaleSnapshot?: number;
     customSvgDataSnapshot?: string;
     backgroundColorSnapshot?: string;
@@ -1040,6 +1109,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
   const getCurrentProjectSnapshot = useCallback(() => {
     return JSON.stringify({
       config,
+      currentPlanIndex,
       shapeTabs: shapeTabs.map(t => ({
         id: t.id,
         name: t.name,
@@ -1054,11 +1124,15 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
       })),
       allPagesCount: allPages.length,
       dataMode,
+      dataModeEnabled,
       impositionStyle,
+      impositionStyleEnabled,
+      xUpQty,
+      standardQty,
       customScale,
       backgroundColor
     });
-  }, [config, shapeTabs, allPages.length, dataMode, impositionStyle, customScale, backgroundColor]);
+  }, [config, currentPlanIndex, shapeTabs, allPages.length, dataMode, dataModeEnabled, impositionStyle, impositionStyleEnabled, xUpQty, standardQty, customScale, backgroundColor]);
 
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState<string>('');
   const [isUnsavedWarningModalOpen, setIsUnsavedWarningModalOpen] = useState(false);
@@ -1072,17 +1146,57 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
   const [impositionHistory, setImpositionHistory] = useState<ImpositionHistoryItem[]>(() => {
     try {
       const raw = localStorage.getItem('toolx_imposition_history');
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        return JSON.parse(raw);
+      }
     } catch (e) {}
     return [];
   });
 
   const saveHistoryItem = useCallback((item: ImpositionHistoryItem) => {
     setImpositionHistory((prev) => {
-      const next = [item, ...prev.filter(x => x.id !== item.id)].slice(0, 50);
-      try {
-        localStorage.setItem('toolx_imposition_history', JSON.stringify(next));
-      } catch (e) {}
+      const filtered = prev.filter(x => x.id !== item.id);
+      const next = [item, ...filtered].slice(0, 30);
+      
+      const trySave = (items: ImpositionHistoryItem[]): boolean => {
+        try {
+          localStorage.setItem('toolx_imposition_history', JSON.stringify(items));
+          return true;
+        } catch {
+          return false;
+        }
+      };
+
+      if (!trySave(next)) {
+        // Fallback 1: Gọt bỏ originalThumb trong allPagesSnapshot và shapeTabsSnapshot
+        const lightItems: ImpositionHistoryItem[] = next.map(it => {
+          return {
+            ...it,
+            allPagesSnapshot: it.allPagesSnapshot?.map(p => ({
+              ...p,
+              originalThumb: undefined
+            })),
+            shapeTabsSnapshot: it.shapeTabsSnapshot?.map(t => ({
+              ...t,
+              sourceImage: t.sourceImage ? { ...t.sourceImage, originalThumb: undefined } : null
+            }))
+          };
+        });
+        if (!trySave(lightItems)) {
+          // Fallback 2: Chỉ giữ 10 mục gần nhất
+          const compact = lightItems.slice(0, 10);
+          if (!trySave(compact)) {
+            // Fallback 3: Giữ 5 mục không chứa base64
+            const minimal = compact.slice(0, 5).map(it => ({
+              ...it,
+              thumbnail: '',
+              allPagesSnapshot: it.allPagesSnapshot?.map(p => ({ ...p, thumb: '', originalThumb: undefined })),
+              shapeTabsSnapshot: it.shapeTabsSnapshot?.map(t => ({ ...t, sourceImage: null }))
+            }));
+            trySave(minimal);
+          }
+        }
+      }
       return next;
     });
   }, []);
@@ -1114,6 +1228,9 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
         ...item.configSnapshot
       }));
     }
+    if (item.currentPlanIndexSnapshot !== undefined && typeof item.currentPlanIndexSnapshot === 'number') {
+      setCurrentPlanIndex(item.currentPlanIndexSnapshot);
+    }
     if (item.shapeTabsSnapshot && Array.isArray(item.shapeTabsSnapshot) && item.shapeTabsSnapshot.length > 0) {
       setShapeTabs(item.shapeTabsSnapshot);
       setActiveTabId(item.shapeTabsSnapshot[0]?.id || 'tab-a');
@@ -1122,10 +1239,24 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
       setAllPages(item.allPagesSnapshot);
     }
     if (item.dataModeSnapshot !== undefined) {
-      setDataMode(item.dataModeSnapshot);
+      const dm = item.dataModeSnapshot;
+      const num = typeof dm === 'string' ? parseInt(dm, 10) : Number(dm);
+      setDataMode((isNaN(num) ? 1 : num) as DataMode);
+    }
+    if (item.dataModeEnabledSnapshot !== undefined) {
+      setDataModeEnabled(item.dataModeEnabledSnapshot);
     }
     if (item.impositionStyleSnapshot) {
       setImpositionStyle(item.impositionStyleSnapshot);
+    }
+    if (item.impositionStyleEnabledSnapshot !== undefined) {
+      setImpositionStyleEnabled(item.impositionStyleEnabledSnapshot);
+    }
+    if (item.xUpQtySnapshot !== undefined) {
+      setXUpQty(item.xUpQtySnapshot);
+    }
+    if (item.standardQtySnapshot !== undefined) {
+      setStandardQty(item.standardQtySnapshot);
     }
     if (item.customScaleSnapshot !== undefined) {
       setCustomScale(item.customScaleSnapshot);
@@ -1156,14 +1287,18 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
       })),
       allPagesCount: (item.allPagesSnapshot || allPages).length,
       dataMode: item.dataModeSnapshot ?? dataMode,
+      dataModeEnabled: item.dataModeEnabledSnapshot ?? dataModeEnabled,
       impositionStyle: item.impositionStyleSnapshot ?? impositionStyle,
+      impositionStyleEnabled: item.impositionStyleEnabledSnapshot ?? impositionStyleEnabled,
+      xUpQty: item.xUpQtySnapshot ?? xUpQty,
+      standardQty: item.standardQtySnapshot ?? standardQty,
       customScale: item.customScaleSnapshot ?? customScale,
       backgroundColor: item.backgroundColorSnapshot ?? backgroundColor
     });
     setLastSavedSnapshot(newSnapshot);
 
     safeToastSuccess(`Đã nạp thành công lịch sử: "${item.title}"`);
-  }, [config, shapeTabs, allPages, dataMode, impositionStyle, customScale, backgroundColor]);
+  }, [config, shapeTabs, allPages, dataMode, dataModeEnabled, impositionStyle, impositionStyleEnabled, xUpQty, standardQty, customScale, backgroundColor]);
 
   const handleRequestRestoreHistory = useCallback((item: ImpositionHistoryItem) => {
     const current = getCurrentProjectSnapshot();
@@ -1442,7 +1577,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
   }, [currentPlan, config.useTotalLimit, config.totalOrder, isMultiShape]);
 
   // Get page index for each item slot on a given sheet (default currentSheetIndex)
-  const getPageForSlot = useCallback((slotIndex: number, sheetIdx: number = currentSheetIndex): number => {
+  const getPageForSlot = useCallback((slotIndex: number, sheetIdx: number = currentSheetIndex, overrideSide?: 'front' | 'back'): number => {
     if (allPages.length === 0) return -1;
     const itemsPerSheet = currentPlan?.qty || 1;
 
@@ -1456,8 +1591,10 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
     
     // Odd-even 2-sided mode: odd pages (0,2,4..) = front, even pages (1,3,5..) = back
     if (config.is2Sided && config.twoSideMode === 'odd-even') {
-      const globalSlot = sheetIdx * itemsPerSheet + slotIndex;
-      if (previewSide === 'front') {
+      const effectiveSide = overrideSide || (sheetIdx % 2 === 1 ? 'back' : previewSide);
+      const sheetPairIndex = Math.floor(sheetIdx / 2);
+      const globalSlot = sheetPairIndex * itemsPerSheet + slotIndex;
+      if (effectiveSide === 'front') {
         const frontIdx = (globalSlot * 2) % allPages.length;
         return frontIdx;
       } else {
@@ -1850,9 +1987,19 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
     const workspace = {
       name: localWorkspaceName.trim(),
       config: { ...config },
+      currentPlanIndex,
       dataMode: dataMode.toString(),
+      dataModeEnabled,
       xUpQty,
-      standardQty
+      standardQty,
+      shapeTabs: JSON.parse(JSON.stringify(shapeTabs)),
+      allPages: JSON.parse(JSON.stringify(allPages)),
+      customScale,
+      customSvgData,
+      backgroundColor,
+      impositionStyle,
+      impositionStyleEnabled,
+      vectorMaskResult
     };
     
     try {
@@ -1872,7 +2019,22 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
         // Update local state
         const updated = [...savedWorkspaces.filter(w => w.name !== workspace.name), savedWorkspace];
         setSavedWorkspaces(updated);
-        localStorage.setItem("imposition-workspaces", JSON.stringify(updated));
+        try {
+          localStorage.setItem("imposition-workspaces", JSON.stringify(updated));
+        } catch {
+          // Quota fallback: Gọt bỏ originalThumb trong workspaces lưu cục bộ
+          try {
+            const lightWorkspaces = updated.map(ws => ({
+              ...ws,
+              allPages: ws.allPages?.map((p: any) => ({ ...p, originalThumb: undefined })),
+              shapeTabs: ws.shapeTabs?.map((t: any) => ({
+                ...t,
+                sourceImage: t.sourceImage ? { ...t.sourceImage, originalThumb: undefined } : null
+              }))
+            }));
+            localStorage.setItem("imposition-workspaces", JSON.stringify(lightWorkspaces));
+          } catch {}
+        }
         
         setWorkspaceName("");
         setLocalWorkspaceName("");
@@ -1887,11 +2049,32 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
     }
   };
 
-  const loadWorkspace = (workspace: typeof savedWorkspaces[0]) => {
-    setConfig(workspace.config);
-    setDataMode(typeof workspace.dataMode === "string" ? parseInt(workspace.dataMode) as DataMode : workspace.dataMode);
-    setXUpQty(workspace.xUpQty);
-    setStandardQty(workspace.standardQty);
+  const loadWorkspace = (workspace: any) => {
+    if (workspace.config) setConfig(workspace.config);
+    if (workspace.currentPlanIndex !== undefined && typeof workspace.currentPlanIndex === 'number') {
+      setCurrentPlanIndex(workspace.currentPlanIndex);
+    }
+    if (workspace.dataMode !== undefined) {
+      const dm = workspace.dataMode;
+      const num = typeof dm === 'string' ? parseInt(dm, 10) : Number(dm);
+      setDataMode((isNaN(num) ? 1 : num) as DataMode);
+    }
+    if (workspace.dataModeEnabled !== undefined) setDataModeEnabled(workspace.dataModeEnabled);
+    if (workspace.xUpQty !== undefined) setXUpQty(workspace.xUpQty);
+    if (workspace.standardQty !== undefined) setStandardQty(workspace.standardQty);
+    if (workspace.shapeTabs && Array.isArray(workspace.shapeTabs) && workspace.shapeTabs.length > 0) {
+      setShapeTabs(workspace.shapeTabs);
+      setActiveTabId(workspace.shapeTabs[0]?.id || 'tab-a');
+    }
+    if (workspace.allPages && Array.isArray(workspace.allPages)) {
+      setAllPages(workspace.allPages);
+    }
+    if (workspace.customScale !== undefined) setCustomScale(workspace.customScale);
+    if (workspace.customSvgData !== undefined) setCustomSvgData(workspace.customSvgData);
+    if (workspace.backgroundColor !== undefined) setBackgroundColor(workspace.backgroundColor);
+    if (workspace.impositionStyle !== undefined) setImpositionStyle(workspace.impositionStyle);
+    if (workspace.impositionStyleEnabled !== undefined) setImpositionStyleEnabled(workspace.impositionStyleEnabled);
+    if (workspace.vectorMaskResult !== undefined) setVectorMaskResult(workspace.vectorMaskResult);
     alert(`Đã tải workspace: ${workspace.name}`);
   };
 
@@ -2697,7 +2880,20 @@ Chỉ trả về JSON, không giải thích thêm.`;
         colorMode: config.colorMode,
         status: 'completed',
         thumbnail: allPages[0]?.thumb || allPages[0]?.originalThumb || '',
-        configSnapshot: { ...config }
+        configSnapshot: { ...config },
+        currentPlanIndexSnapshot: currentPlanIndex,
+        shapeTabsSnapshot: JSON.parse(JSON.stringify(shapeTabs)),
+        allPagesSnapshot: JSON.parse(JSON.stringify(allPages)),
+        dataModeSnapshot: dataMode,
+        dataModeEnabledSnapshot: dataModeEnabled,
+        impositionStyleSnapshot: impositionStyle,
+        impositionStyleEnabledSnapshot: impositionStyleEnabled,
+        xUpQtySnapshot: xUpQty,
+        standardQtySnapshot: standardQty,
+        customScaleSnapshot: customScale,
+        customSvgDataSnapshot: customSvgData,
+        backgroundColorSnapshot: backgroundColor,
+        vectorMaskResultSnapshot: vectorMaskResult
       });
     } catch (e: any) { alert(e.message); }
     finally { setTimeout(() => { setIsGenerating(false); setProgress(0); }, 500); }
@@ -2881,12 +3077,14 @@ Chỉ trả về JSON, không giải thích thêm.`;
   };
 
   // Hàm vẽ nội dung của một tờ in cụ thể lên tài liệu jsPDF
-  const drawSheetOnDoc = async (doc: jsPDF, sIdx: number, itemsForSheet: PlanItem[]) => {
+  const drawSheetOnDoc = async (doc: jsPDF, sIdx: number, itemsForSheet: PlanItem[], forceSide?: 'front' | 'back') => {
     // 1. Nền trắng trang in
+    const pageW = Number(config.pageW) || 330;
+    const pageH = Number(config.pageH) || 480;
     doc.setFillColor(255, 255, 255);
-    doc.rect(0, 0, config.pageW, config.pageH, 'F');
+    doc.rect(0, 0, pageW, pageH, 'F');
 
-    const isBackSide = config.is2Sided && (sIdx % 2 === 1);
+    const isBackSide = forceSide !== undefined ? (forceSide === 'back') : (config.is2Sided && (sIdx % 2 === 1));
     const effectiveFitMode = (customScale !== 100) ? 'actual' : config.fitMode;
 
     // 2. Vẽ từng con tem thuộc tờ này
@@ -2905,10 +3103,10 @@ Chỉ trả về JSON, không giải thích thêm.`;
 
       const actualW = it.w !== undefined ? it.w : (it.rot ? config.itemH : config.itemW);
       const actualH = itemShape === 'circle' ? actualW : (it.h !== undefined ? it.h : (it.rot ? config.itemW : config.itemH));
-      const itemX = isBackSide ? (config.pageW - it.x - actualW) : it.x;
+      const itemX = isBackSide ? (pageW - it.x - actualW) : it.x;
       const itemY = it.y;
       
-      const pageIdx = getPageForSlot(i, sIdx);
+      const pageIdx = getPageForSlot(i, sIdx, isBackSide ? 'back' : 'front');
       const page = pageIdx >= 0 ? allPages[pageIdx] : null;
       const correspondingTab = isMultiShape ? shapeTabs.find(t => t.id === it.tabId || t.name === it.tabName) : null;
       const previewSrc = (it.sourceImage as any)?.thumb || (typeof it.sourceImage === 'string' ? it.sourceImage : null) || (correspondingTab?.sourceImage as any)?.thumb || (typeof correspondingTab?.sourceImage === 'string' ? correspondingTab?.sourceImage : null) || (activeTab?.sourceImage as any)?.thumb || (page ? (page.originalThumb || page.thumb) : (allPages.length > 0 ? (allPages[i % allPages.length]?.originalThumb || allPages[i % allPages.length]?.thumb) : null));
@@ -3063,7 +3261,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
   // Tạo PDF Blob từ Canvas / Layout hiện tại để gửi sang máy trạm Render Prepress hoặc tải về
   const generateImpositionPdfBlob = async (targetSheetIndex?: number): Promise<Blob> => {
     // Trường hợp 1: Có ảnh nguồn và Python backend online -> Dùng generatePdfAsync chất lượng gốc (chỉ khi xuất gộp toàn bộ)
-    if (targetSheetIndex === undefined && allPages.length > 0 && apiStatus === 'online' && currentPlan && currentPlan.items?.length > 0) {
+    if (targetSheetIndex === undefined && allPages.length > 0 && allPages.some(p => p.thumb || p.originalThumb || p.fileId) && apiStatus === 'online' && currentPlan && currentPlan.items?.length > 0) {
       try {
         const fd = new FormData();
         const fileIds = allPages.map(p => p.fileId).filter(Boolean);
@@ -3073,6 +3271,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
           for (let i = 0; i < allPages.length; i++) {
             const page = allPages[i];
             const imageSource = page.originalThumb || page.thumb;
+            if (!imageSource) continue;
             const response = await fetch(imageSource);
             const blob = await response.blob();
             const isPng = imageSource.startsWith('data:image/png') || blob.type === 'image/png';
@@ -3144,11 +3343,13 @@ Chỉ trả về JSON, không giải thích thêm.`;
     }
 
     // Trường hợp 2: Client-side vector render PDF qua jsPDF
-    const orientation = config.pageW > config.pageH ? 'landscape' : 'portrait';
+    const pageW = Number(config.pageW) || 330;
+    const pageH = Number(config.pageH) || 480;
+    const orientation = pageW > pageH ? 'landscape' : 'portrait';
     const doc = new jsPDF({
       orientation: orientation,
       unit: 'mm',
-      format: [config.pageW, config.pageH],
+      format: [pageW, pageH],
       compress: true
     });
 
@@ -3159,18 +3360,28 @@ Chỉ trả về JSON, không giải thích thêm.`;
       const sheetItems = isMultiShape
         ? allPlanItems.filter(it => (it.sheetIndex ?? 0) === targetSheetIndex)
         : allPlanItems;
-      await drawSheetOnDoc(doc, targetSheetIndex, sheetItems);
+      if (config.is2Sided) {
+        // Tờ 2 mặt gồm 2 trang: Mặt trước và Mặt sau
+        await drawSheetOnDoc(doc, targetSheetIndex * 2, sheetItems, 'front');
+        doc.addPage([pageW, pageH], orientation);
+        await drawSheetOnDoc(doc, targetSheetIndex * 2 + 1, sheetItems, 'back');
+      } else {
+        await drawSheetOnDoc(doc, targetSheetIndex, sheetItems, 'front');
+      }
     } else {
       // Kết xuất toàn bộ các tờ thành PDF đa trang (Mỗi tờ 1 trang riêng biệt, không chồng lấn)
       const sheetsCount = Math.max(1, totalSheets);
-      for (let sIdx = 0; sIdx < sheetsCount; sIdx++) {
-        if (sIdx > 0) {
-          doc.addPage([config.pageW, config.pageH], orientation);
+      const totalPdfPages = config.is2Sided ? sheetsCount * 2 : sheetsCount;
+      for (let pIdx = 0; pIdx < totalPdfPages; pIdx++) {
+        if (pIdx > 0) {
+          doc.addPage([pageW, pageH], orientation);
         }
+        const sIdx = config.is2Sided ? Math.floor(pIdx / 2) : pIdx;
+        const sideToDraw: 'front' | 'back' = config.is2Sided ? (pIdx % 2 === 1 ? 'back' : 'front') : previewSide;
         const sheetItems = isMultiShape
           ? allPlanItems.filter(it => (it.sheetIndex ?? 0) === sIdx)
           : allPlanItems;
-        await drawSheetOnDoc(doc, sIdx, sheetItems);
+        await drawSheetOnDoc(doc, sIdx, sheetItems, sideToDraw);
       }
     }
 
@@ -3312,7 +3523,16 @@ Chỉ trả về JSON, không giải thích thêm.`;
       setLastImpositionRender(renderResult);
       try {
         localStorage.setItem('toolx_last_imposition_render', JSON.stringify(renderResult));
-      } catch {}
+      } catch (quotaErr) {
+        try {
+          const lightRender = {
+            ...renderResult,
+            previewUrl: '',
+            sheetFiles: renderResult.sheetFiles?.map(sf => ({ ...sf, downloadUrl: '' }))
+          };
+          localStorage.setItem('toolx_last_imposition_render', JSON.stringify(lightRender));
+        } catch {}
+      }
 
       // Thêm vào Lịch sử bình trang
       const historyItem: ImpositionHistoryItem = {
@@ -3331,10 +3551,15 @@ Chỉ trả về JSON, không giải thích thêm.`;
         status: 'completed',
         thumbnail: renderResult.previewUrl,
         configSnapshot: { ...config },
+        currentPlanIndexSnapshot: currentPlanIndex,
         shapeTabsSnapshot: JSON.parse(JSON.stringify(shapeTabs)),
         allPagesSnapshot: JSON.parse(JSON.stringify(allPages)),
         dataModeSnapshot: dataMode,
+        dataModeEnabledSnapshot: dataModeEnabled,
         impositionStyleSnapshot: impositionStyle,
+        impositionStyleEnabledSnapshot: impositionStyleEnabled,
+        xUpQtySnapshot: xUpQty,
+        standardQtySnapshot: standardQty,
         customScaleSnapshot: customScale,
         customSvgDataSnapshot: customSvgData,
         backgroundColorSnapshot: backgroundColor,
@@ -3677,7 +3902,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
     setIsSaving(true);
     try {
       let pdfBlob: Blob;
-      if (allPages.length > 0 && apiStatus === 'online' && currentPlan && currentPlan.items?.length > 0) {
+      if (allPages.length > 0 && allPages.some(p => p.thumb || p.originalThumb || p.fileId) && apiStatus === 'online' && currentPlan && currentPlan.items?.length > 0) {
         const fd = new FormData();
         const fileIds = allPages.map(p => p.fileId).filter(Boolean);
         if (fileIds.length > 0) {
@@ -3686,6 +3911,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
           for (let i = 0; i < allPages.length; i++) {
             const page = allPages[i];
             const imageSource = page.originalThumb || page.thumb;
+            if (!imageSource) continue;
             const response = await fetch(imageSource);
             const blob = await response.blob();
             const isPng = imageSource.startsWith('data:image/png') || blob.type === 'image/png';
@@ -3795,10 +4021,15 @@ Chỉ trả về JSON, không giải thích thêm.`;
         status: 'completed',
         thumbnail: allPages[0]?.thumb || allPages[0]?.originalThumb || '',
         configSnapshot: { ...config },
+        currentPlanIndexSnapshot: currentPlanIndex,
         shapeTabsSnapshot: JSON.parse(JSON.stringify(shapeTabs)),
         allPagesSnapshot: JSON.parse(JSON.stringify(allPages)),
         dataModeSnapshot: dataMode,
+        dataModeEnabledSnapshot: dataModeEnabled,
         impositionStyleSnapshot: impositionStyle,
+        impositionStyleEnabledSnapshot: impositionStyleEnabled,
+        xUpQtySnapshot: xUpQty,
+        standardQtySnapshot: standardQty,
         customScaleSnapshot: customScale,
         customSvgDataSnapshot: customSvgData,
         backgroundColorSnapshot: backgroundColor,
@@ -3813,9 +4044,16 @@ Chỉ trả về JSON, không giải thích thêm.`;
         await workspaceService.saveWorkspace({
           name: historyTitle,
           config: config,
-          dataMode: dataMode,
+          currentPlanIndex: currentPlanIndex,
+          dataMode: dataMode.toString(),
+          dataModeEnabled: dataModeEnabled,
           xUpQty: xUpQty,
-          standardQty: standardQty
+          standardQty: standardQty,
+          shapeTabs: shapeTabs,
+          customScale: customScale,
+          backgroundColor: backgroundColor,
+          impositionStyle: impositionStyle,
+          impositionStyleEnabled: impositionStyleEnabled
         });
       } catch (wsErr) {
         console.warn('Lưu workspace lên database không khả dụng:', wsErr);
@@ -4203,6 +4441,32 @@ Chỉ trả về JSON, không giải thích thêm.`;
             <a
               href={lastImpositionRender.downloadUrl}
               download={lastImpositionRender.filename || 'BinhTrang_Render.pdf'}
+              onClick={async (e) => {
+                if (lastImpositionRender.downloadUrl.startsWith('blob:')) {
+                  try {
+                    const check = await fetch(lastImpositionRender.downloadUrl, { method: 'HEAD' });
+                    if (check.ok) return;
+                  } catch {}
+                  e.preventDefault();
+                  try {
+                    safeToastInfo('Đang tạo lại tệp PDF cho phiên làm việc hiện tại...');
+                    const freshBlob = await generateImpositionPdfBlob();
+                    const freshUrl = URL.createObjectURL(freshBlob);
+                    const updated = { ...lastImpositionRender, downloadUrl: freshUrl };
+                    setLastImpositionRender(updated);
+                    try { localStorage.setItem('toolx_last_imposition_render', JSON.stringify(updated)); } catch {}
+                    const a = document.createElement('a');
+                    a.href = freshUrl;
+                    a.download = lastImpositionRender.filename || 'BinhTrang_Render.pdf';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    safeToastSuccess('Đã tải xuống thành công bản render!');
+                  } catch (err: any) {
+                    safeToastError('Không thể tạo lại file tải: ' + (err.message || err));
+                  }
+                }
+              }}
               className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-medium transition-all"
               title="Tải bản Render gần nhất"
             >
