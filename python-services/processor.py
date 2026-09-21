@@ -1950,6 +1950,10 @@ def generate_pdf_multipage(
     for sheet_idx in range(total_sheets):
         # Draw each item on this sheet
         for slot_idx, item in enumerate(plan_items):
+            # Check sheetIndex: if item belongs to another sheet, skip it
+            if item.get('sheetIndex') is not None and item.get('sheetIndex') != sheet_idx:
+                continue
+
             page_idx = get_page_for_slot(sheet_idx, slot_idx)
             if page_idx < 0 or page_idx >= len(processed_images):
                 continue
@@ -2029,6 +2033,9 @@ def generate_pdf_multipage(
             c.setLineWidth(crop_thick * mm)
             
             for item in plan_items:
+                if item.get('sheetIndex') is not None and item.get('sheetIndex') != sheet_idx:
+                    continue
+
                 if is_flip_shape:
                     w_mm = item_w
                     h_mm = item_h

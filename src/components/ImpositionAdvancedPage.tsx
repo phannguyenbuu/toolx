@@ -2710,10 +2710,138 @@ Chỉ trả về JSON, không giải thích thêm.`;
     handleMultiFileUpload(fakeEvent);
   };
 
-  // Tạo PDF Blob từ Canvas / Layout hiện tại để gửi sang máy trạm Render Prepress
-  const generateImpositionPdfBlob = async (): Promise<Blob> => {
-    // Trường hợp 1: Có ảnh nguồn và Python backend online -> Dùng generatePdfAsync chất lượng gốc
-    if (allPages.length > 0 && apiStatus === 'online' && currentPlan && currentPlan.items?.length > 0) {
+  // Hàm vẽ nội dung của một tờ in cụ thể lên tài liệu jsPDF
+  const drawSheetOnDoc = (doc: jsPDF, sIdx: number, itemsForSheet: PlanItem[]) => {
+    // 1. Nền trắng trang in
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, config.pageW, config.pageH, 'F');
+
+    // 2. Vẽ từng con tem thuộc tờ này
+    for (let i = 0; i < itemsForSheet.length; i++) {
+      const it = itemsForSheet[i];
+      const itemsPerSheet = itemsForSheet.length;
+      const globalSlotIdx = sIdx * itemsPerSheet + i;
+      if (!isMultiShape && config.useTotalLimit && config.totalOrder > 0 && globalSlotIdx >= config.totalOrder) {
+        continue;
+      }
+
+      const itemShape = (it.shape || config.shape) as string;
+      const actualW = it.w !== undefined ? it.w : (it.rot ? config.itemH : config.itemW);
+      const actualH = itemShape === 'circle' ? actualW : (it.h !== undefined ? it.h : (it.rot ? config.itemW : config.itemH));
+      const itemX = it.x;
+      const itemY = it.y;
+      
+      const pageIdx = getPageForSlot(i, sIdx);
+      const page = pageIdx >= 0 ? allPages[pageIdx] : null;
+      const correspondingTab = isMultiShape ? shapeTabs.find(t => t.id === it.tabId || t.name === it.tabName) : null;
+      const previewSrc = (it.sourceImage as any)?.thumb || (typeof it.sourceImage === 'string' ? it.sourceImage : null) || (correspondingTab?.sourceImage as any)?.thumb || (typeof correspondingTab?.sourceImage === 'string' ? correspondingTab?.sourceImage : null) || (activeTab?.sourceImage as any)?.thumb || (page ? page.thumb : (allPages.length > 0 ? allPages[i % allPages.length]?.thumb : null));
+
+      if (previewSrc) {
+        try {
+          doc.addImage(previewSrc, 'JPEG', itemX, itemY, actualW, actualH, undefined, 'FAST');
+        } catch {
+          doc.setFillColor(245, 243, 255);
+          doc.setDrawColor(139, 92, 246);
+          doc.rect(itemX, itemY, actualW, actualH, 'FD');
+        }
+      } else {
+        doc.setFillColor(245, 243, 255);
+        doc.setDrawColor(139, 92, 246);
+        doc.setLineWidth(0.3);
+        if (itemShape === 'circle') {
+          doc.circle(itemX + actualW / 2, itemY + actualH / 2, actualW / 2, 'FD');
+        } else {
+          doc.roundedRect(itemX, itemY, actualW, actualH, 2, 2, 'FD');
+        }
+      }
+    }
+
+    // 3. Dấu xén từng con tem (Item Crop Marks) cho các con tem của tờ này
+    if (config.useCrop) {
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(config.cropThick || 0.25);
+      const { cropLen: l, cropDist: d } = config;
+      itemsForSheet.forEach((item, i) => {
+        if (!isMultiShape && config.useTotalLimit && config.totalOrder > 0) {
+          const globalSlotIdx = sIdx * itemsForSheet.length + i;
+          if (globalSlotIdx >= config.totalOrder) return;
+        }
+        const itemShape = (item.shape || config.shape) as string;
+        const w = item.w !== undefined ? item.w : (item.rot ? config.itemH : config.itemW);
+        const h = itemShape === 'circle' ? w : (item.h !== undefined ? item.h : (item.rot ? config.itemW : config.itemH));
+        const x = item.x;
+        const y = item.y;
+        doc.line(x - d - l, y, x - d, y);
+        doc.line(x, y - d - l, x, y - d);
+        doc.line(x + w + d, y, x + w + d + l, y);
+        doc.line(x + w, y - d - l, x + w, y - d);
+        doc.line(x - d - l, y + h, x - d, y + h);
+        doc.line(x, y + h + d, x, y + h + d + l);
+        doc.line(x + w + d, y + h, x + w + d + l, y + h);
+        doc.line(x + w, y + h + d, x + w, y + h + d + l);
+      });
+    }
+
+    // 4. Dấu cắt góc trang (Page Crop Marks)
+    if (config.usePageCrop) {
+      const L = config.pageCropLen;
+      const D = config.pageCropDist;
+      const T = config.pageCropThick;
+      const pW = config.pageW;
+      const pH = config.pageH;
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(T || 0.25);
+      // Top-Left
+      doc.line(D, D, D + L, D);
+      doc.line(D, D, D, D + L);
+      // Top-Right
+      doc.line(pW - D - L, D, pW - D, D);
+      doc.line(pW - D, D, pW - D, D + L);
+      // Bottom-Left
+      doc.line(D, pH - D, D + L, pH - D);
+      doc.line(D, pH - D, D, pH - D - L);
+      // Bottom-Right
+      doc.line(pW - D - L, pH - D, pW - D, pH - D);
+      doc.line(pW - D, pH - D, pW - D, pH - D - L);
+    }
+
+    // 5. Dải màu CMYK
+    if (config.useColorBar) {
+      const cmykColors: [number, number, number][] = [
+        [0, 255, 255], [255, 0, 255], [255, 255, 0], [0, 0, 0],
+        [255, 0, 0], [0, 255, 0], [0, 0, 255],
+        [119, 119, 119], [187, 187, 187], [255, 255, 255]
+      ];
+      const pW = config.pageW, pH = config.pageH, pad = config.colorBarPadding, thick = 3;
+      const positions = config.colorBarPosition === 'all' ? ['top', 'bottom', 'left', 'right'] as const : [config.colorBarPosition] as const;
+      positions.forEach(pos => {
+        const isH = pos === 'top' || pos === 'bottom';
+        const barLen = isH ? pW * 0.6 : pH * 0.6;
+        const segW = barLen / cmykColors.length;
+        let sx: number, sy: number;
+        if (pos === 'bottom') { sx = (pW - barLen) / 2; sy = pH - pad - thick; }
+        else if (pos === 'top') { sx = (pW - barLen) / 2; sy = pad; }
+        else if (pos === 'left') { sx = pad; sy = (pH - barLen) / 2; }
+        else { sx = pW - pad - thick; sy = (pH - barLen) / 2; }
+
+        cmykColors.forEach(([r, g, b], idx) => {
+          doc.setFillColor(r, g, b);
+          doc.setDrawColor(150, 150, 150);
+          doc.setLineWidth(0.1);
+          if (isH) {
+            doc.rect(sx + idx * segW, sy, segW, thick, 'FD');
+          } else {
+            doc.rect(sx, sy + idx * segW, thick, segW, 'FD');
+          }
+        });
+      });
+    }
+  };
+
+  // Tạo PDF Blob từ Canvas / Layout hiện tại để gửi sang máy trạm Render Prepress hoặc tải về
+  const generateImpositionPdfBlob = async (targetSheetIndex?: number): Promise<Blob> => {
+    // Trường hợp 1: Có ảnh nguồn và Python backend online -> Dùng generatePdfAsync chất lượng gốc (chỉ khi xuất gộp toàn bộ)
+    if (targetSheetIndex === undefined && allPages.length > 0 && apiStatus === 'online' && currentPlan && currentPlan.items?.length > 0) {
       try {
         const fd = new FormData();
         const fileIds = allPages.map(p => p.fileId).filter(Boolean);
@@ -2791,70 +2919,26 @@ Chỉ trả về JSON, không giải thích thêm.`;
       compress: true
     });
 
-    const renderItems = (impositionStyleEnabled && styledPlan ? styledPlan.items : (currentPlan?.items || []));
-    
-    // Nền trắng trang in
-    doc.setFillColor(255, 255, 255);
-    doc.rect(0, 0, config.pageW, config.pageH, 'F');
+    const allPlanItems = (impositionStyleEnabled && styledPlan ? styledPlan.items : (currentPlan?.items || []));
 
-    for (let i = 0; i < renderItems.length; i++) {
-      const it = renderItems[i];
-      const itemsPerSheet = renderItems.length;
-      const globalSlotIdx = currentSheetIndex * itemsPerSheet + i;
-      if (!isMultiShape && config.useTotalLimit && config.totalOrder > 0 && globalSlotIdx >= config.totalOrder) {
-        continue;
-      }
-
-      const itemShape = (it.shape || config.shape) as string;
-      const actualW = it.w !== undefined ? it.w : (it.rot ? config.itemH : config.itemW);
-      const actualH = itemShape === 'circle' ? actualW : (it.h !== undefined ? it.h : (it.rot ? config.itemW : config.itemH));
-      const itemX = it.x;
-      const itemY = it.y;
-      const pageIdx = getPageForSlot(i);
-      const page = pageIdx >= 0 ? allPages[pageIdx] : null;
-      const correspondingTab = isMultiShape ? shapeTabs.find(t => t.id === it.tabId || t.name === it.tabName) : null;
-      const previewSrc = it.sourceImage?.thumb || correspondingTab?.sourceImage?.thumb || (page ? page.thumb : (allPages.length > 0 ? allPages[i % allPages.length]?.thumb : null));
-
-      if (previewSrc) {
-        try {
-          doc.addImage(previewSrc, 'JPEG', itemX, itemY, actualW, actualH, undefined, 'FAST');
-        } catch {
-          doc.setFillColor(245, 243, 255);
-          doc.setDrawColor(139, 92, 246);
-          doc.rect(itemX, itemY, actualW, actualH, 'FD');
+    if (targetSheetIndex !== undefined) {
+      // Kết xuất 1 tờ đơn lẻ
+      const sheetItems = isMultiShape
+        ? allPlanItems.filter(it => (it.sheetIndex ?? 0) === targetSheetIndex)
+        : allPlanItems;
+      drawSheetOnDoc(doc, targetSheetIndex, sheetItems);
+    } else {
+      // Kết xuất toàn bộ các tờ thành PDF đa trang (Mỗi tờ 1 trang riêng biệt, không chồng lấn)
+      const sheetsCount = Math.max(1, totalSheets);
+      for (let sIdx = 0; sIdx < sheetsCount; sIdx++) {
+        if (sIdx > 0) {
+          doc.addPage([config.pageW, config.pageH], orientation);
         }
-      } else {
-        doc.setFillColor(245, 243, 255);
-        doc.setDrawColor(139, 92, 246);
-        doc.setLineWidth(0.3);
-        if (itemShape === 'circle') {
-          doc.circle(itemX + actualW / 2, itemY + actualH / 2, actualW / 2, 'FD');
-        } else {
-          doc.roundedRect(itemX, itemY, actualW, actualH, 2, 2, 'FD');
-        }
+        const sheetItems = isMultiShape
+          ? allPlanItems.filter(it => (it.sheetIndex ?? 0) === sIdx)
+          : allPlanItems;
+        drawSheetOnDoc(doc, sIdx, sheetItems);
       }
-    }
-
-    // Crop marks
-    if (config.useCrop) {
-      doc.setDrawColor(0, 0, 0);
-      doc.setLineWidth(config.cropThick || 0.25);
-      const { cropLen: l, cropDist: d } = config;
-      renderItems.forEach(item => {
-        const itemShape = (item.shape || config.shape) as string;
-        const w = item.w !== undefined ? item.w : (item.rot ? config.itemH : config.itemW);
-        const h = itemShape === 'circle' ? w : (item.h !== undefined ? item.h : (item.rot ? config.itemW : config.itemH));
-        const x = item.x;
-        const y = item.y;
-        doc.line(x - d - l, y, x - d, y);
-        doc.line(x, y - d - l, x, y - d);
-        doc.line(x + w + d, y, x + w + d + l, y);
-        doc.line(x + w, y - d - l, x + w, y - d);
-        doc.line(x - d - l, y + h, x - d, y + h);
-        doc.line(x, y + h + d, x, y + h + d + l);
-        doc.line(x + w + d, y + h, x + w + d + l, y + h);
-        doc.line(x + w, y + h + d, x + w, y + h + d + l);
-      });
     }
 
     return doc.output('blob');
@@ -2865,8 +2949,31 @@ Chỉ trả về JSON, không giải thích thêm.`;
     setRenderProgressText('Đang đóng gói file bình trang PDF...');
     try {
       const pdfBlob = await generateImpositionPdfBlob();
-      const filename = `BinhTrang_${config.pageW}x${config.pageH}mm_${config.shape}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      const filename = `BinhTrang_${config.pageW}x${config.pageH}mm_${config.shape}_${totalSheets > 1 ? `${totalSheets}Trang_` : ''}${new Date().toISOString().slice(0, 10)}.pdf`;
       const pdfFile = new File([pdfBlob], filename, { type: 'application/pdf' });
+
+      // Nếu có từ 2 tờ trở lên, tạo sẵn các file PDF riêng cho từng tờ đơn lẻ
+      const sheetFiles: {
+        sheetIndex: number;
+        sheetName: string;
+        filename: string;
+        downloadUrl: string;
+      }[] = [];
+
+      if (totalSheets > 1) {
+        setRenderProgressText(`Đang tạo ${totalSheets} file PDF riêng cho từng tờ...`);
+        for (let s = 0; s < totalSheets; s++) {
+          const sBlob = await generateImpositionPdfBlob(s);
+          const sFilename = `BinhTrang_${config.pageW}x${config.pageH}mm_${config.shape}_To${s + 1}_${new Date().toISOString().slice(0, 10)}.pdf`;
+          const sUrl = URL.createObjectURL(sBlob);
+          sheetFiles.push({
+            sheetIndex: s,
+            sheetName: `Tờ ${s + 1}`,
+            filename: sFilename,
+            downloadUrl: sUrl,
+          });
+        }
+      }
 
       const preset = RENDER_PRESETS.find(p => p.id === selectedPresetId);
       const targetDpi = preset?.settings.dpi || config.dpi || 300;
@@ -2884,6 +2991,12 @@ Chỉ trả về JSON, không giải thích thêm.`;
         totalPages: number;
         engineName: string;
         presetName: string;
+        sheetFiles?: {
+          sheetIndex: number;
+          sheetName: string;
+          filename: string;
+          downloadUrl: string;
+        }[];
       } | null = null;
 
       // 1. Kiểm tra engine GoAgent cục bộ (PC 128GB RAM)
@@ -2933,9 +3046,10 @@ Chỉ trả về JSON, không giải thích thêm.`;
             duration: durationFormatted,
             dpi: targetDpi,
             colorspace: targetColorspace.toUpperCase(),
-            totalPages: res.total_pages || 1,
+            totalPages: res.total_pages || totalSheets || 1,
             engineName: agentDisplayName,
-            presetName: preset?.name || 'Prepress Chuẩn'
+            presetName: preset?.name || 'Prepress Chuẩn',
+            sheetFiles: sheetFiles.length > 0 ? sheetFiles : undefined,
           };
         }
       }
@@ -2955,9 +3069,10 @@ Chỉ trả về JSON, không giải thích thêm.`;
           duration: '0.35s (Vector Engine)',
           dpi: targetDpi,
           colorspace: targetColorspace.toUpperCase(),
-          totalPages: 1,
+          totalPages: totalSheets || 1,
           engineName: 'Render Prepress Core',
-          presetName: preset?.name || 'Prepress Chuẩn'
+          presetName: preset?.name || 'Prepress Chuẩn',
+          sheetFiles: sheetFiles.length > 0 ? sheetFiles : undefined,
         };
       }
 
@@ -7947,10 +8062,58 @@ Chỉ trả về JSON, không giải thích thêm.`;
                   </span>
                 </div>
               </div>
+              {/* Separate Sheet Files for Multi-page / Multi-sheet */}
+              {renderSuccessModal.sheetFiles && renderSuccessModal.sheetFiles.length > 1 && (
+                <div className="bg-gradient-to-br from-violet-50/90 to-indigo-50/70 border border-violet-200/90 rounded-2xl p-3.5 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-violet-600 animate-pulse" />
+                      <span className="text-xs font-bold text-violet-900">
+                        Bộ tệp kết xuất ({renderSuccessModal.sheetFiles.length} tờ in riêng biệt)
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        renderSuccessModal.sheetFiles?.forEach((file: any, idx: number) => {
+                          setTimeout(() => {
+                            const a = document.createElement('a');
+                            a.href = file.downloadUrl;
+                            a.download = file.filename;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                          }, idx * 400);
+                        });
+                        safeToastSuccess(`Đang tải xuống lần lượt ${renderSuccessModal.sheetFiles.length} file...`);
+                      }}
+                      className="text-[11px] font-bold px-3 py-1 bg-violet-600 hover:bg-violet-700 text-white rounded-xl shadow-xs transition flex items-center gap-1 cursor-pointer active:scale-95"
+                      title="Tải tất cả các file riêng biệt cùng lúc"
+                    >
+                      <Download size={13} />
+                      <span>Tải cả {renderSuccessModal.sheetFiles.length} file riêng</span>
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    {renderSuccessModal.sheetFiles.map((file: any) => (
+                      <a
+                        key={file.sheetIndex}
+                        href={file.downloadUrl}
+                        download={file.filename}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-violet-200 bg-white hover:bg-violet-100/70 text-violet-800 font-semibold text-xs transition cursor-pointer shadow-2xs"
+                        title={`Tải file ${file.sheetName}: ${file.filename}`}
+                      >
+                        <Download size={12} className="text-violet-600" />
+                        <span>Tải {file.sheetName}</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Footer */}
-            <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
+            <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={() => setRenderSuccessModal(null)}
@@ -7959,14 +8122,43 @@ Chỉ trả về JSON, không giải thích thêm.`;
                 Đóng
               </button>
 
-              <a
-                href={renderSuccessModal.downloadUrl}
-                download={renderSuccessModal.filename || 'BinhTrang_Render.pdf'}
-                className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 text-white rounded-xl font-bold text-xs shadow-lg shadow-emerald-500/25 active:scale-95 transition cursor-pointer"
-              >
-                <Download size={16} />
-                <span>Tải File Render PDF</span>
-              </a>
+              <div className="flex items-center gap-2">
+                {renderSuccessModal.sheetFiles && renderSuccessModal.sheetFiles.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      renderSuccessModal.sheetFiles?.forEach((file: any, idx: number) => {
+                        setTimeout(() => {
+                          const a = document.createElement('a');
+                          a.href = file.downloadUrl;
+                          a.download = file.filename;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                        }, idx * 400);
+                      });
+                      safeToastSuccess(`Đang tải xuống ${renderSuccessModal.sheetFiles.length} file...`);
+                    }}
+                    className="flex items-center gap-1.5 px-4 py-2.5 bg-violet-50 hover:bg-violet-100 border border-violet-200 text-violet-800 rounded-xl font-bold text-xs transition cursor-pointer"
+                  >
+                    <Download size={14} />
+                    <span>Tải {renderSuccessModal.sheetFiles.length} file riêng</span>
+                  </button>
+                )}
+
+                <a
+                  href={renderSuccessModal.downloadUrl}
+                  download={renderSuccessModal.filename || 'BinhTrang_Render.pdf'}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 text-white rounded-xl font-bold text-xs shadow-lg shadow-emerald-500/25 active:scale-95 transition cursor-pointer"
+                >
+                  <Download size={16} />
+                  <span>
+                    {renderSuccessModal.sheetFiles && renderSuccessModal.sheetFiles.length > 1
+                      ? `Tải File Gộp (${renderSuccessModal.totalPages || renderSuccessModal.sheetFiles.length} trang)`
+                      : 'Tải File Render PDF'}
+                  </span>
+                </a>
+              </div>
             </div>
           </div>
         </div>
