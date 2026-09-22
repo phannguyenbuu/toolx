@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   X, Check, RotateCw, RotateCcw, FlipHorizontal, FlipVertical,
   ZoomIn, ZoomOut, Move, Eye, EyeOff, Upload, Sparkles,
-  RefreshCw, Scissors, Grid, Layers, Plus, Edit3
+  RefreshCw, Scissors, Grid, Layers, Plus, Edit3,
+  ChevronDown, Zap, Loader2, Trash2
 } from 'lucide-react';
 import {
   ColorAdjustSettings,
@@ -127,14 +128,23 @@ const ModalNumberInput: React.FC<ModalNumberInputProps> = ({
   );
 };
 
-// Compact Dim text input for dimensions: "100x120" or "100" (for circle)
-interface ModalDimInputProps {
-  shape: string;
-  w: number;
-  h: number;
-  onChange: (newW: number, newH: number) => void;
-  className?: string;
-}
+// Storage helpers for size suggestions history
+const STORAGE_KEY_SUGGESTIONS = 'toolx_crop_size_suggestions';
+const DEFAULT_RECT_SUGGESTIONS = [
+  '90x54', '85x55', '100x100', '50x50', '60x40', '70x100', '148x210', '210x297'
+];
+const DEFAULT_CIRCLE_SUGGESTIONS = ['50', '60', '70', '80', '100', '120'];
+
+export const saveCropSizeSuggestion = (sizeStr: string) => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_SUGGESTIONS);
+    let list: string[] = raw ? JSON.parse(raw) : [...DEFAULT_RECT_SUGGESTIONS, ...DEFAULT_CIRCLE_SUGGESTIONS];
+    const clean = sizeStr.trim().toLowerCase();
+    if (!clean) return;
+    list = [clean, ...list.filter(s => s !== clean)].slice(0, 30);
+    localStorage.setItem(STORAGE_KEY_SUGGESTIONS, JSON.stringify(list));
+  } catch {}
+};
 
 const parseDimValue = (text: string, currentW: number, currentH: number, isCircle: boolean): { w: number; h: number } | null => {
   const clean = text.trim().toLowerCase();
@@ -188,20 +198,89 @@ const parseDimValue = (text: string, currentW: number, currentH: number, isCircl
   return null;
 };
 
-const ModalDimInput: React.FC<ModalDimInputProps> = ({ shape, w, h, onChange, className = '' }) => {
+// Dropdownlist with history suggestions and freeform input for dimensions
+interface DimDropdownComboboxProps {
+  shape: string;
+  w: number;
+  h: number;
+  onChange: (newW: number, newH: number) => void;
+  className?: string;
+}
+
+const DimDropdownCombobox: React.FC<DimDropdownComboboxProps> = ({
+  shape,
+  w,
+  h,
+  onChange,
+  className = '',
+}) => {
   const isCircle = shape === 'circle';
   const formatStr = useCallback((width: number, height: number, circle: boolean) => {
     return circle ? `${width}` : `${width}x${height}`;
   }, []);
 
-  const [str, setStr] = useState<string>(() => formatStr(w, h, isCircle));
+  const [inputVal, setInputVal] = useState<string>(() => formatStr(w, h, isCircle));
+  const [isOpen, setIsOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const containerRef = useRef<HTMLDivElement>(null);
   const isFocusedRef = useRef(false);
 
+  // Load suggestions from localStorage
+  const loadSuggestions = useCallback(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_SUGGESTIONS);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          if (isCircle) {
+            const circleItems = parsed.filter(s => !s.includes('x') && !s.includes('*') && !s.includes(' '));
+            setSuggestions(Array.from(new Set([...circleItems, ...DEFAULT_CIRCLE_SUGGESTIONS])));
+            return;
+          } else {
+            const rectItems = parsed.filter(s => s.includes('x') || s.includes('*') || s.includes(' '));
+            setSuggestions(Array.from(new Set([...rectItems, ...DEFAULT_RECT_SUGGESTIONS])));
+            return;
+          }
+        }
+      }
+    } catch {}
+    setSuggestions(isCircle ? DEFAULT_CIRCLE_SUGGESTIONS : DEFAULT_RECT_SUGGESTIONS);
+  }, [isCircle]);
+
+  useEffect(() => {
+    loadSuggestions();
+  }, [loadSuggestions]);
+
+  // Sync external w, h changes
   useEffect(() => {
     if (!isFocusedRef.current) {
-      setStr(formatStr(w, h, isCircle));
+      setInputVal(formatStr(w, h, isCircle));
     }
   }, [w, h, isCircle, formatStr]);
+
+  const removeSuggestion = (e: React.MouseEvent, targetSize: string) => {
+    e.stopPropagation();
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_SUGGESTIONS);
+      let list: string[] = raw ? JSON.parse(raw) : [...DEFAULT_RECT_SUGGESTIONS, ...DEFAULT_CIRCLE_SUGGESTIONS];
+      list = list.filter(s => s !== targetSize);
+      localStorage.setItem(STORAGE_KEY_SUGGESTIONS, JSON.stringify(list));
+      loadSuggestions();
+    } catch {}
+  };
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
 
   const commitValue = (valToCommit: string) => {
     const parsed = parseDimValue(valToCommit, w, h, isCircle);
@@ -209,54 +288,124 @@ const ModalDimInput: React.FC<ModalDimInputProps> = ({ shape, w, h, onChange, cl
       const finalW = Math.max(1, parsed.w);
       const finalH = isCircle ? finalW : Math.max(1, parsed.h);
       onChange(finalW, finalH);
-      setStr(formatStr(finalW, finalH, isCircle));
+      const formatted = formatStr(finalW, finalH, isCircle);
+      setInputVal(formatted);
+      saveCropSizeSuggestion(formatted);
+      loadSuggestions();
     } else {
-      setStr(formatStr(w, h, isCircle));
+      setInputVal(formatStr(w, h, isCircle));
     }
   };
 
+  const handleSelectSuggestion = (sizeStr: string) => {
+    setInputVal(sizeStr);
+    commitValue(sizeStr);
+    setIsOpen(false);
+  };
+
+  const currentFormatted = formatStr(w, h, isCircle);
+
   return (
-    <div className={`flex items-center bg-white hover:bg-slate-50 border border-slate-200 rounded-full px-2.5 py-1 shadow-2xs gap-1 focus-within:ring-2 focus-within:ring-violet-300 ${className}`}>
-      <span className="text-[10px] font-semibold text-slate-600 select-none">
-        {isCircle ? 'Đ.kính:' : 'KT:'}
-      </span>
-      <input
-        type="text"
-        value={str}
-        onFocus={(e) => {
-          isFocusedRef.current = true;
-          e.target.select();
-        }}
-        onBlur={() => {
-          isFocusedRef.current = false;
-          commitValue(str);
-        }}
-        onChange={(e) => {
-          const val = e.target.value;
-          setStr(val);
-          const parsed = parseDimValue(val, w, h, isCircle);
-          if (parsed && (val.includes('x') || val.includes('*') || val.includes(' ') || isCircle)) {
-            const finalW = Math.max(1, parsed.w);
-            const finalH = isCircle ? finalW : Math.max(1, parsed.h);
-            onChange(finalW, finalH);
-          }
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            (e.target as HTMLInputElement).blur();
-          }
-        }}
-        placeholder={isCircle ? '100' : '100x100'}
-        className="w-16 bg-transparent text-center font-bold text-xs text-slate-800 focus:outline-none"
-      />
-      <span className="text-[10px] text-slate-400 font-medium select-none">mm</span>
+    <div ref={containerRef} className={`relative inline-block ${className}`}>
+      {/* Combobox container */}
+      <div className="flex items-center bg-white hover:bg-slate-50 border border-slate-200 rounded-full px-2 py-0.5 shadow-2xs gap-0.5 focus-within:ring-2 focus-within:ring-violet-400 focus-within:border-violet-300">
+        <input
+          type="text"
+          value={inputVal}
+          onFocus={(e) => {
+            isFocusedRef.current = true;
+            e.target.select();
+            setIsOpen(true);
+          }}
+          onBlur={() => {
+            isFocusedRef.current = false;
+            commitValue(inputVal);
+          }}
+          onChange={(e) => {
+            const val = e.target.value;
+            setInputVal(val);
+            const parsed = parseDimValue(val, w, h, isCircle);
+            if (parsed && (val.includes('x') || val.includes('*') || val.includes(' ') || isCircle)) {
+              const finalW = Math.max(1, parsed.w);
+              const finalH = isCircle ? finalW : Math.max(1, parsed.h);
+              onChange(finalW, finalH);
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              (e.target as HTMLInputElement).blur();
+              setIsOpen(false);
+            } else if (e.key === 'Escape') {
+              setIsOpen(false);
+            }
+          }}
+          placeholder={isCircle ? '100' : '100x100'}
+          className="w-16 bg-transparent text-center font-bold text-xs text-slate-800 focus:outline-none"
+        />
+        <span className="text-[10px] text-slate-400 font-medium select-none">mm</span>
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className="p-0.5 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition cursor-pointer"
+          title="Chọn kích thước từ gợi ý / lịch sử"
+        >
+          <ChevronDown size={12} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+      </div>
+
+      {/* Dropdown Menu */}
+      {isOpen && (
+        <div className="absolute right-0 top-full mt-1.5 w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 max-h-56 overflow-y-auto backdrop-blur-md">
+          <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 flex items-center justify-between">
+            <span>Kích thước gợi ý</span>
+            <span className="text-[9px] text-violet-600 font-mono">mm</span>
+          </div>
+          <div className="py-1">
+            {suggestions.map((s) => {
+              const isSelected = s === currentFormatted || s === inputVal;
+              return (
+                <div
+                  key={s}
+                  onClick={() => handleSelectSuggestion(s)}
+                  className={`flex items-center justify-between px-2.5 py-1.5 text-xs cursor-pointer select-none transition ${
+                    isSelected
+                      ? 'bg-violet-50 text-violet-800 font-bold'
+                      : 'hover:bg-slate-100 text-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    {isSelected ? (
+                      <Check size={12} className="text-violet-600" />
+                    ) : (
+                      <span className="w-3" />
+                    )}
+                    <span className="font-mono">
+                      {isCircle ? `Ø ${s} mm` : `${s.replace('x', ' × ')} mm`}
+                    </span>
+                  </div>
+                  {!DEFAULT_RECT_SUGGESTIONS.includes(s) && !DEFAULT_CIRCLE_SUGGESTIONS.includes(s) && (
+                    <button
+                      type="button"
+                      onClick={(e) => removeSuggestion(e, s)}
+                      className="p-0.5 rounded text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition"
+                      title="Xóa gợi ý này"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-// Interactive Edge Dimension Badge Input directly on the crop box edges
+// Interactive Edge Dimension Badge Input directly on the crop box edges (compact & no text labels)
 interface CropEdgeDimInputProps {
-  label: string;
+  label?: string;
   value: number;
   suffix?: string;
   arrows: { start: string; end: string };
@@ -291,6 +440,7 @@ const CropEdgeDimInput: React.FC<CropEdgeDimInputProps> = ({
       if (parsed && (text.includes('x') || text.includes('X') || text.includes('*') || text.includes(' ') || text.includes(','))) {
         onDimensionChange(parsed.w, parsed.h);
         setStrVal(String(parsed.w));
+        saveCropSizeSuggestion(isCircle ? `${parsed.w}` : `${parsed.w}x${parsed.h}`);
         return;
       }
     }
@@ -300,6 +450,7 @@ const CropEdgeDimInput: React.FC<CropEdgeDimInputProps> = ({
       const rounded = Math.round(num * 10) / 10;
       onChangeValue(rounded);
       setStrVal(String(rounded));
+      saveCropSizeSuggestion(String(rounded));
     } else {
       setStrVal(String(value));
     }
@@ -307,13 +458,13 @@ const CropEdgeDimInput: React.FC<CropEdgeDimInputProps> = ({
 
   return (
     <div
-      className={`pointer-events-auto flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/95 text-violet-200 border border-violet-400/80 shadow-2xl text-xs font-bold font-mono backdrop-blur-md transition-all hover:border-violet-300 hover:shadow-violet-500/25 focus-within:ring-2 focus-within:ring-violet-400 focus-within:border-violet-300 cursor-default select-none ${className}`}
+      className={`pointer-events-auto flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-900/95 text-violet-200 border border-violet-400/80 shadow-2xl text-xs font-bold font-mono backdrop-blur-md transition-all hover:border-violet-300 hover:shadow-violet-500/25 focus-within:ring-2 focus-within:ring-violet-400 focus-within:border-violet-300 cursor-default select-none ${className}`}
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <span className="text-violet-400 text-[11px] select-none">{arrows.start}</span>
-      <span className="text-violet-300 text-[11px] font-semibold select-none">{label}</span>
+      <span className="text-violet-400 text-[10px] select-none">{arrows.start}</span>
+      {label && <span className="text-violet-300 text-[10px] font-semibold select-none">{label}</span>}
       <input
         type="text"
         value={strVal}
@@ -363,13 +514,13 @@ const CropEdgeDimInput: React.FC<CropEdgeDimInputProps> = ({
             setStrVal(String(next));
           }
         }}
-        title="Nhập kích thước trực tiếp (nhấn phím ↑/↓ để tăng/giảm 1mm)"
-        className="w-13 px-1.5 py-0.5 text-center font-bold font-mono text-xs text-white bg-slate-800/90 hover:bg-slate-700/80 focus:bg-violet-950 focus:text-violet-100 rounded border border-violet-500/50 focus:border-violet-400 focus:outline-none shadow-inner cursor-text transition-colors"
+        title="Nhập kích thước trực tiếp (hỗ trợ phím ↑/↓ để tăng/giảm 1mm)"
+        className="w-10 px-1 py-0.5 text-center font-bold font-mono text-xs text-white bg-slate-800/90 hover:bg-slate-700/80 focus:bg-violet-950 focus:text-violet-100 rounded border border-violet-500/50 focus:border-violet-400 focus:outline-none shadow-inner cursor-text transition-colors"
       />
-      <span className="text-violet-300 text-[11px] font-mono select-none">
+      <span className="text-violet-300 text-[10px] font-mono select-none">
         {suffix || 'mm'}
       </span>
-      <span className="text-violet-400 text-[11px] select-none">{arrows.end}</span>
+      <span className="text-violet-400 text-[10px] select-none">{arrows.end}</span>
     </div>
   );
 };
@@ -448,10 +599,17 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     ...DEFAULT_COLOR_SETTINGS,
     ...(initialColorSettings || {})
   }));
-  const [colorTab, setColorTab] = useState<'balance' | 'curves' | 'brightness' | 'hsl' | 'cmyk' | 'rgb'>('balance');
+  const [colorTab, setColorTab] = useState<'balance' | 'curves' | 'brightness' | 'hsl' | 'cmyk' | 'rgb' | 'bleed'>('balance');
   const [curveChannel, setCurveChannel] = useState<CurveChannelType>('rgb');
   const [showOriginal, setShowOriginal] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
+
+  // Bleed Studio state (Off / Offset / AI)
+  const [bleedMode, setBleedMode] = useState<'off' | 'offset' | 'ai'>('ai');
+  const [bleedPercent, setBleedPercent] = useState<number>(10);
+  const [isProcessingBleed, setIsProcessingBleed] = useState(false);
+  const [originalBackupSrc, setOriginalBackupSrc] = useState<string | null>(null);
+  const [bleedStatusMsg, setBleedStatusMsg] = useState<string | null>(null);
 
   // Dragging state for Pan
   const [isDragging, setIsDragging] = useState(false);
@@ -593,13 +751,131 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
   }, [viewportSize, targetRatio]);
 
   // Bleed / Outpaint pixel size calculation
-  const effectiveBleedMm = cutBleed ?? 2;
+  const effectiveBleedMm = useMemo(() => {
+    if (bleedMode === 'off') return 0;
+    const percentMm = Math.round((localItemW * (bleedPercent / 100) / 2) * 10) / 10;
+    return Math.max(1, percentMm);
+  }, [bleedMode, localItemW, bleedPercent]);
+
   const pxPerMm = useMemo(() => {
     return (cropBox.w && localItemW) ? (cropBox.w / localItemW) : 1;
   }, [cropBox.w, localItemW]);
+
   const bleedPx = useMemo(() => {
+    if (bleedMode === 'off') return 0;
     return Math.round(effectiveBleedMm * pxPerMm);
-  }, [effectiveBleedMm, pxPerMm]);
+  }, [bleedMode, effectiveBleedMm, pxPerMm]);
+
+  // Create continuous pixel offset outward (Replicate border clamp in 2D canvas)
+  const applyOffsetBleed = () => {
+    if (!imgElement || !imgLoaded || !currentImageSrc) return;
+    if (!originalBackupSrc) {
+      setOriginalBackupSrc(currentImageSrc);
+    }
+    setIsProcessingBleed(true);
+    setBleedStatusMsg('Đang tạo vòng pixel offset tràn lề...');
+
+    setTimeout(() => {
+      try {
+        const origW = imgElement.naturalWidth || imgElement.width;
+        const origH = imgElement.naturalHeight || imgElement.height;
+        const padRatio = Math.max(0.01, bleedPercent / 100);
+        const padW = Math.max(2, Math.round(origW * padRatio));
+        const padH = Math.max(2, Math.round(origH * padRatio));
+        const newW = origW + padW * 2;
+        const newH = origH + padH * 2;
+
+        const offCanvas = document.createElement('canvas');
+        offCanvas.width = newW;
+        offCanvas.height = newH;
+        const offCtx = offCanvas.getContext('2d');
+        if (!offCtx) return;
+
+        // 1. Draw central original image
+        offCtx.drawImage(imgElement, padW, padH, origW, origH);
+
+        // 2. Continuous offset: Stretch top edge outward (1px slice stretched to padH)
+        offCtx.drawImage(imgElement, 0, 0, origW, 1, padW, 0, origW, padH);
+
+        // 3. Stretch bottom edge outward (1px slice)
+        offCtx.drawImage(imgElement, 0, origH - 1, origW, 1, padW, padH + origH, origW, padH);
+
+        // 4. Stretch left edge outward (1px slice)
+        offCtx.drawImage(imgElement, 0, 0, 1, origH, 0, padH, padW, origH);
+
+        // 5. Stretch right edge outward (1px slice)
+        offCtx.drawImage(imgElement, origW - 1, 0, 1, origH, padW + origW, padH, padW, origH);
+
+        // 6. 4 Corners (1x1 pixel stretched into corner rects)
+        offCtx.drawImage(imgElement, 0, 0, 1, 1, 0, 0, padW, padH);
+        offCtx.drawImage(imgElement, origW - 1, 0, 1, 1, padW + origW, 0, padW, padH);
+        offCtx.drawImage(imgElement, 0, origH - 1, 1, 1, 0, padH + origH, padW, padH);
+        offCtx.drawImage(imgElement, origW - 1, origH - 1, 1, 1, padW + origW, padH + origH, padW, padH);
+
+        const resultDataUrl = offCanvas.toDataURL('image/jpeg', 0.95);
+        setCurrentImageSrc(resultDataUrl);
+        setBleedStatusMsg(`Đã tạo tràn lề Offset +${bleedPercent}% thành công!`);
+      } catch (err: any) {
+        setBleedStatusMsg(`Lỗi khi tạo Offset: ${err?.message || err}`);
+      } finally {
+        setIsProcessingBleed(false);
+      }
+    }, 40);
+  };
+
+  // Run AI Outpainting using backend LaMa model
+  const applyAIBleed = async () => {
+    if (!currentImageSrc) return;
+    if (!originalBackupSrc) {
+      setOriginalBackupSrc(currentImageSrc);
+    }
+    setIsProcessingBleed(true);
+    setBleedStatusMsg('Đang gửi tới mô hình AI LaMa Outpainter...');
+
+    try {
+      const res = await fetch(currentImageSrc);
+      const blob = await res.blob();
+
+      const formData = new FormData();
+      formData.append('file', blob, 'source.jpg');
+      formData.append('percent', (bleedPercent / 100).toFixed(2));
+      formData.append('mode', 'smart_portrait');
+      formData.append('format', 'image');
+
+      const apiRes = await fetch('/api/outpaint-bleed', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!apiRes.ok) {
+        throw new Error(`AI Outpaint thất bại (HTTP ${apiRes.status})`);
+      }
+
+      const outBlob = await apiRes.blob();
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (e.target?.result) {
+          setCurrentImageSrc(e.target.result as string);
+          setBleedStatusMsg(`Đã mở rộng biên bằng AI (+${bleedPercent}%) thành công!`);
+        }
+      };
+      reader.readAsDataURL(outBlob);
+    } catch (err: any) {
+      console.warn('AI Outpaint failed, falling back to local offset:', err);
+      applyOffsetBleed();
+      setBleedStatusMsg(`Máy chủ AI phản hồi chậm, đã tự động bù xén bằng Offset +${bleedPercent}%.`);
+    } finally {
+      setIsProcessingBleed(false);
+    }
+  };
+
+  const handleRestoreOriginal = () => {
+    if (originalBackupSrc) {
+      setCurrentImageSrc(originalBackupSrc);
+      setOriginalBackupSrc(null);
+      setBleedStatusMsg('Đã khôi phục ảnh ban đầu.');
+    }
+  };
 
   // Color adjustment helper
   const updateSetting = <K extends keyof ColorAdjustSettings>(key: K, value: ColorAdjustSettings[K]) => {
@@ -1370,7 +1646,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
               )}
 
               {/* 3. Bleed Guideline (Đường bù cắt tràn lề outpaint) */}
-              {currentImageSrc && bleedPx > 0 && (
+              {currentImageSrc && bleedMode !== 'off' && bleedPx > 0 && (
                 <div
                   style={{
                     left: `${cropBox.x - bleedPx}px`,
@@ -1384,7 +1660,9 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                   {/* Bleed Badge */}
                   <div className="absolute -top-5 right-2 px-1.5 py-0.5 rounded bg-emerald-950/90 border border-emerald-500/50 text-[9px] font-mono text-emerald-300 font-bold tracking-tight shadow-md flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <span>Tràn lề (Bleed) +{effectiveBleedMm}mm</span>
+                    <span>
+                      {bleedMode === 'offset' ? 'Tràn lề Offset' : 'Tràn lề AI'} +{effectiveBleedMm}mm ({bleedPercent}%)
+                    </span>
                   </div>
                 </div>
               )}
@@ -1429,12 +1707,12 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                     <div className="w-1.5 h-2 border-r border-violet-400/80" />
                   </div>
 
-                  {/* DIM WIDTH INPUT BADGE (Cạnh trên - Nhập trực tiếp) */}
-                  <div className="absolute -top-9 left-1/2 -translate-x-1/2 z-40">
+                  {/* DIM WIDTH INPUT BADGE (Cạnh trên - Nhập trực tiếp, không chữ 'Rộng') */}
+                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 z-40">
                     <CropEdgeDimInput
-                      label={localShape === 'circle' ? 'Ø' : 'Rộng:'}
+                      label={localShape === 'circle' ? 'Ø' : ''}
                       value={localItemW}
-                      suffix={localShape === 'circle' ? 'mm (Đ.kính)' : 'mm'}
+                      suffix="mm"
                       arrows={{ start: '⟵', end: '⟶' }}
                       isCircle={localShape === 'circle'}
                       onChangeValue={handleWidthChange}
@@ -1451,11 +1729,11 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                     </div>
                   )}
 
-                  {/* DIM HEIGHT INPUT BADGE (Cạnh phải - Nhập trực tiếp) */}
+                  {/* DIM HEIGHT INPUT BADGE (Cạnh phải - Nhập trực tiếp, không chữ 'Cao') */}
                   {localShape !== 'circle' && (
-                    <div className="absolute -right-3.5 top-1/2 -translate-y-1/2 translate-x-full z-40">
+                    <div className="absolute -right-3 top-1/2 -translate-y-1/2 translate-x-full z-40">
                       <CropEdgeDimInput
-                        label="Cao:"
+                        label=""
                         value={localShape === 'circle' ? localItemW : localItemH}
                         suffix="mm"
                         arrows={{ start: '↑', end: '↓' }}
@@ -1524,22 +1802,23 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                 </select>
               </div>
 
-              {/* Số lượng */}
-              <div className="flex items-center bg-emerald-50/90 hover:bg-emerald-100/90 border border-emerald-300 rounded-full px-2.5 py-1 shadow-2xs gap-1">
-                <span className="text-[10px] font-bold text-emerald-800 select-none">SL:</span>
+              {/* Số lượng (đã bỏ nhãn SL và tem) */}
+              <div
+                className="flex items-center bg-emerald-50/90 hover:bg-emerald-100/90 border border-emerald-300 rounded-full px-2 py-0.5 shadow-2xs"
+                title="Số lượng tem (1 - 99)"
+              >
                 <ModalNumberInput
                   value={localQuantity}
                   onChange={handleQuantityChange}
                   step={1}
                   min={1}
                   max={99}
-                  className="w-7 bg-transparent text-center font-bold text-xs text-emerald-700 focus:outline-none"
+                  className="w-6 bg-transparent text-center font-bold text-xs text-emerald-700 focus:outline-none"
                 />
-                <span className="text-[10px] text-emerald-700 font-medium select-none">tem</span>
               </div>
 
-              {/* Kích thước (KT: WxH hoặc Đ.kính) dạng dim text */}
-              <ModalDimInput
+              {/* Kích thước dạng Dropdownlist Combobox lưu gợi ý & lịch sử */}
+              <DimDropdownCombobox
                 shape={localShape}
                 w={localItemW}
                 h={localShape === 'circle' ? localItemW : localItemH}
@@ -1568,15 +1847,15 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
               </div>
             </div>
 
-            {/* Tabs */}
-            <div className="grid grid-cols-6 border-b border-slate-200 text-[10px] font-bold text-center bg-slate-100/50">
+            {/* Navtabs Row 1: Nhóm Cân bằng, Curves, Sáng / Tương phản */}
+            <div className="grid grid-cols-3 border-b border-slate-200 text-[10px] font-bold text-center bg-slate-100/70">
               <button
                 type="button"
                 onClick={() => setColorTab('balance')}
-                className={`py-2 transition border-b-2 cursor-pointer ${
+                className={`py-1.5 transition border-b-2 cursor-pointer ${
                   colorTab === 'balance'
-                    ? 'border-violet-600 text-violet-700 bg-white font-bold'
-                    : 'border-transparent text-slate-500 hover:text-slate-900'
+                    ? 'border-violet-600 text-violet-700 bg-white font-bold shadow-2xs'
+                    : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50'
                 }`}
               >
                 Balance
@@ -1584,10 +1863,10 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
               <button
                 type="button"
                 onClick={() => setColorTab('curves')}
-                className={`py-2 transition border-b-2 cursor-pointer ${
+                className={`py-1.5 transition border-b-2 cursor-pointer ${
                   colorTab === 'curves'
-                    ? 'border-violet-600 text-violet-700 bg-white font-bold'
-                    : 'border-transparent text-slate-500 hover:text-slate-900'
+                    ? 'border-violet-600 text-violet-700 bg-white font-bold shadow-2xs'
+                    : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50'
                 }`}
               >
                 Curves
@@ -1595,21 +1874,25 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
               <button
                 type="button"
                 onClick={() => setColorTab('brightness')}
-                className={`py-2 transition border-b-2 cursor-pointer ${
+                className={`py-1.5 transition border-b-2 cursor-pointer ${
                   colorTab === 'brightness'
-                    ? 'border-violet-600 text-violet-700 bg-white font-bold'
-                    : 'border-transparent text-slate-500 hover:text-slate-900'
+                    ? 'border-violet-600 text-violet-700 bg-white font-bold shadow-2xs'
+                    : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50'
                 }`}
               >
-                Sáng/T.Phản
+                Sáng / Tương phản
               </button>
+            </div>
+
+            {/* Navtabs Row 2: Nhóm HSL, CMYK, RGB & Tràn lề (Bleed) */}
+            <div className="grid grid-cols-4 border-b border-slate-200 text-[10px] font-bold text-center bg-slate-100/40">
               <button
                 type="button"
                 onClick={() => setColorTab('hsl')}
-                className={`py-2 transition border-b-2 cursor-pointer ${
+                className={`py-1.5 transition border-b-2 cursor-pointer ${
                   colorTab === 'hsl'
-                    ? 'border-violet-600 text-violet-700 bg-white font-bold'
-                    : 'border-transparent text-slate-500 hover:text-slate-900'
+                    ? 'border-violet-600 text-violet-700 bg-white font-bold shadow-2xs'
+                    : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50'
                 }`}
               >
                 HSL
@@ -1617,10 +1900,10 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
               <button
                 type="button"
                 onClick={() => setColorTab('cmyk')}
-                className={`py-2 transition border-b-2 cursor-pointer ${
+                className={`py-1.5 transition border-b-2 cursor-pointer ${
                   colorTab === 'cmyk'
-                    ? 'border-violet-600 text-violet-700 bg-white font-bold'
-                    : 'border-transparent text-slate-500 hover:text-slate-900'
+                    ? 'border-violet-600 text-violet-700 bg-white font-bold shadow-2xs'
+                    : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50'
                 }`}
               >
                 CMYK
@@ -1628,13 +1911,25 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
               <button
                 type="button"
                 onClick={() => setColorTab('rgb')}
-                className={`py-2 transition border-b-2 cursor-pointer ${
+                className={`py-1.5 transition border-b-2 cursor-pointer ${
                   colorTab === 'rgb'
-                    ? 'border-violet-600 text-violet-700 bg-white font-bold'
-                    : 'border-transparent text-slate-500 hover:text-slate-900'
+                    ? 'border-violet-600 text-violet-700 bg-white font-bold shadow-2xs'
+                    : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50'
                 }`}
               >
                 RGB
+              </button>
+              <button
+                type="button"
+                onClick={() => setColorTab('bleed')}
+                className={`py-1.5 transition border-b-2 cursor-pointer flex items-center justify-center gap-1 ${
+                  colorTab === 'bleed'
+                    ? 'border-violet-600 text-violet-700 bg-white font-bold shadow-2xs'
+                    : 'border-transparent text-emerald-600 hover:text-emerald-700 hover:bg-slate-50'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Tràn lề (Bleed)</span>
               </button>
             </div>
 
@@ -1879,6 +2174,179 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                       />
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* TAB: BLEED STUDIO */}
+              {colorTab === 'bleed' && (
+                <div className="space-y-4">
+                  <div className="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80 text-[11px] text-emerald-900 space-y-1">
+                    <div className="font-bold flex items-center gap-1.5 text-emerald-800">
+                      <Sparkles size={13} className="text-emerald-600" />
+                      <span>Studio Bù Xén Tràn Lề (Bleed Expansion)</span>
+                    </div>
+                    <p className="text-[10px] text-emerald-700 leading-relaxed">
+                      Mở rộng biên ảnh ra ngoài khung cắt để chống lệch mép, viền trắng khi cắt/bế thành phẩm in ấn.
+                    </p>
+                  </div>
+
+                  {/* Mode Radio Buttons */}
+                  <div className="space-y-2">
+                    <span className="text-[11px] font-bold text-slate-700 block">
+                      Chọn kiểu tràn lề:
+                    </span>
+                    <div className="grid grid-cols-3 gap-2">
+                      {/* Mode OFF */}
+                      <label
+                        className={`flex flex-col p-2.5 rounded-xl border cursor-pointer transition select-none ${
+                          bleedMode === 'off'
+                            ? 'bg-violet-50/80 border-violet-500 text-violet-900 shadow-xs'
+                            : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <input
+                            type="radio"
+                            name="bleedMode"
+                            checked={bleedMode === 'off'}
+                            onChange={() => setBleedMode('off')}
+                            className="text-violet-600 focus:ring-violet-500 cursor-pointer"
+                          />
+                          <span className="font-bold text-xs">Off</span>
+                        </div>
+                        <span className="text-[9px] text-slate-500 leading-tight">
+                          Không có bleed (tắt bù xén)
+                        </span>
+                      </label>
+
+                      {/* Mode OFFSET */}
+                      <label
+                        className={`flex flex-col p-2.5 rounded-xl border cursor-pointer transition select-none ${
+                          bleedMode === 'offset'
+                            ? 'bg-violet-50/80 border-violet-500 text-violet-900 shadow-xs'
+                            : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <input
+                            type="radio"
+                            name="bleedMode"
+                            checked={bleedMode === 'offset'}
+                            onChange={() => setBleedMode('offset')}
+                            className="text-violet-600 focus:ring-violet-500 cursor-pointer"
+                          />
+                          <span className="font-bold text-xs">Offset</span>
+                        </div>
+                        <span className="text-[9px] text-slate-500 leading-tight">
+                          Offset các vòng pixel ra ngoài
+                        </span>
+                      </label>
+
+                      {/* Mode AI */}
+                      <label
+                        className={`flex flex-col p-2.5 rounded-xl border cursor-pointer transition select-none ${
+                          bleedMode === 'ai'
+                            ? 'bg-violet-50/80 border-violet-500 text-violet-900 shadow-xs'
+                            : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <input
+                            type="radio"
+                            name="bleedMode"
+                            checked={bleedMode === 'ai'}
+                            onChange={() => setBleedMode('ai')}
+                            className="text-violet-600 focus:ring-violet-500 cursor-pointer"
+                          />
+                          <span className="font-bold text-xs">AI</span>
+                        </div>
+                        <span className="text-[9px] text-slate-500 leading-tight">
+                          AI Outpainting (LaMa hiện có)
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Slider: Tỉ lệ % từ 1 đến 30% */}
+                  {bleedMode !== 'off' && (
+                    <div className="space-y-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-slate-700">Tỉ lệ mở rộng tràn lề:</span>
+                        <span className="px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 font-mono font-bold text-xs">
+                          {bleedPercent}% (~{Math.round((localItemW * (bleedPercent / 100) / 2) * 10) / 10} mm mỗi cạnh)
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={1}
+                        max={30}
+                        step={1}
+                        value={bleedPercent}
+                        onChange={(e) => setBleedPercent(Number(e.target.value))}
+                        className="w-full accent-violet-600 cursor-pointer"
+                      />
+                      <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                        <span>1% (Mỏng)</span>
+                        <span>15%</span>
+                        <span>30% (Rộng)</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action buttons */}
+                  {bleedMode !== 'off' && (
+                    <div className="space-y-2 pt-1">
+                      {bleedMode === 'offset' && (
+                        <button
+                          type="button"
+                          disabled={isProcessingBleed}
+                          onClick={applyOffsetBleed}
+                          className="w-full py-2.5 px-4 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition cursor-pointer"
+                        >
+                          <Zap size={14} />
+                          <span>Tạo tràn lề Offset ({bleedPercent}%)</span>
+                        </button>
+                      )}
+
+                      {bleedMode === 'ai' && (
+                        <button
+                          type="button"
+                          disabled={isProcessingBleed}
+                          onClick={applyAIBleed}
+                          className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition cursor-pointer"
+                        >
+                          {isProcessingBleed ? (
+                            <>
+                              <Loader2 size={14} className="animate-spin" />
+                              <span>Đang xử lý AI LaMa...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles size={14} />
+                              <span>Mở rộng biên bằng AI (+{bleedPercent}%)</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+
+                      {originalBackupSrc && (
+                        <button
+                          type="button"
+                          onClick={handleRestoreOriginal}
+                          className="w-full py-1.5 px-3 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-600 text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                        >
+                          <RotateCcw size={13} />
+                          <span>Khôi phục ảnh gốc trước khi bù xén</span>
+                        </button>
+                      )}
+
+                      {bleedStatusMsg && (
+                        <div className="text-[11px] text-slate-600 italic bg-slate-100 p-2 rounded-lg text-center">
+                          {bleedStatusMsg}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
