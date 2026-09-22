@@ -4832,7 +4832,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
                       inputRef={soLuongInputRef}
                       min={1}
                       step={1}
-                      value={isMultiShape ? activeTab.quantity : (config.useTotalLimit ? config.totalOrder : (currentPlan ? (allPages.length > 0 ? allPages.length * standardQty : currentPlan.qty) : config.totalOrder))}
+                      value={isMultiShape ? (activeTab.quantity || 1) : (config.totalOrder || 1)}
                       onChange={v => {
                         const q = Math.max(1, Math.round(v));
                         if (!isMultiShape) {
@@ -4858,6 +4858,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
                     <DebouncedNumberInput
                       inputRef={rongInputRef}
                       step={0.1}
+                      min={1}
                       value={config.itemW}
                       onChange={v => {
                         setConfig(c => ({
@@ -4871,11 +4872,6 @@ Chỉ trả về JSON, không giải thích thêm.`;
                         });
                       }}
                       className="w-14 sm:w-16 min-w-[44px] bg-transparent text-right font-bold text-xs text-slate-800 focus:outline-none"
-                      disabled={
-                        (config.shape === 'custom-svg' && !!customSvgData) ||
-                        config.shape === 'svg-image' ||
-                        config.shape === 'pdf-source'
-                      }
                     />
                     <span className="text-[9px] text-slate-400 font-medium select-none">mm</span>
                   </div>
@@ -4894,17 +4890,13 @@ Chỉ trả về JSON, không giải thích thêm.`;
                       <DebouncedNumberInput
                         inputRef={caoInputRef}
                         step={0.1}
+                        min={1}
                         value={config.itemH}
                         onChange={v => {
                           setConfig(c => ({ ...c, itemH: v }));
                           updateActiveTabProp({ itemH: v });
                         }}
                         className="w-14 sm:w-16 min-w-[44px] bg-transparent text-right font-bold text-xs text-slate-800 focus:outline-none"
-                        disabled={
-                          (config.shape === 'custom-svg' && !!customSvgData) ||
-                          config.shape === 'svg-image' ||
-                          config.shape === 'pdf-source'
-                        }
                       />
                       <span className="text-[9px] text-slate-400 font-medium select-none">mm</span>
                     </div>
