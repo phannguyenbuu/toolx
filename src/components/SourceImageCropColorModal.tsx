@@ -254,6 +254,127 @@ const ModalDimInput: React.FC<ModalDimInputProps> = ({ shape, w, h, onChange, cl
   );
 };
 
+// Interactive Edge Dimension Badge Input directly on the crop box edges
+interface CropEdgeDimInputProps {
+  label: string;
+  value: number;
+  suffix?: string;
+  arrows: { start: string; end: string };
+  isCircle?: boolean;
+  onChangeValue: (val: number) => void;
+  onDimensionChange?: (w: number, h: number) => void;
+  className?: string;
+}
+
+const CropEdgeDimInput: React.FC<CropEdgeDimInputProps> = ({
+  label,
+  value,
+  suffix,
+  arrows,
+  isCircle = false,
+  onChangeValue,
+  onDimensionChange,
+  className = '',
+}) => {
+  const [strVal, setStrVal] = useState<string>(() => String(value));
+  const isFocusedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isFocusedRef.current) {
+      setStrVal(String(value));
+    }
+  }, [value]);
+
+  const commitValue = (text: string) => {
+    if (onDimensionChange) {
+      const parsed = parseDimValue(text, value, value, !!isCircle);
+      if (parsed && (text.includes('x') || text.includes('X') || text.includes('*') || text.includes(' ') || text.includes(','))) {
+        onDimensionChange(parsed.w, parsed.h);
+        setStrVal(String(parsed.w));
+        return;
+      }
+    }
+
+    const num = parseFloat(text.replace(',', '.'));
+    if (!isNaN(num) && num > 0) {
+      const rounded = Math.round(num * 10) / 10;
+      onChangeValue(rounded);
+      setStrVal(String(rounded));
+    } else {
+      setStrVal(String(value));
+    }
+  };
+
+  return (
+    <div
+      className={`pointer-events-auto flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/95 text-violet-200 border border-violet-400/80 shadow-2xl text-xs font-bold font-mono backdrop-blur-md transition-all hover:border-violet-300 hover:shadow-violet-500/25 focus-within:ring-2 focus-within:ring-violet-400 focus-within:border-violet-300 cursor-default select-none ${className}`}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <span className="text-violet-400 text-[11px] select-none">{arrows.start}</span>
+      <span className="text-violet-300 text-[11px] font-semibold select-none">{label}</span>
+      <input
+        type="text"
+        value={strVal}
+        onFocus={(e) => {
+          isFocusedRef.current = true;
+          e.target.select();
+        }}
+        onBlur={() => {
+          isFocusedRef.current = false;
+          commitValue(strVal);
+        }}
+        onChange={(e) => {
+          const val = e.target.value;
+          setStrVal(val);
+          if (onDimensionChange) {
+            const parsed = parseDimValue(val, value, value, !!isCircle);
+            if (parsed && (val.includes('x') || val.includes('X') || val.includes('*') || val.includes(' '))) {
+              onDimensionChange(parsed.w, parsed.h);
+              return;
+            }
+          }
+          const num = parseFloat(val.replace(',', '.'));
+          if (!isNaN(num) && num >= 5) {
+            const rounded = Math.round(num * 10) / 10;
+            onChangeValue(rounded);
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            (e.target as HTMLInputElement).blur();
+          } else if (e.key === 'Escape') {
+            setStrVal(String(value));
+            (e.target as HTMLInputElement).blur();
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const step = e.shiftKey ? 10 : 1;
+            const currentNum = parseFloat(strVal.replace(',', '.')) || value;
+            const next = Math.max(1, Math.round((currentNum + step) * 10) / 10);
+            onChangeValue(next);
+            setStrVal(String(next));
+          } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const step = e.shiftKey ? 10 : 1;
+            const currentNum = parseFloat(strVal.replace(',', '.')) || value;
+            const next = Math.max(1, Math.round((currentNum - step) * 10) / 10);
+            onChangeValue(next);
+            setStrVal(String(next));
+          }
+        }}
+        title="Nhập kích thước trực tiếp (nhấn phím ↑/↓ để tăng/giảm 1mm)"
+        className="w-13 px-1.5 py-0.5 text-center font-bold font-mono text-xs text-white bg-slate-800/90 hover:bg-slate-700/80 focus:bg-violet-950 focus:text-violet-100 rounded border border-violet-500/50 focus:border-violet-400 focus:outline-none shadow-inner cursor-text transition-colors"
+      />
+      <span className="text-violet-300 text-[11px] font-mono select-none">
+        {suffix || 'mm'}
+      </span>
+      <span className="text-violet-400 text-[11px] select-none">{arrows.end}</span>
+    </div>
+  );
+};
+
+
 interface SourceImageCropColorModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -455,8 +576,8 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
 
   // Calculate crop box pixel size in viewport (leaving room for dim badges)
   const cropBox = useMemo(() => {
-    const padX = 75; // Leave room for right dim height badge
-    const padY = 50; // Leave room for top dim width badge
+    const padX = 95; // Leave room for right dim height badge
+    const padY = 55; // Leave room for top dim width badge
     const maxW = Math.max(100, viewportSize.w - padX * 2);
     const maxH = Math.max(100, viewportSize.h - padY * 2);
 
@@ -1308,15 +1429,17 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                     <div className="w-1.5 h-2 border-r border-violet-400/80" />
                   </div>
 
-                  {/* DIM WIDTH BADGE (Cạnh trên) */}
-                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-slate-900/95 text-violet-200 border border-violet-400/70 shadow-xl text-xs font-bold font-mono select-none pointer-events-none backdrop-blur-md whitespace-nowrap z-40">
-                    <span className="text-[10px] text-violet-400">⟵</span>
-                    <span>
-                      {localShape === 'circle'
-                        ? `Ø ${localItemW} mm (Đ.kính)`
-                        : `Rộng: ${localItemW} mm`}
-                    </span>
-                    <span className="text-[10px] text-violet-400">⟶</span>
+                  {/* DIM WIDTH INPUT BADGE (Cạnh trên - Nhập trực tiếp) */}
+                  <div className="absolute -top-9 left-1/2 -translate-x-1/2 z-40">
+                    <CropEdgeDimInput
+                      label={localShape === 'circle' ? 'Ø' : 'Rộng:'}
+                      value={localItemW}
+                      suffix={localShape === 'circle' ? 'mm (Đ.kính)' : 'mm'}
+                      arrows={{ start: '⟵', end: '⟶' }}
+                      isCircle={localShape === 'circle'}
+                      onChangeValue={handleWidthChange}
+                      onDimensionChange={handleDimChange}
+                    />
                   </div>
 
                   {/* Right Edge Dimension Guide Line (Non-circle) */}
@@ -1328,12 +1451,16 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                     </div>
                   )}
 
-                  {/* DIM HEIGHT BADGE (Cạnh phải) */}
+                  {/* DIM HEIGHT INPUT BADGE (Cạnh phải - Nhập trực tiếp) */}
                   {localShape !== 'circle' && (
-                    <div className="absolute -right-3.5 top-1/2 -translate-y-1/2 translate-x-full flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-900/95 text-violet-200 border border-violet-400/70 shadow-xl text-xs font-bold font-mono select-none pointer-events-none backdrop-blur-md whitespace-nowrap z-40">
-                      <span className="text-[10px] text-violet-400">↑</span>
-                      <span>Cao: {localShape === 'circle' ? localItemW : localItemH} mm</span>
-                      <span className="text-[10px] text-violet-400">↓</span>
+                    <div className="absolute -right-3.5 top-1/2 -translate-y-1/2 translate-x-full z-40">
+                      <CropEdgeDimInput
+                        label="Cao:"
+                        value={localShape === 'circle' ? localItemW : localItemH}
+                        suffix="mm"
+                        arrows={{ start: '↑', end: '↓' }}
+                        onChangeValue={handleHeightChange}
+                      />
                     </div>
                   )}
                 </div>
