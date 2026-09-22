@@ -1661,7 +1661,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                   <div className="absolute -top-5 right-2 px-1.5 py-0.5 rounded bg-emerald-950/90 border border-emerald-500/50 text-[9px] font-mono text-emerald-300 font-bold tracking-tight shadow-md flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                     <span>
-                      {bleedMode === 'offset' ? 'Tràn lề Offset' : 'Tràn lề AI'} +{effectiveBleedMm}mm ({bleedPercent}%)
+                      Outpaint ({bleedMode === 'offset' ? 'Offset' : 'AI'}) +{effectiveBleedMm}mm ({bleedPercent}%)
                     </span>
                   </div>
                 </div>
@@ -1884,8 +1884,8 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
               </button>
             </div>
 
-            {/* Navtabs Row 2: Nhóm HSL, CMYK, RGB & Tràn lề (Bleed) */}
-            <div className="grid grid-cols-4 border-b border-slate-200 text-[10px] font-bold text-center bg-slate-100/40">
+            {/* Navtabs Row 2: Nhóm HSL, CMYK, RGB */}
+            <div className="grid grid-cols-3 border-b border-slate-200 text-[10px] font-bold text-center bg-slate-100/40">
               <button
                 type="button"
                 onClick={() => setColorTab('hsl')}
@@ -1919,17 +1919,28 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
               >
                 RGB
               </button>
+            </div>
+
+            {/* Navtabs Row 3: Hàng riêng biệt Outpaint (luôn expand 100% full width) */}
+            <div className="border-b border-slate-200 bg-slate-50/70 text-[10px] font-bold text-center">
               <button
                 type="button"
                 onClick={() => setColorTab('bleed')}
-                className={`py-1.5 transition border-b-2 cursor-pointer flex items-center justify-center gap-1 ${
+                className={`w-full py-1.5 px-3 transition border-b-2 cursor-pointer flex items-center justify-center gap-1.5 ${
                   colorTab === 'bleed'
                     ? 'border-violet-600 text-violet-700 bg-white font-bold shadow-2xs'
-                    : 'border-transparent text-emerald-600 hover:text-emerald-700 hover:bg-slate-50'
+                    : 'border-transparent text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50/50 bg-emerald-50/20'
                 }`}
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Tràn lề (Bleed)</span>
+                <Sparkles size={13} className={colorTab === 'bleed' ? 'text-violet-600' : 'text-emerald-600 animate-pulse'} />
+                <span className="tracking-wide uppercase text-[11px] font-bold">Outpaint</span>
+                <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                  bleedMode === 'off'
+                    ? 'bg-slate-200 text-slate-600'
+                    : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                }`}>
+                  {bleedMode === 'off' ? 'Off' : `${bleedMode.toUpperCase()} +${bleedPercent}%`}
+                </span>
               </button>
             </div>
 
@@ -2183,7 +2194,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                   <div className="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80 text-[11px] text-emerald-900 space-y-1">
                     <div className="font-bold flex items-center gap-1.5 text-emerald-800">
                       <Sparkles size={13} className="text-emerald-600" />
-                      <span>Studio Bù Xén Tràn Lề (Bleed Expansion)</span>
+                      <span>Studio Outpaint (Bù Xén Tràn Lề)</span>
                     </div>
                     <p className="text-[10px] text-emerald-700 leading-relaxed">
                       Mở rộng biên ảnh ra ngoài khung cắt để chống lệch mép, viền trắng khi cắt/bế thành phẩm in ấn.
