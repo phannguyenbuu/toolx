@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   X, Check, RotateCw, RotateCcw, FlipHorizontal, FlipVertical,
   ZoomIn, ZoomOut, Move, Eye, EyeOff, Upload, Sparkles,
-  RefreshCw, Scissors, Grid
+  RefreshCw, Scissors, Grid, Layers, Plus, Edit3
 } from 'lucide-react';
 import {
   ColorAdjustSettings,
@@ -34,6 +34,92 @@ export const DEFAULT_CROP_TRANSFORM: CropTransform = {
   aspectMode: 'item',
 };
 
+export interface CropModalLayerTab {
+  id: string;
+  name: string;
+  enabled: boolean;
+  shape: 'rect' | 'circle' | 'oval' | 'trapezoid' | 'triangle' | 'hexagon' | 'custom-svg' | 'svg-image' | 'pdf-source';
+  itemW: number;
+  itemH: number;
+  quantity: number;
+  useTotalLimit?: boolean;
+  cornerRadius?: number;
+  sourceImage?: any;
+  vectorMaskResult?: any;
+  customSvgData?: string;
+  color?: string;
+  autoRotateImage?: boolean;
+  canRotate?: boolean;
+}
+
+const TAB_COLORS = ['#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#3b82f6', '#84cc16', '#6366f1'];
+const LAYER_COLOR_PRESETS = [
+  '#8b5cf6', '#3b82f6', '#06b6d4', '#10b981', '#84cc16', '#f59e0b',
+  '#f97316', '#ef4444', '#ec4899', '#6366f1', '#14b8a6', '#64748b'
+];
+
+interface ModalNumberInputProps {
+  value: number;
+  onChange: (v: number) => void;
+  step?: number;
+  min?: number;
+  className?: string;
+}
+
+const ModalNumberInput: React.FC<ModalNumberInputProps> = ({
+  value,
+  onChange,
+  step = 0.1,
+  min = 1,
+  className
+}) => {
+  const [str, setStr] = useState(String(value));
+  const isFocusedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isFocusedRef.current) {
+      setStr(String(value));
+    }
+  }, [value]);
+
+  return (
+    <input
+      type="number"
+      step={step}
+      min={min}
+      value={str}
+      onFocus={(e) => {
+        isFocusedRef.current = true;
+        e.target.select();
+      }}
+      onBlur={() => {
+        isFocusedRef.current = false;
+        const num = parseFloat(str.replace(',', '.'));
+        if (!isNaN(num) && num >= min) {
+          onChange(num);
+          setStr(String(num));
+        } else {
+          setStr(String(value));
+        }
+      }}
+      onChange={(e) => {
+        const val = e.target.value;
+        setStr(val);
+        const num = parseFloat(val.replace(',', '.'));
+        if (!isNaN(num) && num >= min) {
+          onChange(num);
+        }
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          (e.target as HTMLInputElement).blur();
+        }
+      }}
+      className={className}
+    />
+  );
+};
+
 interface SourceImageCropColorModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -44,6 +130,8 @@ interface SourceImageCropColorModalProps {
   shape?: string; // 'rect' | 'circle' | 'oval' | 'trapezoid' | 'triangle' | 'hexagon' | ...
   initialColorSettings?: ColorAdjustSettings;
   initialCropSettings?: CropTransform;
+  shapeTabs?: CropModalLayerTab[];
+  activeTabId?: string;
   onApply: (result: {
     dataUrl: string;
     originalImage: string;
@@ -52,6 +140,8 @@ interface SourceImageCropColorModalProps {
     colorSettings: ColorAdjustSettings;
     cropSettings: CropTransform;
     filename?: string;
+    updatedTabs?: CropModalLayerTab[];
+    activeTabId?: string;
   }) => void;
 }
 
@@ -65,8 +155,25 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
   shape = 'rect',
   initialColorSettings,
   initialCropSettings,
+  shapeTabs,
+  activeTabId,
   onApply,
 }) => {
+  // Layer Tabs State (cloned from outside canvas)
+  const [tabs, setTabs] = useState<CropModalLayerTab[]>([]);
+  const [currentTabId, setCurrentTabId] = useState<string>('tab-a');
+
+  // Layer editing modal toast state
+  const [editingLayerTab, setEditingLayerTab] = useState<CropModalLayerTab | null>(null);
+  const [editLayerName, setEditLayerName] = useState('');
+  const [editLayerColor, setEditLayerColor] = useState('#8b5cf6');
+
+  // Active layer dimensions, shape, quantity state
+  const [localItemW, setLocalItemW] = useState<number>(itemW || 100);
+  const [localItemH, setLocalItemH] = useState<number>(shape === 'circle' ? (itemW || 100) : (itemH || 100));
+  const [localShape, setLocalShape] = useState<string>(shape || 'rect');
+  const [localQuantity, setLocalQuantity] = useState<number>(10);
+
   // Source image state
   const [currentImageSrc, setCurrentImageSrc] = useState<string | null>(imageUrl);
   const [currentFileName, setCurrentFileName] = useState<string>(imageName);
@@ -101,12 +208,67 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
   // Sync props on open
   useEffect(() => {
     if (isOpen) {
-      setCurrentImageSrc(imageUrl);
-      setCurrentFileName(imageName);
-      if (initialColorSettings) setColorSettings({ ...initialColorSettings });
-      if (initialCropSettings) setCrop({ ...initialCropSettings });
+      if (shapeTabs && shapeTabs.length > 0) {
+        const clonedTabs: CropModalLayerTab[] = JSON.parse(JSON.stringify(shapeTabs));
+        setTabs(clonedTabs);
+        const initId = activeTabId && clonedTabs.some(t => t.id === activeTabId)
+          ? activeTabId
+          : clonedTabs[0].id;
+        setCurrentTabId(initId);
+        const curTab = clonedTabs.find(t => t.id === initId) || clonedTabs[0];
+        const curW = curTab.itemW || itemW || 100;
+        const curH = curTab.shape === 'circle' ? curW : (curTab.itemH || itemH || 100);
+        setLocalItemW(curW);
+        setLocalItemH(curH);
+        setLocalShape(curTab.shape || shape || 'rect');
+        setLocalQuantity(curTab.quantity || 10);
+
+        const srcImg = curTab.sourceImage;
+        const srcUrl = srcImg?.originalThumb || srcImg?.thumb || imageUrl || null;
+        setCurrentImageSrc(srcUrl);
+        setCurrentFileName(srcImg?.name || imageName || `Layer ${curTab.name}`);
+        setCrop(srcImg?.cropSettings || initialCropSettings || { ...DEFAULT_CROP_TRANSFORM });
+        setColorSettings(srcImg?.colorSettings || initialColorSettings || { ...DEFAULT_COLOR_SETTINGS });
+      } else {
+        const fallbackTab: CropModalLayerTab = {
+          id: 'tab-a',
+          name: 'A',
+          enabled: true,
+          shape: (shape as any) || 'rect',
+          itemW: itemW || 100,
+          itemH: shape === 'circle' ? (itemW || 100) : (itemH || 100),
+          quantity: 10,
+          useTotalLimit: false,
+          cornerRadius: 0,
+          sourceImage: imageUrl ? {
+            fileIndex: 0,
+            pageIndex: 1,
+            thumb: imageUrl,
+            originalThumb: imageUrl,
+            name: imageName,
+            w: itemW,
+            h: shape === 'circle' ? itemW : itemH,
+            rotation: 0,
+            cropSettings: initialCropSettings,
+            colorSettings: initialColorSettings,
+          } : null,
+          color: '#8b5cf6',
+          autoRotateImage: true,
+          canRotate: true,
+        };
+        setTabs([fallbackTab]);
+        setCurrentTabId('tab-a');
+        setLocalItemW(fallbackTab.itemW);
+        setLocalItemH(fallbackTab.itemH);
+        setLocalShape(fallbackTab.shape);
+        setLocalQuantity(fallbackTab.quantity);
+        setCurrentImageSrc(imageUrl);
+        setCurrentFileName(imageName);
+        if (initialColorSettings) setColorSettings({ ...initialColorSettings });
+        if (initialCropSettings) setCrop({ ...initialCropSettings });
+      }
     }
-  }, [isOpen, imageUrl, imageName, initialColorSettings, initialCropSettings]);
+  }, [isOpen]);
 
   // Load image element when source changes
   useEffect(() => {
@@ -133,11 +295,11 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     if (crop.aspectMode === '1:1') return 1;
     if (crop.aspectMode === '4:3') return 4 / 3;
     if (crop.aspectMode === '16:9') return 16 / 9;
-    if (crop.aspectMode === 'free') return itemW / (itemH || itemW);
+    if (crop.aspectMode === 'free') return localItemW / (localItemH || localItemW);
     // 'item' mode
-    const effH = shape === 'circle' ? itemW : (itemH || itemW);
-    return itemW / (effH || 1);
-  }, [crop.aspectMode, itemW, itemH, shape]);
+    const effH = localShape === 'circle' ? localItemW : (localItemH || localItemW);
+    return localItemW / (effH || 1);
+  }, [crop.aspectMode, localItemW, localItemH, localShape]);
 
   // Viewport & Crop box calculations
   const [viewportSize, setViewportSize] = useState({ w: 500, h: 420 });
@@ -250,7 +412,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // We render canvas at crop box pixel dimensions
+    // Render canvas at crop box pixel dimensions
     const cw = Math.round(cropBox.w);
     const ch = Math.round(cropBox.h);
     if (cw <= 0 || ch <= 0) return;
@@ -258,10 +420,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     canvas.width = cw;
     canvas.height = ch;
 
-    // Clear
     ctx.clearRect(0, 0, cw, ch);
-
-    // Save context for transform
     ctx.save();
 
     // Center of crop box
@@ -291,27 +450,18 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     }
   }, [isOpen, imgElement, imgLoaded, cropBox, crop, colorSettings, showOriginal]);
 
-  // Apply Action: generate high-resolution export
-  const handleApply = () => {
-    if (!imgElement || !imgLoaded) {
-      onClose();
-      return;
-    }
-
-    // Determine high-res canvas size (e.g., at 300 DPI equivalent or max 2400px)
-    const exportScale = 3; // 3x preview canvas for sharp print quality
-    const exportW = Math.round(cropBox.w * exportScale);
-    const exportH = Math.round(cropBox.h * exportScale);
+  // Export high-resolution canvas dataUrl
+  const renderCurrentExportDataUrl = useCallback((): string | null => {
+    if (!imgElement || !imgLoaded || !previewCanvasRef.current) return currentImageSrc;
+    const exportScale = 3;
+    const exportW = Math.max(1, Math.round(cropBox.w * exportScale));
+    const exportH = Math.max(1, Math.round(cropBox.h * exportScale));
 
     const offCanvas = document.createElement('canvas');
     offCanvas.width = exportW;
     offCanvas.height = exportH;
     const offCtx = offCanvas.getContext('2d');
-
-    if (!offCtx) {
-      onClose();
-      return;
-    }
+    if (!offCtx) return currentImageSrc;
 
     offCtx.save();
     offCtx.translate(exportW / 2 + crop.panX * exportScale, exportH / 2 + crop.panY * exportScale);
@@ -321,14 +471,11 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     const imgAspect = imgElement.width / imgElement.height;
     const baseW = exportW;
     const baseH = baseW / imgAspect;
-
     const drawW = baseW * crop.zoom;
     const drawH = baseH * crop.zoom;
-
     offCtx.drawImage(imgElement, -drawW / 2, -drawH / 2, drawW, drawH);
     offCtx.restore();
 
-    // Apply Color Settings
     if (!isDefaultColorSettings(colorSettings)) {
       try {
         const imgData = offCtx.getImageData(0, 0, exportW, exportH);
@@ -337,21 +484,248 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
         console.error('Export color error:', e);
       }
     }
+    return offCanvas.toDataURL('image/png', 0.95);
+  }, [imgElement, imgLoaded, cropBox.w, cropBox.h, crop, colorSettings, currentImageSrc]);
 
-    const dataUrl = offCanvas.toDataURL('image/png', 0.95);
+  // --- LAYER MANAGEMENT HANDLERS (CLONED FROM CANVAS) ---
+  const handleSwitchTab = (targetTabId: string) => {
+    if (targetTabId === currentTabId) return;
+
+    // 1. Commit current active tab state into tabs array
+    const croppedThumb = currentImageSrc ? (renderCurrentExportDataUrl() || currentImageSrc) : null;
+    const currentEffH = localShape === 'circle' ? localItemW : localItemH;
+
+    const committedTabs = tabs.map(t => {
+      if (t.id === currentTabId) {
+        return {
+          ...t,
+          itemW: localItemW,
+          itemH: currentEffH,
+          shape: localShape as any,
+          quantity: localQuantity,
+          sourceImage: currentImageSrc ? {
+            fileIndex: 0,
+            pageIndex: 1,
+            thumb: croppedThumb || currentImageSrc,
+            originalThumb: currentImageSrc,
+            name: currentFileName,
+            w: localItemW,
+            h: currentEffH,
+            rotation: 0,
+            cropSettings: crop,
+            colorSettings: colorSettings,
+          } : t.sourceImage,
+        };
+      }
+      return t;
+    });
+    setTabs(committedTabs);
+
+    // 2. Switch to target tab
+    const targetTab = committedTabs.find(t => t.id === targetTabId);
+    if (!targetTab) return;
+
+    setCurrentTabId(targetTabId);
+    const targetW = targetTab.itemW || 100;
+    const targetH = targetTab.shape === 'circle' ? targetW : (targetTab.itemH || 100);
+    setLocalItemW(targetW);
+    setLocalItemH(targetH);
+    setLocalShape(targetTab.shape || 'rect');
+    setLocalQuantity(targetTab.quantity || 10);
+
+    const srcImg = targetTab.sourceImage;
+    const nextSrc = srcImg?.originalThumb || srcImg?.thumb || null;
+    setCurrentImageSrc(nextSrc);
+    setCurrentFileName(srcImg?.name || `Layer ${targetTab.name}`);
+    setCrop(srcImg?.cropSettings || { ...DEFAULT_CROP_TRANSFORM });
+    setColorSettings(srcImg?.colorSettings || { ...DEFAULT_COLOR_SETTINGS });
+  };
+
+  const handleAddTabInModal = () => {
+    // 1. Commit current active tab
+    const croppedThumb = currentImageSrc ? (renderCurrentExportDataUrl() || currentImageSrc) : null;
+    const currentEffH = localShape === 'circle' ? localItemW : localItemH;
+
+    const committedTabs = tabs.map(t => {
+      if (t.id === currentTabId) {
+        return {
+          ...t,
+          itemW: localItemW,
+          itemH: currentEffH,
+          shape: localShape as any,
+          quantity: localQuantity,
+          sourceImage: currentImageSrc ? {
+            fileIndex: 0,
+            pageIndex: 1,
+            thumb: croppedThumb || currentImageSrc,
+            originalThumb: currentImageSrc,
+            name: currentFileName,
+            w: localItemW,
+            h: currentEffH,
+            rotation: 0,
+            cropSettings: crop,
+            colorSettings: colorSettings,
+          } : t.sourceImage,
+        };
+      }
+      return t;
+    });
+
+    // 2. Create new tab
+    const nextIndex = committedTabs.length;
+    const letter = String.fromCharCode(65 + (nextIndex % 26)) + (nextIndex >= 26 ? Math.floor(nextIndex / 26) : '');
+    const newId = `tab-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+    const newColor = TAB_COLORS[nextIndex % TAB_COLORS.length];
+    const newTab: CropModalLayerTab = {
+      id: newId,
+      name: letter,
+      enabled: true,
+      shape: (localShape as any) || 'rect',
+      itemW: localItemW || 100,
+      itemH: localShape === 'circle' ? localItemW : (localItemH || 100),
+      quantity: 10,
+      useTotalLimit: true,
+      cornerRadius: 0,
+      sourceImage: null,
+      color: newColor,
+      autoRotateImage: true,
+      canRotate: true,
+    };
+
+    const newTabs = [...committedTabs.map(t => ({ ...t, useTotalLimit: true })), newTab];
+    setTabs(newTabs);
+
+    // 3. Switch to new tab
+    setCurrentTabId(newId);
+    setLocalItemW(newTab.itemW);
+    setLocalItemH(newTab.itemH);
+    setLocalShape(newTab.shape);
+    setLocalQuantity(newTab.quantity);
+    setCurrentImageSrc(null);
+    setCurrentFileName(`Layer ${newTab.name}`);
+    setCrop({ ...DEFAULT_CROP_TRANSFORM });
+    setColorSettings({ ...DEFAULT_COLOR_SETTINGS });
+  };
+
+  const handleDeleteTabInModal = (tabId: string) => {
+    if (tabs.length <= 1) return;
+    const remaining = tabs.filter(t => t.id !== tabId);
+    setTabs(remaining);
+    if (currentTabId === tabId) {
+      const nextTab = remaining[0];
+      setCurrentTabId(nextTab.id);
+      const nw = nextTab.itemW || 100;
+      const nh = nextTab.shape === 'circle' ? nw : (nextTab.itemH || 100);
+      setLocalItemW(nw);
+      setLocalItemH(nh);
+      setLocalShape(nextTab.shape || 'rect');
+      setLocalQuantity(nextTab.quantity || 10);
+      const srcImg = nextTab.sourceImage;
+      setCurrentImageSrc(srcImg?.originalThumb || srcImg?.thumb || null);
+      setCurrentFileName(srcImg?.name || `Layer ${nextTab.name}`);
+      setCrop(srcImg?.cropSettings || { ...DEFAULT_CROP_TRANSFORM });
+      setColorSettings(srcImg?.colorSettings || { ...DEFAULT_COLOR_SETTINGS });
+    }
+  };
+
+  const handleToggleTab = (tabId: string) => {
+    setTabs(prev => prev.map(t => t.id === tabId ? { ...t, enabled: !t.enabled } : t));
+  };
+
+  const handleWidthChange = (val: number) => {
+    const v = Math.max(1, Math.round(val * 10) / 10);
+    setLocalItemW(v);
+    if (localShape === 'circle') {
+      setLocalItemH(v);
+    }
+    setTabs(prev => prev.map(t => t.id === currentTabId ? {
+      ...t,
+      itemW: v,
+      itemH: localShape === 'circle' ? v : t.itemH
+    } : t));
+  };
+
+  const handleHeightChange = (val: number) => {
+    const v = Math.max(1, Math.round(val * 10) / 10);
+    setLocalItemH(v);
+    setTabs(prev => prev.map(t => t.id === currentTabId ? { ...t, itemH: v } : t));
+  };
+
+  const handleQuantityChange = (val: number) => {
+    const q = Math.max(1, Math.round(val));
+    setLocalQuantity(q);
+    setTabs(prev => prev.map(t => t.id === currentTabId ? { ...t, quantity: q } : t));
+  };
+
+  const handleShapeChange = (newShape: string) => {
+    setLocalShape(newShape);
+    let newH = localItemH;
+    if (newShape === 'circle') {
+      newH = localItemW;
+      setLocalItemH(localItemW);
+    }
+    setTabs(prev => prev.map(t => t.id === currentTabId ? {
+      ...t,
+      shape: newShape as any,
+      itemH: newH
+    } : t));
+  };
+
+  const handleSaveLayerEdit = () => {
+    if (!editingLayerTab) return;
+    const trimmed = editLayerName.trim() || 'Mẫu';
+    const chosenColor = editLayerColor || editingLayerTab.color || '#8b5cf6';
+    setTabs(prev => prev.map(t => t.id === editingLayerTab.id ? { ...t, name: trimmed, color: chosenColor } : t));
+    setEditingLayerTab(null);
+  };
+
+  // Apply Action: commit all changes and return to Imposition canvas
+  const handleApply = () => {
+    const currentCroppedDataUrl = currentImageSrc ? (renderCurrentExportDataUrl() || currentImageSrc) : '';
+    const currentEffH = localShape === 'circle' ? localItemW : localItemH;
+
+    const finalTabs = tabs.map(t => {
+      if (t.id === currentTabId) {
+        return {
+          ...t,
+          itemW: localItemW,
+          itemH: currentEffH,
+          shape: localShape as any,
+          quantity: localQuantity,
+          sourceImage: currentImageSrc ? {
+            fileIndex: 0,
+            pageIndex: 1,
+            thumb: currentCroppedDataUrl || currentImageSrc,
+            originalThumb: currentImageSrc,
+            name: currentFileName,
+            w: localItemW,
+            h: currentEffH,
+            rotation: 0,
+            cropSettings: crop,
+            colorSettings: colorSettings,
+          } : t.sourceImage,
+        };
+      }
+      return t;
+    });
+
     onApply({
-      dataUrl,
-      originalImage: currentImageSrc || dataUrl,
-      w_mm: itemW,
-      h_mm: itemH,
+      dataUrl: currentCroppedDataUrl || currentImageSrc || '',
+      originalImage: currentImageSrc || '',
+      w_mm: localItemW,
+      h_mm: currentEffH,
       colorSettings,
       cropSettings: crop,
       filename: currentFileName,
+      updatedTabs: finalTabs,
+      activeTabId: currentTabId,
     });
     onClose();
   };
 
   if (!isOpen) return null;
+
+  const currentTab = tabs.find(t => t.id === currentTabId) || tabs[0];
 
   return (
     <div
@@ -360,9 +734,9 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
     >
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col w-[1100px] max-w-[96vw] h-[92vh] max-h-[820px] overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col w-[1180px] max-w-[98vw] h-[92vh] max-h-[840px] overflow-hidden relative">
         {/* HEADER */}
-        <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50 flex-shrink-0">
+        <div className="px-5 py-2.5 border-b border-slate-200 flex items-center justify-between bg-slate-50 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-violet-600 text-white flex items-center justify-center shadow-sm">
               <Scissors size={18} />
@@ -371,16 +745,16 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-bold text-slate-800">Chỉnh sửa Ảnh nguồn & Cân bằng màu</h2>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-semibold border border-violet-200">
-                  {itemW} × {shape === 'circle' ? itemW : itemH} mm
+                  {localItemW} × {localShape === 'circle' ? localItemW : localItemH} mm
                 </span>
                 {currentFileName && (
-                  <span className="text-[11px] text-slate-400 truncate max-w-[200px]" title={currentFileName}>
+                  <span className="text-[11px] text-slate-400 truncate max-w-[220px]" title={currentFileName}>
                     • {currentFileName}
                   </span>
                 )}
               </div>
               <p className="text-[11px] text-slate-500">
-                Kéo di chuyển ảnh trong vùng chọn, phóng to/xoay và cân chỉnh màu sắc chuẩn in ấn
+                Kéo di chuyển ảnh trong vùng chọn, phóng to/xoay, chỉnh kích thước và quản lý layer chuẩn in ấn
               </p>
             </div>
           </div>
@@ -399,7 +773,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
               className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
             >
               <Upload size={14} />
-              <span>Đổi ảnh khác</span>
+              <span>{currentImageSrc ? 'Đổi ảnh khác' : 'Tải ảnh lên'}</span>
             </button>
 
             <button
@@ -424,6 +798,170 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
             >
               <X size={18} />
             </button>
+          </div>
+        </div>
+
+        {/* SUBHEADER: LAYER MANAGEMENT & DIMENSIONS (CLONED FROM CANVAS) */}
+        <div className="px-4 py-2 border-b border-slate-200 bg-slate-100/80 flex items-center justify-between gap-3 select-none flex-wrap flex-shrink-0">
+          {/* LEFT: Layer Management Tabs */}
+          <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 max-w-full sm:max-w-[55%]">
+            <div className="flex items-center gap-1.5 shrink-0 pr-1">
+              <div className="w-5 h-5 rounded-md bg-violet-100 text-violet-700 flex items-center justify-center font-bold text-xs shadow-2xs">
+                <Layers size={12} />
+              </div>
+              <span className="text-[11px] font-bold text-slate-800 tracking-wide uppercase">
+                LAYER ({tabs.length})
+              </span>
+            </div>
+
+            <div className="w-px h-4 bg-slate-300 shrink-0 mx-0.5" />
+
+            {tabs.map((tab) => {
+              const isActive = tab.id === currentTabId;
+              const tabColor = tab.color || '#8b5cf6';
+              return (
+                <div
+                  key={tab.id}
+                  onClick={() => handleSwitchTab(tab.id)}
+                  className={`group/tab relative flex items-center gap-1.5 transition-all cursor-pointer select-none shrink-0 px-2.5 py-1 rounded-xl border ${
+                    isActive
+                      ? 'bg-white text-slate-900 font-bold shadow-xs'
+                      : tab.enabled
+                      ? 'bg-white/60 hover:bg-white text-slate-700 border-slate-200 shadow-2xs'
+                      : 'bg-slate-200/50 border-dashed border-slate-300 text-slate-400 opacity-60'
+                  }`}
+                  style={{ borderColor: isActive ? tabColor : undefined }}
+                >
+                  <span
+                    className="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-black/10"
+                    style={{ backgroundColor: tabColor }}
+                  />
+                  <span className="font-bold tracking-tight text-[11px] max-w-[80px] truncate">
+                    {tab.name}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingLayerTab(tab);
+                      setEditLayerName(tab.name);
+                      setEditLayerColor(tab.color || '#8b5cf6');
+                    }}
+                    className="p-0.5 rounded hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition"
+                    title="Đổi tên & màu layer"
+                  >
+                    <Edit3 size={11} />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleTab(tab.id);
+                    }}
+                    className={`p-0.5 rounded transition ${
+                      tab.enabled ? 'text-emerald-600 hover:bg-emerald-50' : 'text-slate-400 hover:bg-slate-100'
+                    }`}
+                    title={tab.enabled ? 'Đang hiện' : 'Đang ẩn'}
+                  >
+                    {tab.enabled ? <Eye size={11} /> : <EyeOff size={11} />}
+                  </button>
+
+                  {tabs.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteTabInModal(tab.id);
+                      }}
+                      className="p-0.5 rounded opacity-0 group-hover/tab:opacity-100 hover:bg-rose-100 text-rose-500 transition"
+                      title="Xóa layer này"
+                    >
+                      <X size={11} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+
+            <button
+              type="button"
+              onClick={handleAddTabInModal}
+              className="flex items-center justify-center w-6 h-6 rounded-lg border border-dashed border-slate-300 hover:border-violet-400 text-slate-400 hover:text-violet-600 bg-white/70 hover:bg-violet-50 transition cursor-pointer shrink-0"
+              title="Thêm layer mới"
+            >
+              <Plus size={12} />
+            </button>
+          </div>
+
+          {/* RIGHT: Shape + Quantity + Width * Height Inputs */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Shape selector */}
+            <div className="flex items-center gap-1 bg-white border border-slate-200/90 rounded-xl px-2 py-1 shadow-2xs">
+              <span className="text-[10px] text-slate-500 font-medium">Hình:</span>
+              <select
+                value={localShape}
+                onChange={(e) => handleShapeChange(e.target.value)}
+                className="text-xs font-bold text-slate-700 bg-transparent focus:outline-none cursor-pointer"
+              >
+                <option value="rect">Chữ nhật</option>
+                <option value="circle">Hình tròn</option>
+                <option value="oval">Hình Oval</option>
+                <option value="trapezoid">Hình thang</option>
+                <option value="triangle">Tam giác</option>
+                <option value="hexagon">Lục giác</option>
+                <option value="custom-svg">Custom SVG</option>
+              </select>
+            </div>
+
+            {/* Số lượng */}
+            <div className="flex items-center bg-emerald-50/80 hover:bg-emerald-100/90 border border-emerald-300/90 rounded-xl px-2 py-1 shadow-2xs gap-1">
+              <span className="text-[10px] font-bold text-emerald-800 select-none">SL:</span>
+              <ModalNumberInput
+                value={localQuantity}
+                onChange={handleQuantityChange}
+                step={1}
+                min={1}
+                className="w-10 bg-transparent text-right font-bold text-xs text-emerald-700 focus:outline-none"
+              />
+              <span className="text-[9px] text-slate-400 font-medium select-none">tem</span>
+            </div>
+
+            {/* Rộng (W) */}
+            <div className="flex items-center bg-white hover:bg-slate-50 border border-slate-200/90 rounded-xl px-2 py-1 shadow-2xs gap-1 focus-within:ring-2 focus-within:ring-violet-300">
+              <span className="text-[10px] font-semibold text-slate-600 select-none">
+                {localShape === 'circle' ? 'Đ.kính:' : 'Rộng:'}
+              </span>
+              <ModalNumberInput
+                value={localItemW}
+                onChange={handleWidthChange}
+                step={0.1}
+                min={1}
+                className="w-14 bg-transparent text-right font-bold text-xs text-slate-800 focus:outline-none"
+              />
+              <span className="text-[9px] text-slate-400 font-medium select-none">mm</span>
+            </div>
+
+            {/* Cao (H) */}
+            {localShape !== 'circle' ? (
+              <div className="flex items-center bg-white hover:bg-slate-50 border border-slate-200/90 rounded-xl px-2 py-1 shadow-2xs gap-1 focus-within:ring-2 focus-within:ring-violet-300">
+                <span className="text-[10px] font-semibold text-slate-600 select-none">Cao:</span>
+                <ModalNumberInput
+                  value={localItemH}
+                  onChange={handleHeightChange}
+                  step={0.1}
+                  min={1}
+                  className="w-14 bg-transparent text-right font-bold text-xs text-slate-800 focus:outline-none"
+                />
+                <span className="text-[9px] text-slate-400 font-medium select-none">mm</span>
+              </div>
+            ) : (
+              <div className="flex items-center bg-slate-100/70 border border-dashed border-slate-200 rounded-xl px-2 py-1 text-slate-400 gap-1 select-none">
+                <span className="text-[10px] font-medium">Tỷ lệ:</span>
+                <span className="text-xs font-bold font-mono">1:1</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -519,12 +1057,33 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                 isDragging ? 'cursor-grabbing' : 'cursor-grab'
               }`}
             >
+              {!currentImageSrc ? (
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex flex-col items-center justify-center p-8 text-center cursor-pointer border-2 border-dashed border-slate-700 hover:border-violet-500 rounded-2xl bg-slate-900/80 hover:bg-slate-900 transition-all max-w-sm group shadow-xl z-20 pointer-events-auto"
+                >
+                  <div className="w-14 h-14 rounded-2xl bg-violet-600/20 group-hover:bg-violet-600/30 text-violet-400 flex items-center justify-center mb-3 transition">
+                    <Upload size={26} />
+                  </div>
+                  <h3 className="text-sm font-bold text-slate-200 mb-1">
+                    Chọn ảnh nguồn cho Layer {currentTab?.name || 'này'}
+                  </h3>
+                  <p className="text-xs text-slate-400 mb-4">
+                    Bấm để chọn tệp hình ảnh hoặc PDF từ máy tính
+                  </p>
+                  <span className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold shadow-sm transition">
+                    Tải ảnh lên
+                  </span>
+                </div>
+              ) : null}
+
               {/* Crop Box Container */}
               <div
                 style={{
                   width: `${cropBox.w}px`,
                   height: `${cropBox.h}px`,
-                  borderRadius: shape === 'circle' || shape === 'oval' ? '50%' : '6px',
+                  borderRadius: localShape === 'circle' || localShape === 'oval' ? '50%' : '6px',
+                  display: !currentImageSrc ? 'none' : undefined,
                 }}
                 className="relative shadow-[0_0_0_9999px_rgba(2,6,23,0.78)] border-2 border-violet-400 overflow-hidden flex items-center justify-center pointer-events-none"
               >
@@ -557,10 +1116,12 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
               </div>
 
               {/* Drag Hint Overlay */}
-              <div className="absolute bottom-3 left-3 bg-slate-900/80 backdrop-blur-xs border border-slate-700/80 px-2.5 py-1 rounded-lg text-[10px] text-slate-300 flex items-center gap-1.5 pointer-events-none shadow-md">
-                <Move size={12} className="text-violet-400" />
-                <span>Kéo rê chuột để di chuyển ảnh • Cuộn chuột để phóng to/thu nhỏ</span>
-              </div>
+              {currentImageSrc && (
+                <div className="absolute bottom-3 left-3 bg-slate-900/80 backdrop-blur-xs border border-slate-700/80 px-2.5 py-1 rounded-lg text-[10px] text-slate-300 flex items-center gap-1.5 pointer-events-none shadow-md">
+                  <Move size={12} className="text-violet-400" />
+                  <span>Kéo rê chuột để di chuyển ảnh • Cuộn chuột để phóng to/thu nhỏ</span>
+                </div>
+              )}
             </div>
 
             {/* Bottom Zoom Slider Bar */}
@@ -945,13 +1506,24 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
           </div>
         </div>
 
+
         {/* FOOTER */}
         <div className="px-5 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-2 text-xs text-slate-500">
+          <div className="flex items-center gap-2 text-xs text-slate-500 flex-wrap">
             <span className="font-medium">Tem đích:</span>
-            <span className="font-bold text-slate-700">{itemW} × {shape === 'circle' ? itemW : itemH} mm</span>
+            <span className="font-bold text-slate-700">
+              {localItemW} × {localShape === 'circle' ? localItemW : localItemH} mm
+            </span>
             <span>•</span>
-            <span>Hình dạng: {shape}</span>
+            <span>Layer: <strong className="text-violet-700 font-bold">{currentTab?.name || 'A'}</strong></span>
+            <span>•</span>
+            <span>Hình dạng: {localShape}</span>
+            {localQuantity > 0 && (
+              <>
+                <span>•</span>
+                <span>Số lượng: <strong className="text-emerald-700 font-bold">{localQuantity}</strong> tem</span>
+              </>
+            )}
           </div>
 
           <div className="flex items-center gap-2.5">
@@ -972,6 +1544,108 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
             </button>
           </div>
         </div>
+
+        {/* Edit Layer Modal Toast (Tên & Màu sắc của Layer) */}
+        {editingLayerTab && (
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150 select-none"
+            onClick={() => setEditingLayerTab(null)}
+          >
+            <div
+              className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 w-full max-w-[340px] animate-in zoom-in-95 duration-150 flex flex-col gap-3.5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-6 h-6 rounded-lg flex items-center justify-center text-white shadow-2xs font-bold text-xs"
+                    style={{ backgroundColor: editLayerColor }}
+                  >
+                    {editLayerName.slice(0, 1).toUpperCase() || 'L'}
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-800">Thuộc tính Layer</h4>
+                    <span className="text-[10px] text-slate-400">Đổi tên & màu nhận diện</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingLayerTab(null)}
+                  className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              {/* Tên Layer */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-semibold text-slate-600 flex items-center justify-between">
+                  <span>Tên Layer</span>
+                  <span className="text-[9px] text-slate-400 font-normal">Tối đa 20 ký tự</span>
+                </label>
+                <input
+                  type="text"
+                  value={editLayerName}
+                  onChange={(e) => setEditLayerName(e.target.value.slice(0, 20))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveLayerEdit();
+                    if (e.key === 'Escape') setEditingLayerTab(null);
+                  }}
+                  autoFocus
+                  placeholder="Ví dụ: A, Tem tròn, Nhãn chai..."
+                  className="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-violet-500 bg-slate-50/50 focus:bg-white transition"
+                />
+              </div>
+
+              {/* Bảng màu */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-semibold text-slate-600 flex items-center justify-between">
+                  <span>Màu đại diện</span>
+                  <span className="text-[10px] font-mono text-slate-500 font-medium uppercase">{editLayerColor}</span>
+                </label>
+                <div className="grid grid-cols-6 gap-2">
+                  {LAYER_COLOR_PRESETS.map((col) => {
+                    const isSelected = editLayerColor.toLowerCase() === col.toLowerCase();
+                    return (
+                      <button
+                        key={col}
+                        type="button"
+                        onClick={() => setEditLayerColor(col)}
+                        className={`w-9 h-8 rounded-xl transition-all cursor-pointer flex items-center justify-center relative shadow-2xs hover:scale-105 active:scale-95 ${
+                          isSelected ? 'ring-2 ring-offset-2 ring-slate-800 shadow-sm scale-105' : 'hover:opacity-90'
+                        }`}
+                        style={{ backgroundColor: col }}
+                        title={col}
+                      >
+                        {isSelected && <Check size={14} className="text-white drop-shadow-sm stroke-[3]" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Nút lưu */}
+              <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingLayerTab(null)}
+                  className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 text-xs font-medium transition cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveLayerEdit}
+                  className="px-4 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+                >
+                  <Check size={14} />
+                  <span>Lưu thay đổi</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

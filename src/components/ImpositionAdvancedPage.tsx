@@ -929,13 +929,12 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
   const handleOpenSourceEditor = () => {
     if (activeTab.sourceImage) {
       setEditingSourcePage(activeTab.sourceImage);
-      setIsCropColorModalOpen(true);
     } else if (allPages.length > 0) {
       setEditingSourcePage(allPages[0]);
-      setIsCropColorModalOpen(true);
     } else {
-      sourceImageInputRef.current?.click();
+      setEditingSourcePage(null);
     }
+    setIsCropColorModalOpen(true);
   };
 
   const handleApplyCroppedColorImage = (result: {
@@ -946,7 +945,18 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
     colorSettings: ColorAdjustSettings;
     cropSettings: CropTransform;
     filename?: string;
+    updatedTabs?: any[];
+    activeTabId?: string;
   }) => {
+    if (result.updatedTabs && result.updatedTabs.length > 0) {
+      setShapeTabs(result.updatedTabs as ShapeTabItem[]);
+    }
+    if (result.activeTabId) {
+      setActiveTabId(result.activeTabId);
+    }
+
+    const currentTab = (result.updatedTabs || shapeTabs).find(t => t.id === (result.activeTabId || activeTabId)) || activeTab;
+
     const newPageItem: PageItem = {
       fileIndex: 0,
       pageIndex: 1,
@@ -960,32 +970,42 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
       colorSettings: result.colorSettings
     };
 
+    setConfig(c => ({
+      ...c,
+      itemW: result.w_mm,
+      itemH: result.h_mm,
+      shape: currentTab.shape || c.shape,
+    }));
+
     updateActiveTabProp({
       sourceImage: newPageItem,
       itemW: result.w_mm,
-      itemH: result.h_mm
+      itemH: result.h_mm,
+      shape: currentTab.shape
     });
 
-    setAllPages(prev => {
-      if (prev.length === 0) {
-        return [newPageItem];
-      }
-      return prev.map((p, idx) => {
-        if (idx === 0) {
-          return {
-            ...p,
-            thumb: result.dataUrl,
-            originalThumb: result.originalImage || p.originalThumb,
-            name: result.filename || p.name,
-            w: result.w_mm,
-            h: result.h_mm,
-            cropSettings: result.cropSettings,
-            colorSettings: result.colorSettings
-          };
+    if (result.dataUrl) {
+      setAllPages(prev => {
+        if (prev.length === 0) {
+          return [newPageItem];
         }
-        return p;
+        return prev.map((p, idx) => {
+          if (idx === 0) {
+            return {
+              ...p,
+              thumb: result.dataUrl,
+              originalThumb: result.originalImage || p.originalThumb,
+              name: result.filename || p.name,
+              w: result.w_mm,
+              h: result.h_mm,
+              cropSettings: result.cropSettings,
+              colorSettings: result.colorSettings
+            };
+          }
+          return p;
+        });
       });
-    });
+    }
   };
   useEffect(() => {
     if (config.fitMode !== 'actual' && customScale !== 100) {
@@ -7791,13 +7811,15 @@ Chỉ trả về JSON, không giải thích thêm.`;
       <SourceImageCropColorModal
         isOpen={isCropColorModalOpen}
         onClose={() => setIsCropColorModalOpen(false)}
-        imageUrl={editingSourcePage?.originalThumb || editingSourcePage?.thumb || (allPages.length > 0 ? allPages[0].originalThumb || allPages[0].thumb : null)}
-        imageName={editingSourcePage?.name || (allPages.length > 0 ? allPages[0].name : 'Ảnh nguồn')}
-        itemW={config.itemW}
-        itemH={config.itemH}
-        shape={config.shape}
-        initialColorSettings={editingSourcePage?.colorSettings}
-        initialCropSettings={editingSourcePage?.cropSettings}
+        imageUrl={activeTab?.sourceImage?.originalThumb || activeTab?.sourceImage?.thumb || editingSourcePage?.originalThumb || editingSourcePage?.thumb || (allPages.length > 0 ? allPages[0].originalThumb || allPages[0].thumb : null)}
+        imageName={activeTab?.sourceImage?.name || editingSourcePage?.name || (allPages.length > 0 ? allPages[0].name : 'Ảnh nguồn')}
+        itemW={activeTab?.itemW || config.itemW}
+        itemH={activeTab?.shape === 'circle' ? (activeTab?.itemW || config.itemW) : (activeTab?.itemH || config.itemH)}
+        shape={activeTab?.shape || config.shape}
+        initialColorSettings={activeTab?.sourceImage?.colorSettings || editingSourcePage?.colorSettings}
+        initialCropSettings={activeTab?.sourceImage?.cropSettings || editingSourcePage?.cropSettings}
+        shapeTabs={shapeTabs as any}
+        activeTabId={activeTabId}
         onApply={handleApplyCroppedColorImage}
       />
 
