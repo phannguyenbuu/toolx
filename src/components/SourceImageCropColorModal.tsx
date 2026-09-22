@@ -494,12 +494,51 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     return offCanvas.toDataURL('image/png', 0.95);
   }, [imgElement, imgLoaded, cropBox.w, cropBox.h, crop, colorSettings, currentImageSrc]);
 
+  // Generate lightweight thumbnail (max 320px, JPEG 0.8, ~20KB) for fast UI/DOM rendering
+  const renderPreviewThumbnail = useCallback((maxDim: number = 320): string | null => {
+    if (!imgElement || !imgLoaded || !previewCanvasRef.current) return currentImageSrc;
+    const boxW = Math.max(1, cropBox.w);
+    const boxH = Math.max(1, cropBox.h);
+    const scale = Math.min(1, maxDim / Math.max(boxW, boxH));
+    const exportW = Math.max(1, Math.round(boxW * scale));
+    const exportH = Math.max(1, Math.round(boxH * scale));
+
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = exportW;
+    offCanvas.height = exportH;
+    const offCtx = offCanvas.getContext('2d');
+    if (!offCtx) return currentImageSrc;
+
+    offCtx.save();
+    offCtx.translate(exportW / 2 + crop.panX * scale, exportH / 2 + crop.panY * scale);
+    offCtx.rotate((crop.rotation * Math.PI) / 180);
+    offCtx.scale(crop.flipH ? -1 : 1, crop.flipV ? -1 : 1);
+
+    const imgAspect = imgElement.width / imgElement.height;
+    const baseW = exportW;
+    const baseH = baseW / imgAspect;
+    const drawW = baseW * crop.zoom;
+    const drawH = baseH * crop.zoom;
+    offCtx.drawImage(imgElement, -drawW / 2, -drawH / 2, drawW, drawH);
+    offCtx.restore();
+
+    if (!isDefaultColorSettings(colorSettings)) {
+      try {
+        const imgData = offCtx.getImageData(0, 0, exportW, exportH);
+        applyColorAdjustments(imgData, offCtx, colorSettings);
+      } catch (e) {
+        console.error('Thumbnail color error:', e);
+      }
+    }
+    return offCanvas.toDataURL('image/jpeg', 0.8);
+  }, [imgElement, imgLoaded, cropBox.w, cropBox.h, crop, colorSettings, currentImageSrc]);
+
   // --- LAYER MANAGEMENT HANDLERS (CLONED FROM CANVAS) ---
   const handleSwitchTab = (targetTabId: string) => {
     if (targetTabId === currentTabId) return;
 
-    // 1. Commit current active tab state into tabs array
-    const croppedThumb = currentImageSrc ? (renderCurrentExportDataUrl() || currentImageSrc) : null;
+    // 1. Commit current active tab state into tabs array with lightweight preview thumbnail
+    const croppedThumb = currentImageSrc ? (renderPreviewThumbnail(320) || currentImageSrc) : null;
     const currentEffH = localShape === 'circle' ? localItemW : localItemH;
 
     const committedTabs = tabs.map(t => {
@@ -549,8 +588,8 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
   };
 
   const handleAddTabInModal = () => {
-    // 1. Commit current active tab
-    const croppedThumb = currentImageSrc ? (renderCurrentExportDataUrl() || currentImageSrc) : null;
+    // 1. Commit current active tab with lightweight thumbnail
+    const croppedThumb = currentImageSrc ? (renderPreviewThumbnail(320) || currentImageSrc) : null;
     const currentEffH = localShape === 'circle' ? localItemW : localItemH;
 
     const committedTabs = tabs.map(t => {
@@ -688,7 +727,8 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
 
   // Apply Action: commit all changes and return to Imposition canvas
   const handleApply = () => {
-    const currentCroppedDataUrl = currentImageSrc ? (renderCurrentExportDataUrl() || currentImageSrc) : '';
+    const previewThumb = currentImageSrc ? (renderPreviewThumbnail(320) || currentImageSrc) : '';
+    const fullExportDataUrl = currentImageSrc ? (renderCurrentExportDataUrl() || currentImageSrc) : '';
     const currentEffH = localShape === 'circle' ? localItemW : localItemH;
 
     const finalTabs = tabs.map(t => {
@@ -702,8 +742,8 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
           sourceImage: currentImageSrc ? {
             fileIndex: 0,
             pageIndex: 1,
-            thumb: currentCroppedDataUrl || currentImageSrc,
-            originalThumb: currentImageSrc,
+            thumb: previewThumb || currentImageSrc,
+            originalThumb: fullExportDataUrl || currentImageSrc,
             name: currentFileName,
             w: localItemW,
             h: currentEffH,
@@ -717,8 +757,8 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     });
 
     onApply({
-      dataUrl: currentCroppedDataUrl || currentImageSrc || '',
-      originalImage: currentImageSrc || '',
+      dataUrl: previewThumb || currentImageSrc || '',
+      originalImage: fullExportDataUrl || currentImageSrc || '',
       w_mm: localItemW,
       h_mm: currentEffH,
       colorSettings,
@@ -749,20 +789,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
               <Scissors size={18} />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-bold text-slate-800">Chỉnh sửa Ảnh nguồn & Cân bằng màu</h2>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-semibold border border-violet-200">
-                  {localItemW} × {localShape === 'circle' ? localItemW : localItemH} mm
-                </span>
-                {currentFileName && (
-                  <span className="text-[11px] text-slate-400 truncate max-w-[220px]" title={currentFileName}>
-                    • {currentFileName}
-                  </span>
-                )}
-              </div>
-              <p className="text-[11px] text-slate-500">
-                Kéo di chuyển ảnh trong vùng chọn, phóng to/xoay, chỉnh kích thước và quản lý layer chuẩn in ấn
-              </p>
+              <h2 className="text-base font-bold text-slate-800">Ảnh nguồn</h2>
             </div>
           </div>
 
@@ -808,10 +835,10 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
           </div>
         </div>
 
-        {/* SUBHEADER: LAYER MANAGEMENT & DIMENSIONS (CLONED FROM CANVAS) */}
+        {/* SUBHEADER: LAYER MANAGEMENT (CLONED FROM CANVAS) */}
         <div className="px-4 py-2 border-b border-slate-200 bg-slate-100/80 flex items-center justify-between gap-3 select-none flex-wrap flex-shrink-0">
-          {/* LEFT: Layer Management Tabs */}
-          <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 max-w-full sm:max-w-[55%]">
+          {/* Layer Management Tabs */}
+          <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 w-full">
             <div className="flex items-center gap-1.5 shrink-0 pr-1">
               <div className="w-5 h-5 rounded-md bg-violet-100 text-violet-700 flex items-center justify-center font-bold text-xs shadow-2xs">
                 <Layers size={12} />
@@ -900,76 +927,6 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
             >
               <Plus size={12} />
             </button>
-          </div>
-
-          {/* RIGHT: Shape + Quantity + Width * Height Inputs */}
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Shape selector */}
-            <div className="flex items-center gap-1 bg-white border border-slate-200/90 rounded-xl px-2 py-1 shadow-2xs">
-              <span className="text-[10px] text-slate-500 font-medium">Hình:</span>
-              <select
-                value={localShape}
-                onChange={(e) => handleShapeChange(e.target.value)}
-                className="text-xs font-bold text-slate-700 bg-transparent focus:outline-none cursor-pointer"
-              >
-                <option value="rect">Chữ nhật</option>
-                <option value="circle">Hình tròn</option>
-                <option value="oval">Hình Oval</option>
-                <option value="trapezoid">Hình thang</option>
-                <option value="triangle">Tam giác</option>
-                <option value="hexagon">Lục giác</option>
-                <option value="custom-svg">Custom SVG</option>
-              </select>
-            </div>
-
-            {/* Số lượng */}
-            <div className="flex items-center bg-emerald-50/80 hover:bg-emerald-100/90 border border-emerald-300/90 rounded-xl px-2 py-1 shadow-2xs gap-1">
-              <span className="text-[10px] font-bold text-emerald-800 select-none">SL:</span>
-              <ModalNumberInput
-                value={localQuantity}
-                onChange={handleQuantityChange}
-                step={1}
-                min={1}
-                max={99}
-                className="w-10 bg-transparent text-right font-bold text-xs text-emerald-700 focus:outline-none"
-              />
-              <span className="text-[9px] text-slate-400 font-medium select-none">tem</span>
-            </div>
-
-            {/* Rộng (W) */}
-            <div className="flex items-center bg-white hover:bg-slate-50 border border-slate-200/90 rounded-xl px-2 py-1 shadow-2xs gap-1 focus-within:ring-2 focus-within:ring-violet-300">
-              <span className="text-[10px] font-semibold text-slate-600 select-none">
-                {localShape === 'circle' ? 'Đ.kính:' : 'Rộng:'}
-              </span>
-              <ModalNumberInput
-                value={localItemW}
-                onChange={handleWidthChange}
-                step={0.1}
-                min={1}
-                className="w-14 bg-transparent text-right font-bold text-xs text-slate-800 focus:outline-none"
-              />
-              <span className="text-[9px] text-slate-400 font-medium select-none">mm</span>
-            </div>
-
-            {/* Cao (H) */}
-            {localShape !== 'circle' ? (
-              <div className="flex items-center bg-white hover:bg-slate-50 border border-slate-200/90 rounded-xl px-2 py-1 shadow-2xs gap-1 focus-within:ring-2 focus-within:ring-violet-300">
-                <span className="text-[10px] font-semibold text-slate-600 select-none">Cao:</span>
-                <ModalNumberInput
-                  value={localItemH}
-                  onChange={handleHeightChange}
-                  step={0.1}
-                  min={1}
-                  className="w-14 bg-transparent text-right font-bold text-xs text-slate-800 focus:outline-none"
-                />
-                <span className="text-[9px] text-slate-400 font-medium select-none">mm</span>
-              </div>
-            ) : (
-              <div className="flex items-center bg-slate-100/70 border border-dashed border-slate-200 rounded-xl px-2 py-1 text-slate-400 gap-1 select-none">
-                <span className="text-[10px] font-medium">Tỷ lệ:</span>
-                <span className="text-xs font-bold font-mono">1:1</span>
-              </div>
-            )}
           </div>
         </div>
 
@@ -1160,7 +1117,77 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
           </div>
 
           {/* RIGHT: COLOR STUDIO & ADJUSTMENTS */}
-          <div className="w-[390px] shrink-0 bg-white flex flex-col overflow-hidden text-xs">
+          <div className="w-[415px] shrink-0 bg-white flex flex-col overflow-hidden text-xs">
+            {/* PANEL THÔNG SỐ ĐỐI TƯỢNG (HÌNH, SL, RỘNG, CAO) NẰM TRÊN PANEL MẪU MÀU */}
+            <div className="p-2 border-b border-slate-200 bg-slate-50/90 flex items-center gap-1.5 flex-wrap">
+              {/* Shape selector */}
+              <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-full px-2.5 py-1 shadow-2xs">
+                <span className="text-[10px] text-slate-500 font-medium">Hình:</span>
+                <select
+                  value={localShape}
+                  onChange={(e) => handleShapeChange(e.target.value)}
+                  className="text-xs font-bold text-slate-700 bg-transparent focus:outline-none cursor-pointer"
+                >
+                  <option value="rect">Chữ nhật</option>
+                  <option value="circle">Hình tròn</option>
+                  <option value="oval">Hình Oval</option>
+                  <option value="trapezoid">Hình thang</option>
+                  <option value="triangle">Tam giác</option>
+                  <option value="hexagon">Lục giác</option>
+                  <option value="custom-svg">Custom SVG</option>
+                </select>
+              </div>
+
+              {/* Số lượng */}
+              <div className="flex items-center bg-emerald-50/90 hover:bg-emerald-100/90 border border-emerald-300 rounded-full px-2.5 py-1 shadow-2xs gap-1">
+                <span className="text-[10px] font-bold text-emerald-800 select-none">SL:</span>
+                <ModalNumberInput
+                  value={localQuantity}
+                  onChange={handleQuantityChange}
+                  step={1}
+                  min={1}
+                  max={99}
+                  className="w-7 bg-transparent text-center font-bold text-xs text-emerald-700 focus:outline-none"
+                />
+                <span className="text-[10px] text-emerald-700 font-medium select-none">tem</span>
+              </div>
+
+              {/* Rộng (W) */}
+              <div className="flex items-center bg-white hover:bg-slate-50 border border-slate-200 rounded-full px-2.5 py-1 shadow-2xs gap-1 focus-within:ring-2 focus-within:ring-violet-300">
+                <span className="text-[10px] font-semibold text-slate-600 select-none">
+                  {localShape === 'circle' ? 'Đ.kính:' : 'Rộng:'}
+                </span>
+                <ModalNumberInput
+                  value={localItemW}
+                  onChange={handleWidthChange}
+                  step={0.1}
+                  min={1}
+                  className="w-11 bg-transparent text-center font-bold text-xs text-slate-800 focus:outline-none"
+                />
+                <span className="text-[10px] text-slate-400 font-medium select-none">mm</span>
+              </div>
+
+              {/* Cao (H) */}
+              {localShape !== 'circle' ? (
+                <div className="flex items-center bg-white hover:bg-slate-50 border border-slate-200 rounded-full px-2.5 py-1 shadow-2xs gap-1 focus-within:ring-2 focus-within:ring-violet-300">
+                  <span className="text-[10px] font-semibold text-slate-600 select-none">Cao:</span>
+                  <ModalNumberInput
+                    value={localItemH}
+                    onChange={handleHeightChange}
+                    step={0.1}
+                    min={1}
+                    className="w-11 bg-transparent text-center font-bold text-xs text-slate-800 focus:outline-none"
+                  />
+                  <span className="text-[10px] text-slate-400 font-medium select-none">mm</span>
+                </div>
+              ) : (
+                <div className="flex items-center bg-slate-100/70 border border-dashed border-slate-200 rounded-full px-2.5 py-1 text-slate-400 gap-1 select-none">
+                  <span className="text-[10px] font-medium">Tỷ lệ:</span>
+                  <span className="text-xs font-bold font-mono">1:1</span>
+                </div>
+              )}
+            </div>
+
             {/* Presets Bar */}
             <div className="p-2.5 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between gap-2">
               <div className="flex items-center gap-1 text-[11px] font-bold text-slate-700">

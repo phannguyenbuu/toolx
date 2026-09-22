@@ -10,6 +10,7 @@ import { VectorMaskEditorModal, VectorMaskResult, VectorKnot } from './VectorMas
 import { CutDielineModal } from './CutDielineModal';
 import { ColorAdjustSettings } from '../utils/colorAdjustment';
 import { fileService } from '../services/fileService';
+import { createClientThumbnail } from '../utils/imageThumbnail';
 import { workspaceService } from '../services/workspaceService';
 import { generatePdfAsync, downloadPdfBlob } from '../utils/pdfAsync';
 import { jsPDF } from 'jspdf';
@@ -177,6 +178,7 @@ interface SourcePage {
   pageIndex: number;
   thumb: string;
   originalThumb?: string;
+  baseThumb?: string;
   name: string;
   w: number;
   h: number;
@@ -660,12 +662,23 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
+        const lightAllPages = allPages.map(p => ({
+          ...p,
+          originalThumb: undefined
+        }));
+        const lightShapeTabs = shapeTabs.map(t => ({
+          ...t,
+          sourceImage: t.sourceImage ? {
+            ...t.sourceImage,
+            originalThumb: undefined
+          } : null
+        }));
         const stateToSave = {
           config,
           currentPlanIndex,
-          shapeTabs,
+          shapeTabs: lightShapeTabs,
           activeTabId,
-          allPages,
+          allPages: lightAllPages,
           dataMode,
           impositionStyle,
           dataModeEnabled,
@@ -680,27 +693,8 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
         try {
           localStorage.setItem(AUTOSAVE_STORAGE_KEY, JSON.stringify(stateToSave));
         } catch (quotaErr) {
-          // Tier 1 Fallback: Quota exceeded, gọt bỏ originalThumb (ảnh gốc dung lượng lớn) chỉ giữ thumb
+          // Tier 1 Fallback: Quota exceeded, gọt bỏ cả thumb chỉ giữ thông số
           try {
-            const lightAllPages = allPages.map(p => ({
-              ...p,
-              originalThumb: undefined
-            }));
-            const lightShapeTabs = shapeTabs.map(t => ({
-              ...t,
-              sourceImage: t.sourceImage ? {
-                ...t.sourceImage,
-                originalThumb: undefined
-              } : null
-            }));
-            const lightState = {
-              ...stateToSave,
-              allPages: lightAllPages,
-              shapeTabs: lightShapeTabs,
-            };
-            localStorage.setItem(AUTOSAVE_STORAGE_KEY, JSON.stringify(lightState));
-          } catch (quotaErr2) {
-            // Tier 2 Fallback: Nếu vẫn quá quota, chỉ lưu toàn bộ cấu hình, kích thước, số lượng & layer (bỏ ảnh base64)
             const minimalAllPages = allPages.map(p => ({
               ...p,
               thumb: '',
@@ -710,12 +704,13 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
               ...t,
               sourceImage: null
             }));
-            localStorage.setItem(AUTOSAVE_STORAGE_KEY, JSON.stringify({
+            const minimalState = {
               ...stateToSave,
               allPages: minimalAllPages,
               shapeTabs: minimalShapeTabs,
-            }));
-          }
+            };
+            localStorage.setItem(AUTOSAVE_STORAGE_KEY, JSON.stringify(minimalState));
+          } catch (quotaErr2) {}
         }
       } catch (err) {
         console.warn('[AutoSave] Failed to save state to localStorage:', err);
@@ -906,14 +901,16 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       const dataUrl = ev.target?.result as string;
       if (!dataUrl) return;
+      const lightweightThumb = await createClientThumbnail(dataUrl, 320, 0.75);
       const newPageItem: PageItem = {
         fileIndex: allPages.length,
         pageIndex: 1,
-        thumb: dataUrl,
+        thumb: lightweightThumb || dataUrl,
         originalThumb: dataUrl,
+        baseThumb: lightweightThumb || dataUrl,
         name: file.name,
         w: config.itemW,
         h: config.shape === 'circle' ? config.itemW : config.itemH,
@@ -966,6 +963,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
       pageIndex: 1,
       thumb: result.dataUrl,
       originalThumb: result.originalImage,
+      baseThumb: result.dataUrl,
       name: result.filename || 'Ảnh nguồn',
       w: result.w_mm,
       h: result.h_mm,
@@ -999,6 +997,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
               ...p,
               thumb: result.dataUrl,
               originalThumb: result.originalImage || p.originalThumb,
+              baseThumb: result.dataUrl,
               name: result.filename || p.name,
               w: result.w_mm,
               h: result.h_mm,
@@ -1112,10 +1111,10 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
               
               resolve({
                 ...page,
-                thumb: canvas.toDataURL('image/jpeg', 0.9)
+                thumb: canvas.toDataURL('image/jpeg', 0.8)
               });
             };
-            img.src = page.originalThumb!;
+            img.src = page.baseThumb || page.originalThumb!;
           });
         }));
         
@@ -1124,13 +1123,13 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
       
       updateThumbnails();
     } else if ((config.fitMode !== 'actual' || customScale === 100) && allPages.length > 0) {
-      // Restore original thumbnails when not in 'actual' mode OR scale is 100%
-      const needsRestore = allPages.some(page => page.originalThumb && page.thumb !== page.originalThumb);
+      // Restore lightweight base thumbnails when not in 'actual' mode OR scale is 100%
+      const needsRestore = allPages.some(page => page.baseThumb && page.thumb !== page.baseThumb);
       if (needsRestore) {
-        console.log('🔄 Restoring original thumbnails (fitMode:', config.fitMode, ', scale:', customScale, ')');
+        console.log('🔄 Restoring lightweight base thumbnails (fitMode:', config.fitMode, ', scale:', customScale, ')');
         setAllPages(prev => prev.map(page => ({
           ...page,
-          thumb: page.originalThumb || page.thumb
+          thumb: page.baseThumb || page.thumb
         })));
       }
     }
