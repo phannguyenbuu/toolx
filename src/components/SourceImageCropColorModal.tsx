@@ -127,6 +127,133 @@ const ModalNumberInput: React.FC<ModalNumberInputProps> = ({
   );
 };
 
+// Compact Dim text input for dimensions: "100x120" or "100" (for circle)
+interface ModalDimInputProps {
+  shape: string;
+  w: number;
+  h: number;
+  onChange: (newW: number, newH: number) => void;
+  className?: string;
+}
+
+const parseDimValue = (text: string, currentW: number, currentH: number, isCircle: boolean): { w: number; h: number } | null => {
+  const clean = text.trim().toLowerCase();
+  if (!clean) return null;
+
+  if (isCircle) {
+    const num = parseFloat(clean.replace(',', '.'));
+    if (!isNaN(num) && num > 0) {
+      const val = Math.round(num * 10) / 10;
+      return { w: val, h: val };
+    }
+    return null;
+  }
+
+  // Matches "90x50", "90*50", "90X50", "90/50", "90;50"
+  const delimMatch = clean.match(/^([\d.,]+)\s*[*xX;/]\s*([\d.,]+)$/);
+  if (delimMatch) {
+    const w = parseFloat(delimMatch[1].replace(',', '.'));
+    const h = parseFloat(delimMatch[2].replace(',', '.'));
+    if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) {
+      return { w: Math.round(w * 10) / 10, h: Math.round(h * 10) / 10 };
+    }
+  }
+
+  // Matches space: "90 50"
+  const spaceParts = clean.split(/\s+/);
+  if (spaceParts.length === 2) {
+    const w = parseFloat(spaceParts[0].replace(',', '.'));
+    const h = parseFloat(spaceParts[1].replace(',', '.'));
+    if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) {
+      return { w: Math.round(w * 10) / 10, h: Math.round(h * 10) / 10 };
+    }
+  }
+
+  // Matches comma with space: "90, 50"
+  const commaSpaceMatch = clean.match(/^([\d.]+)\s*,\s*([\d.]+)$/);
+  if (commaSpaceMatch) {
+    const w = parseFloat(commaSpaceMatch[1]);
+    const h = parseFloat(commaSpaceMatch[2]);
+    if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) {
+      return { w: Math.round(w * 10) / 10, h: Math.round(h * 10) / 10 };
+    }
+  }
+
+  // Single number fallback
+  const single = parseFloat(clean.replace(',', '.'));
+  if (!isNaN(single) && single > 0) {
+    return { w: Math.round(single * 10) / 10, h: currentH };
+  }
+
+  return null;
+};
+
+const ModalDimInput: React.FC<ModalDimInputProps> = ({ shape, w, h, onChange, className = '' }) => {
+  const isCircle = shape === 'circle';
+  const formatStr = useCallback((width: number, height: number, circle: boolean) => {
+    return circle ? `${width}` : `${width}x${height}`;
+  }, []);
+
+  const [str, setStr] = useState<string>(() => formatStr(w, h, isCircle));
+  const isFocusedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isFocusedRef.current) {
+      setStr(formatStr(w, h, isCircle));
+    }
+  }, [w, h, isCircle, formatStr]);
+
+  const commitValue = (valToCommit: string) => {
+    const parsed = parseDimValue(valToCommit, w, h, isCircle);
+    if (parsed) {
+      const finalW = Math.max(1, parsed.w);
+      const finalH = isCircle ? finalW : Math.max(1, parsed.h);
+      onChange(finalW, finalH);
+      setStr(formatStr(finalW, finalH, isCircle));
+    } else {
+      setStr(formatStr(w, h, isCircle));
+    }
+  };
+
+  return (
+    <div className={`flex items-center bg-white hover:bg-slate-50 border border-slate-200 rounded-full px-2.5 py-1 shadow-2xs gap-1 focus-within:ring-2 focus-within:ring-violet-300 ${className}`}>
+      <span className="text-[10px] font-semibold text-slate-600 select-none">
+        {isCircle ? 'Đ.kính:' : 'KT:'}
+      </span>
+      <input
+        type="text"
+        value={str}
+        onFocus={(e) => {
+          isFocusedRef.current = true;
+          e.target.select();
+        }}
+        onBlur={() => {
+          isFocusedRef.current = false;
+          commitValue(str);
+        }}
+        onChange={(e) => {
+          const val = e.target.value;
+          setStr(val);
+          const parsed = parseDimValue(val, w, h, isCircle);
+          if (parsed && (val.includes('x') || val.includes('*') || val.includes(' ') || isCircle)) {
+            const finalW = Math.max(1, parsed.w);
+            const finalH = isCircle ? finalW : Math.max(1, parsed.h);
+            onChange(finalW, finalH);
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+        placeholder={isCircle ? '100' : '100x100'}
+        className="w-16 bg-transparent text-center font-bold text-xs text-slate-800 focus:outline-none"
+      />
+      <span className="text-[10px] text-slate-400 font-medium select-none">mm</span>
+    </div>
+  );
+};
+
 interface SourceImageCropColorModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -678,6 +805,18 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     setTabs(prev => prev.map(t => t.id === tabId ? { ...t, enabled: !t.enabled } : t));
   };
 
+  const handleDimChange = (newW: number, newH: number) => {
+    const w = Math.max(1, Math.round(newW * 10) / 10);
+    const h = localShape === 'circle' ? w : Math.max(1, Math.round(newH * 10) / 10);
+    setLocalItemW(w);
+    setLocalItemH(h);
+    setTabs(prev => prev.map(t => t.id === currentTabId ? {
+      ...t,
+      itemW: w,
+      itemH: h
+    } : t));
+  };
+
   const handleWidthChange = (val: number) => {
     const v = Math.max(1, Math.round(val * 10) / 10);
     setLocalItemW(v);
@@ -1152,40 +1291,13 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                 <span className="text-[10px] text-emerald-700 font-medium select-none">tem</span>
               </div>
 
-              {/* Rộng (W) */}
-              <div className="flex items-center bg-white hover:bg-slate-50 border border-slate-200 rounded-full px-2.5 py-1 shadow-2xs gap-1 focus-within:ring-2 focus-within:ring-violet-300">
-                <span className="text-[10px] font-semibold text-slate-600 select-none">
-                  {localShape === 'circle' ? 'Đ.kính:' : 'Rộng:'}
-                </span>
-                <ModalNumberInput
-                  value={localItemW}
-                  onChange={handleWidthChange}
-                  step={0.1}
-                  min={1}
-                  className="w-11 bg-transparent text-center font-bold text-xs text-slate-800 focus:outline-none"
-                />
-                <span className="text-[10px] text-slate-400 font-medium select-none">mm</span>
-              </div>
-
-              {/* Cao (H) */}
-              {localShape !== 'circle' ? (
-                <div className="flex items-center bg-white hover:bg-slate-50 border border-slate-200 rounded-full px-2.5 py-1 shadow-2xs gap-1 focus-within:ring-2 focus-within:ring-violet-300">
-                  <span className="text-[10px] font-semibold text-slate-600 select-none">Cao:</span>
-                  <ModalNumberInput
-                    value={localItemH}
-                    onChange={handleHeightChange}
-                    step={0.1}
-                    min={1}
-                    className="w-11 bg-transparent text-center font-bold text-xs text-slate-800 focus:outline-none"
-                  />
-                  <span className="text-[10px] text-slate-400 font-medium select-none">mm</span>
-                </div>
-              ) : (
-                <div className="flex items-center bg-slate-100/70 border border-dashed border-slate-200 rounded-full px-2.5 py-1 text-slate-400 gap-1 select-none">
-                  <span className="text-[10px] font-medium">Tỷ lệ:</span>
-                  <span className="text-xs font-bold font-mono">1:1</span>
-                </div>
-              )}
+              {/* Kích thước (KT: WxH hoặc Đ.kính) dạng dim text */}
+              <ModalDimInput
+                shape={localShape}
+                w={localItemW}
+                h={localShape === 'circle' ? localItemW : localItemH}
+                onChange={handleDimChange}
+              />
             </div>
 
             {/* Presets Bar */}
