@@ -63,6 +63,7 @@ interface ModalNumberInputProps {
   onChange: (v: number) => void;
   step?: number;
   min?: number;
+  max?: number;
   className?: string;
 }
 
@@ -71,6 +72,7 @@ const ModalNumberInput: React.FC<ModalNumberInputProps> = ({
   onChange,
   step = 0.1,
   min = 1,
+  max,
   className
 }) => {
   const [str, setStr] = useState(String(value));
@@ -87,6 +89,7 @@ const ModalNumberInput: React.FC<ModalNumberInputProps> = ({
       type="number"
       step={step}
       min={min}
+      max={max}
       value={str}
       onFocus={(e) => {
         isFocusedRef.current = true;
@@ -94,8 +97,10 @@ const ModalNumberInput: React.FC<ModalNumberInputProps> = ({
       }}
       onBlur={() => {
         isFocusedRef.current = false;
-        const num = parseFloat(str.replace(',', '.'));
-        if (!isNaN(num) && num >= min) {
+        let num = parseFloat(str.replace(',', '.'));
+        if (!isNaN(num)) {
+          if (min !== undefined) num = Math.max(min, num);
+          if (max !== undefined) num = Math.min(max, num);
           onChange(num);
           setStr(String(num));
         } else {
@@ -105,8 +110,10 @@ const ModalNumberInput: React.FC<ModalNumberInputProps> = ({
       onChange={(e) => {
         const val = e.target.value;
         setStr(val);
-        const num = parseFloat(val.replace(',', '.'));
-        if (!isNaN(num) && num >= min) {
+        let num = parseFloat(val.replace(',', '.'));
+        if (!isNaN(num)) {
+          if (max !== undefined && num > max) num = max;
+          if (min !== undefined && num < min) return; // allow user to delete and retype
           onChange(num);
         }
       }}
@@ -652,7 +659,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
   };
 
   const handleQuantityChange = (val: number) => {
-    const q = Math.max(1, Math.round(val));
+    const q = Math.min(99, Math.max(1, Math.round(val)));
     setLocalQuantity(q);
     setTabs(prev => prev.map(t => t.id === currentTabId ? { ...t, quantity: q } : t));
   };
@@ -923,6 +930,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                 onChange={handleQuantityChange}
                 step={1}
                 min={1}
+                max={99}
                 className="w-10 bg-transparent text-right font-bold text-xs text-emerald-700 focus:outline-none"
               />
               <span className="text-[9px] text-slate-400 font-medium select-none">tem</span>

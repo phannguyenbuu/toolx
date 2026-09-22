@@ -750,9 +750,13 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
   }, [shapeTabs]);
 
   const updateActiveTabProp = useCallback((patch: Partial<ShapeTabItem>) => {
+    const safePatch = { ...patch };
+    if (safePatch.quantity !== undefined) {
+      safePatch.quantity = Math.min(99, Math.max(1, Math.round(safePatch.quantity)));
+    }
     setShapeTabs(prev => prev.map(tab => {
       if (tab.id === activeTabId) {
-        return { ...tab, ...patch };
+        return { ...tab, ...safePatch };
       }
       return tab;
     }));
@@ -2307,7 +2311,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
       const multiItems: any[] = [];
       let itemId = 0;
       enabledTabs.forEach((tab) => {
-        const qty = Math.max(1, tab.quantity || 1);
+        const qty = Math.min(99, Math.max(1, tab.quantity || 1));
         const w = tab.itemW;
         const h = tab.shape === 'circle' ? tab.itemW : tab.itemH;
         const tabCanRotate = tab.canRotate !== undefined ? tab.canRotate : (tab.autoRotate !== undefined ? tab.autoRotate : config.autoRotate);
@@ -4829,8 +4833,10 @@ Chỉ trả về JSON, không giải thích thêm.`;
                       checked={isMultiShape ? true : !!config.useTotalLimit}
                       onChange={e => {
                         const checked = e.target.checked;
-                        setConfig(c => ({ ...c, useTotalLimit: checked }));
-                        updateActiveTabProp({ useTotalLimit: checked });
+                        const safeOrder = Math.min(99, config.totalOrder || 1);
+                        const safeTabQty = Math.min(99, activeTab.quantity || 1);
+                        setConfig(c => ({ ...c, useTotalLimit: checked, totalOrder: safeOrder }));
+                        updateActiveTabProp({ useTotalLimit: checked, quantity: safeTabQty });
                       }}
                       className="w-3.5 h-3.5 rounded text-emerald-600 focus:ring-emerald-400 border-emerald-400 cursor-pointer shrink-0"
                     />
@@ -4838,10 +4844,12 @@ Chỉ trả về JSON, không giải thích thêm.`;
                       className="text-[10px] font-bold text-emerald-800 shrink-0 cursor-pointer select-none" 
                       onClick={() => {
                         const checked = !config.useTotalLimit;
-                        setConfig(c => ({ ...c, useTotalLimit: checked }));
-                        updateActiveTabProp({ useTotalLimit: checked });
+                        const safeOrder = Math.min(99, config.totalOrder || 1);
+                        const safeTabQty = Math.min(99, activeTab.quantity || 1);
+                        setConfig(c => ({ ...c, useTotalLimit: checked, totalOrder: safeOrder }));
+                        updateActiveTabProp({ useTotalLimit: checked, quantity: safeTabQty });
                       }}
-                      title="Giới hạn số lượng tem đặt in"
+                      title="Giới hạn số lượng tem đặt in (Tối đa 99 tem/layer)"
                     >
                       Số lượng
                     </span>
@@ -4851,10 +4859,11 @@ Chỉ trả về JSON, không giải thích thêm.`;
                     <DebouncedNumberInput
                       inputRef={soLuongInputRef}
                       min={1}
+                      max={99}
                       step={1}
-                      value={isMultiShape ? (activeTab.quantity || 1) : (config.totalOrder || 1)}
+                      value={Math.min(99, isMultiShape ? (activeTab.quantity || 1) : (config.totalOrder || 1))}
                       onChange={v => {
-                        const q = Math.max(1, Math.round(v));
+                        const q = Math.min(99, Math.max(1, Math.round(v)));
                         if (!isMultiShape) {
                           setConfig(c => ({ ...c, totalOrder: q, useTotalLimit: true }));
                         }
