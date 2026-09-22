@@ -262,6 +262,7 @@ interface SourceImageCropColorModalProps {
   itemW: number; // mm
   itemH: number; // mm
   shape?: string; // 'rect' | 'circle' | 'oval' | 'trapezoid' | 'triangle' | 'hexagon' | ...
+  cutBleed?: number; // mm (bù tràn lề outpaint)
   initialColorSettings?: ColorAdjustSettings;
   initialCropSettings?: CropTransform;
   shapeTabs?: CropModalLayerTab[];
@@ -287,6 +288,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
   itemW,
   itemH,
   shape = 'rect',
+  cutBleed = 2,
   initialColorSettings,
   initialCropSettings,
   shapeTabs,
@@ -451,11 +453,12 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     return () => window.removeEventListener('resize', updateSize);
   }, [isOpen]);
 
-  // Calculate crop box pixel size in viewport
+  // Calculate crop box pixel size in viewport (leaving room for dim badges)
   const cropBox = useMemo(() => {
-    const pad = 40;
-    const maxW = Math.max(100, viewportSize.w - pad * 2);
-    const maxH = Math.max(100, viewportSize.h - pad * 2);
+    const padX = 75; // Leave room for right dim height badge
+    const padY = 50; // Leave room for top dim width badge
+    const maxW = Math.max(100, viewportSize.w - padX * 2);
+    const maxH = Math.max(100, viewportSize.h - padY * 2);
 
     let w = maxW;
     let h = w / targetRatio;
@@ -467,6 +470,15 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     const y = (viewportSize.h - h) / 2;
     return { x, y, w, h };
   }, [viewportSize, targetRatio]);
+
+  // Bleed / Outpaint pixel size calculation
+  const effectiveBleedMm = cutBleed ?? 2;
+  const pxPerMm = useMemo(() => {
+    return (cropBox.w && localItemW) ? (cropBox.w / localItemW) : 1;
+  }, [cropBox.w, localItemW]);
+  const bleedPx = useMemo(() => {
+    return Math.round(effectiveBleedMm * pxPerMm);
+  }, [effectiveBleedMm, pxPerMm]);
 
   // Color adjustment helper
   const updateSetting = <K extends keyof ColorAdjustSettings>(key: K, value: ColorAdjustSettings[K]) => {
@@ -538,7 +550,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     }));
   };
 
-  // Live Canvas Rendering (Crop + Color Balance)
+  // Live Canvas Rendering (Crop + Color Balance + Outpaint / Bleed Visibility across full viewport)
   useEffect(() => {
     if (!isOpen || !imgElement || !imgLoaded || !previewCanvasRef.current) return;
 
@@ -546,25 +558,27 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Render canvas at crop box pixel dimensions
-    const cw = Math.round(cropBox.w);
-    const ch = Math.round(cropBox.h);
-    if (cw <= 0 || ch <= 0) return;
+    // Viewport dimensions (full extent to reveal outpaint / bleed outside crop box)
+    const vw = Math.max(100, Math.round(viewportSize.w));
+    const vh = Math.max(100, Math.round(viewportSize.h));
 
-    canvas.width = cw;
-    canvas.height = ch;
+    canvas.width = vw;
+    canvas.height = vh;
 
-    ctx.clearRect(0, 0, cw, ch);
+    ctx.clearRect(0, 0, vw, vh);
     ctx.save();
 
-    // Center of crop box
-    ctx.translate(cw / 2 + crop.panX, ch / 2 + crop.panY);
+    // Center of crop box in the viewport
+    const centerX = cropBox.x + cropBox.w / 2;
+    const centerY = cropBox.y + cropBox.h / 2;
+
+    ctx.translate(centerX + crop.panX, centerY + crop.panY);
     ctx.rotate((crop.rotation * Math.PI) / 180);
     ctx.scale(crop.flipH ? -1 : 1, crop.flipV ? -1 : 1);
 
-    // Scale image
+    // Scale image relative to crop box
     const imgAspect = imgElement.width / imgElement.height;
-    const baseW = cw;
+    const baseW = cropBox.w;
     const baseH = baseW / imgAspect;
 
     const drawW = baseW * crop.zoom;
@@ -576,13 +590,13 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     // Apply color adjustments if not showing original
     if (!showOriginal && !isDefaultColorSettings(colorSettings)) {
       try {
-        const imageData = ctx.getImageData(0, 0, cw, ch);
+        const imageData = ctx.getImageData(0, 0, vw, vh);
         applyColorAdjustments(imageData, ctx, colorSettings);
       } catch (err) {
         console.error('Error applying color adjustment:', err);
       }
     }
-  }, [isOpen, imgElement, imgLoaded, cropBox, crop, colorSettings, showOriginal]);
+  }, [isOpen, imgElement, imgLoaded, cropBox, crop, colorSettings, showOriginal, viewportSize]);
 
   // Export high-resolution canvas dataUrl
   const renderCurrentExportDataUrl = useCallback((): string | null => {
@@ -1181,43 +1195,149 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                 </div>
               ) : null}
 
-              {/* Crop Box Container */}
-              <div
-                style={{
-                  width: `${cropBox.w}px`,
-                  height: `${cropBox.h}px`,
-                  borderRadius: localShape === 'circle' || localShape === 'oval' ? '50%' : '6px',
-                  display: !currentImageSrc ? 'none' : undefined,
-                }}
-                className="relative shadow-[0_0_0_9999px_rgba(2,6,23,0.78)] border-2 border-violet-400 overflow-hidden flex items-center justify-center pointer-events-none"
-              >
-                {/* Live Canvas with transformed image + color filter */}
+              {/* 1. Live Full-Viewport Canvas: Renders full image, revealing both crop area AND outpaint (tràn lề) */}
+              {currentImageSrc && (
                 <canvas
                   ref={previewCanvasRef}
-                  className="w-full h-full block bg-white"
+                  className="absolute inset-0 w-full h-full block pointer-events-none z-0"
                 />
+              )}
 
-                {/* Rule of thirds grid overlay */}
-                {showGrid && (
-                  <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none">
-                    <div className="border-r border-b border-white/30" />
-                    <div className="border-r border-b border-white/30" />
-                    <div className="border-b border-white/30" />
-                    <div className="border-r border-b border-white/30" />
-                    <div className="border-r border-b border-white/30" />
-                    <div className="border-b border-white/30" />
-                    <div className="border-r border-b border-white/30" />
-                    <div className="border-r border-b border-white/30" />
-                    <div />
+              {/* 2. SVG Dark Mask: Dims the area outside cropBox (62% dark), allowing outpainted image to be clearly seen */}
+              {currentImageSrc && (
+                <svg
+                  className="absolute inset-0 w-full h-full pointer-events-none z-10"
+                  width={viewportSize.w}
+                  height={viewportSize.h}
+                >
+                  <defs>
+                    <mask id="sourceCropMask">
+                      {/* White reveals the dark tint */}
+                      <rect x="0" y="0" width={viewportSize.w} height={viewportSize.h} fill="white" />
+                      {/* Black cuts out the hole, keeping the crop box 100% bright and clear */}
+                      {localShape === 'circle' || localShape === 'oval' ? (
+                        <ellipse
+                          cx={cropBox.x + cropBox.w / 2}
+                          cy={cropBox.y + cropBox.h / 2}
+                          rx={cropBox.w / 2}
+                          ry={cropBox.h / 2}
+                          fill="black"
+                        />
+                      ) : (
+                        <rect
+                          x={cropBox.x}
+                          y={cropBox.y}
+                          width={cropBox.w}
+                          height={cropBox.h}
+                          rx={6}
+                          ry={6}
+                          fill="black"
+                        />
+                      )}
+                    </mask>
+                  </defs>
+                  {/* Semi-transparent dark overlay */}
+                  <rect
+                    x="0"
+                    y="0"
+                    width={viewportSize.w}
+                    height={viewportSize.h}
+                    fill="rgba(10, 15, 30, 0.62)"
+                    mask="url(#sourceCropMask)"
+                  />
+                </svg>
+              )}
+
+              {/* 3. Bleed Guideline (Đường bù cắt tràn lề outpaint) */}
+              {currentImageSrc && bleedPx > 0 && (
+                <div
+                  style={{
+                    left: `${cropBox.x - bleedPx}px`,
+                    top: `${cropBox.y - bleedPx}px`,
+                    width: `${cropBox.w + bleedPx * 2}px`,
+                    height: `${cropBox.h + bleedPx * 2}px`,
+                    borderRadius: localShape === 'circle' || localShape === 'oval' ? '50%' : '8px',
+                  }}
+                  className="absolute pointer-events-none border border-dashed border-emerald-400/80 z-20"
+                >
+                  {/* Bleed Badge */}
+                  <div className="absolute -top-5 right-2 px-1.5 py-0.5 rounded bg-emerald-950/90 border border-emerald-500/50 text-[9px] font-mono text-emerald-300 font-bold tracking-tight shadow-md flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>Tràn lề (Bleed) +{effectiveBleedMm}mm</span>
                   </div>
-                )}
+                </div>
+              )}
 
-                {/* Corner markers */}
-                <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-white pointer-events-none" />
-                <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-white pointer-events-none" />
-                <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-white pointer-events-none" />
-                <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-white pointer-events-none" />
-              </div>
+              {/* 4. Crop Box Frame (Đường cắt thành phẩm + Dim width + Dim height) */}
+              {currentImageSrc && (
+                <div
+                  style={{
+                    left: `${cropBox.x}px`,
+                    top: `${cropBox.y}px`,
+                    width: `${cropBox.w}px`,
+                    height: `${cropBox.h}px`,
+                    borderRadius: localShape === 'circle' || localShape === 'oval' ? '50%' : '6px',
+                  }}
+                  className="absolute border-2 border-violet-400 pointer-events-none z-30 shadow-[0_0_15px_rgba(139,92,246,0.25)]"
+                >
+                  {/* Rule of thirds grid overlay */}
+                  {showGrid && (
+                    <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none">
+                      <div className="border-r border-b border-white/25" />
+                      <div className="border-r border-b border-white/25" />
+                      <div className="border-b border-white/25" />
+                      <div className="border-r border-b border-white/25" />
+                      <div className="border-r border-b border-white/25" />
+                      <div className="border-b border-white/25" />
+                      <div className="border-r border-b border-white/25" />
+                      <div className="border-r border-b border-white/25" />
+                      <div />
+                    </div>
+                  )}
+
+                  {/* Corner markers */}
+                  <div className="absolute -top-0.5 -left-0.5 w-3.5 h-3.5 border-t-2 border-l-2 border-white pointer-events-none" />
+                  <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 border-t-2 border-r-2 border-white pointer-events-none" />
+                  <div className="absolute -bottom-0.5 -left-0.5 w-3.5 h-3.5 border-b-2 border-l-2 border-white pointer-events-none" />
+                  <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 border-b-2 border-r-2 border-white pointer-events-none" />
+
+                  {/* Top Edge Dimension Guide Line */}
+                  <div className="absolute -top-3.5 left-0 right-0 flex items-center justify-between px-1 pointer-events-none">
+                    <div className="w-1.5 h-2 border-l border-violet-400/80" />
+                    <div className="flex-1 h-px bg-violet-400/50 mx-1" />
+                    <div className="w-1.5 h-2 border-r border-violet-400/80" />
+                  </div>
+
+                  {/* DIM WIDTH BADGE (Cạnh trên) */}
+                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-slate-900/95 text-violet-200 border border-violet-400/70 shadow-xl text-xs font-bold font-mono select-none pointer-events-none backdrop-blur-md whitespace-nowrap z-40">
+                    <span className="text-[10px] text-violet-400">⟵</span>
+                    <span>
+                      {localShape === 'circle'
+                        ? `Ø ${localItemW} mm (Đ.kính)`
+                        : `Rộng: ${localItemW} mm`}
+                    </span>
+                    <span className="text-[10px] text-violet-400">⟶</span>
+                  </div>
+
+                  {/* Right Edge Dimension Guide Line (Non-circle) */}
+                  {localShape !== 'circle' && (
+                    <div className="absolute top-0 bottom-0 -right-3.5 flex flex-col items-center justify-between py-1 pointer-events-none">
+                      <div className="h-1.5 w-2 border-t border-violet-400/80" />
+                      <div className="flex-1 w-px bg-violet-400/50 my-1" />
+                      <div className="h-1.5 w-2 border-b border-violet-400/80" />
+                    </div>
+                  )}
+
+                  {/* DIM HEIGHT BADGE (Cạnh phải) */}
+                  {localShape !== 'circle' && (
+                    <div className="absolute -right-3.5 top-1/2 -translate-y-1/2 translate-x-full flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-900/95 text-violet-200 border border-violet-400/70 shadow-xl text-xs font-bold font-mono select-none pointer-events-none backdrop-blur-md whitespace-nowrap z-40">
+                      <span className="text-[10px] text-violet-400">↑</span>
+                      <span>Cao: {localShape === 'circle' ? localItemW : localItemH} mm</span>
+                      <span className="text-[10px] text-violet-400">↓</span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Drag Hint Overlay */}
               {currentImageSrc && (

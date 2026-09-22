@@ -666,15 +666,26 @@ def api_outpaint():
         new_w = orig_w + left_px + right_px
         new_h = orig_h + top_px + bottom_px
         
-        # Create expanded canvas with white background
-        expanded = Image.new('RGB', (new_w, new_h), (255, 255, 255))
-        
-        # Paste original image at correct position
-        expanded.paste(img, (left_px, top_px))
+        # Run AI Outpainting using LaMa CPU model
+        try:
+            from bleed_outpainter import get_bleed_outpainter
+            print(f"[OUTPAINT] Running LaMa CPU Outpainter: {orig_w}x{orig_h} -> {new_w}x{new_h} (T={top_px}, R={right_px}, B={bottom_px}, L={left_px})")
+            outpainter = get_bleed_outpainter()
+            expanded = outpainter.outpaint(
+                img,
+                pad_pixels=(top_px, right_px, bottom_px, left_px),
+                pre_fill_method="smart_portrait",
+                feather_edge=3,
+                preserve_center=True
+            )
+        except Exception as ai_err:
+            print(f"[OUTPAINT] Warning: LaMa AI inference failed ({ai_err}), falling back to border padding")
+            expanded = Image.new('RGB', (new_w, new_h), (255, 255, 255))
+            expanded.paste(img, (left_px, top_px))
         
         # Convert back to base64
         img_buffer = io.BytesIO()
-        expanded.save(img_buffer, format='PNG', optimize=True)
+        expanded.save(img_buffer, format='JPEG', quality=95)
         img_buffer.seek(0)
         img_base64 = base64.b64encode(img_buffer.read()).decode('utf-8')
         
@@ -687,7 +698,7 @@ def api_outpaint():
         return jsonify({
             'success': True,
             'message': 'Mở rộng ảnh thành công',
-            'image': f'data:image/png;base64,{img_base64}',
+            'image': f'data:image/jpeg;base64,{img_base64}',
             'width_mm': round(new_w_mm, 1),
             'height_mm': round(new_h_mm, 1),
             'original_size': f'{orig_w}x{orig_h}px',
@@ -1844,6 +1855,71 @@ def finalize_upload():
         
     except Exception as e:
         print(f"[ERROR] Finalize upload failed: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/outpaint-bleed', methods=['POST'])
+def api_outpaint_bleed():
+    """
+    AI Bleed Outpainter endpoint using LaMa CPU model.
+    Expands image borders (e.g. ~30%) to prevent bleed die-cutting issues.
+    """
+    try:
+        from bleed_outpainter import get_bleed_outpainter
+        from PIL import Image
+        import io
+        
+        # Check for uploaded file or file_path in json/form
+        uploaded_file = request.files.get('file') or request.files.get('image')
+        file_path = request.form.get('file_path') or (request.json.get('file_path') if request.is_json else None)
+        
+        if uploaded_file:
+            input_img = Image.open(uploaded_file.stream).convert('RGB')
+        elif file_path and os.path.exists(file_path):
+            input_img = Image.open(file_path).convert('RGB')
+        else:
+            return jsonify({'error': 'No file or valid file_path provided'}), 400
+            
+        percent = float(request.form.get('percent') or (request.json.get('percent', 0.30) if request.is_json else 0.30))
+        bleed_mm = request.form.get('bleed_mm') or (request.json.get('bleed_mm') if request.is_json else None)
+        bleed_mm = float(bleed_mm) if bleed_mm is not None else None
+        dpi = int(request.form.get('dpi') or (request.json.get('dpi', 300) if request.is_json else 300))
+        mode = request.form.get('mode') or (request.json.get('mode', 'smart_portrait') if request.is_json else 'smart_portrait')
+        
+        outpainter = get_bleed_outpainter()
+        
+        if bleed_mm is not None:
+            out_img = outpainter.outpaint_for_print_card(input_img, bleed_mm=bleed_mm, dpi=dpi)
+        else:
+            out_img = outpainter.outpaint(input_img, bleed_percent=percent, pre_fill_method=mode)
+            
+        # Response format: 'image' (default) or 'json'
+        response_format = request.args.get('format') or request.form.get('format') or (request.json.get('format') if request.is_json else 'image')
+        
+        if response_format == 'json':
+            out_filename = f"bleed_{uuid.uuid4().hex[:8]}.jpg"
+            out_path = os.path.join(UPLOADS_DIR, out_filename)
+            out_img.save(out_path, quality=95)
+            return jsonify({
+                'success': True,
+                'filename': out_filename,
+                'file_path': out_path,
+                'width': out_img.width,
+                'height': out_img.height,
+                'original_width': input_img.width,
+                'original_height': input_img.height,
+            })
+        else:
+            buf = io.BytesIO()
+            out_img.save(buf, format='JPEG', quality=95)
+            buf.seek(0)
+            return Response(
+                buf.getvalue(),
+                mimetype='image/jpeg',
+                headers={'Content-Disposition': 'inline; filename=outpaint_bleed.jpg'}
+            )
+    except Exception as e:
+        logger.error(f"Outpaint API error: {e}")
+        import traceback; traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

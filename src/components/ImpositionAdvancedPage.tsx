@@ -7824,6 +7824,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
         itemW={activeTab?.itemW || config.itemW}
         itemH={activeTab?.shape === 'circle' ? (activeTab?.itemW || config.itemW) : (activeTab?.itemH || config.itemH)}
         shape={activeTab?.shape || config.shape}
+        cutBleed={config.cutBleed || 2}
         initialColorSettings={activeTab?.sourceImage?.colorSettings || editingSourcePage?.colorSettings}
         initialCropSettings={activeTab?.sourceImage?.cropSettings || editingSourcePage?.cropSettings}
         shapeTabs={shapeTabs as any}
