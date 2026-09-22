@@ -27,3 +27,18 @@ root.render(
   </React.StrictMode>
 );
 console.log('API URL:', process.env.REACT_APP_API_URL);
+
+// Tự động reload trang khi phát hiện thay đổi mã nguồn trong môi trường dev (khắc phục Fast Refresh không tương thích React 19)
+if (process.env.NODE_ENV === 'development' && (module as any).hot) {
+  let isHmrUpdating = false;
+  (module as any).hot.addStatusHandler((status: string) => {
+    if (status === 'check' || status === 'prepare' || status === 'apply') {
+      isHmrUpdating = true;
+    } else if (status === 'idle' && isHmrUpdating) {
+      isHmrUpdating = false;
+      console.log('[HMR] Module updated, auto-reloading page...');
+      window.location.reload();
+    }
+  });
+}
+

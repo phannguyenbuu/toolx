@@ -683,6 +683,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
         if (initialCropSettings) setCrop({ ...initialCropSettings });
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   // Load image element when source changes
@@ -2209,71 +2210,56 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                     <div className="grid grid-cols-3 gap-2">
                       {/* Mode OFF */}
                       <label
-                        className={`flex flex-col p-2.5 rounded-xl border cursor-pointer transition select-none ${
+                        className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl border cursor-pointer transition select-none ${
                           bleedMode === 'off'
-                            ? 'bg-violet-50/80 border-violet-500 text-violet-900 shadow-xs'
+                            ? 'bg-violet-50/80 border-violet-500 text-violet-900 shadow-xs font-bold'
                             : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
                         }`}
                       >
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <input
-                            type="radio"
-                            name="bleedMode"
-                            checked={bleedMode === 'off'}
-                            onChange={() => setBleedMode('off')}
-                            className="text-violet-600 focus:ring-violet-500 cursor-pointer"
-                          />
-                          <span className="font-bold text-xs">Off</span>
-                        </div>
-                        <span className="text-[9px] text-slate-500 leading-tight">
-                          Không có bleed (tắt bù xén)
-                        </span>
+                        <input
+                          type="radio"
+                          name="bleedMode"
+                          checked={bleedMode === 'off'}
+                          onChange={() => setBleedMode('off')}
+                          className="text-violet-600 focus:ring-violet-500 cursor-pointer"
+                        />
+                        <span className="font-bold text-xs">Off</span>
                       </label>
 
                       {/* Mode OFFSET */}
                       <label
-                        className={`flex flex-col p-2.5 rounded-xl border cursor-pointer transition select-none ${
+                        className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl border cursor-pointer transition select-none ${
                           bleedMode === 'offset'
-                            ? 'bg-violet-50/80 border-violet-500 text-violet-900 shadow-xs'
+                            ? 'bg-violet-50/80 border-violet-500 text-violet-900 shadow-xs font-bold'
                             : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
                         }`}
                       >
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <input
-                            type="radio"
-                            name="bleedMode"
-                            checked={bleedMode === 'offset'}
-                            onChange={() => setBleedMode('offset')}
-                            className="text-violet-600 focus:ring-violet-500 cursor-pointer"
-                          />
-                          <span className="font-bold text-xs">Offset</span>
-                        </div>
-                        <span className="text-[9px] text-slate-500 leading-tight">
-                          Offset các vòng pixel ra ngoài
-                        </span>
+                        <input
+                          type="radio"
+                          name="bleedMode"
+                          checked={bleedMode === 'offset'}
+                          onChange={() => setBleedMode('offset')}
+                          className="text-violet-600 focus:ring-violet-500 cursor-pointer"
+                        />
+                        <span className="font-bold text-xs">Offset</span>
                       </label>
 
                       {/* Mode AI */}
                       <label
-                        className={`flex flex-col p-2.5 rounded-xl border cursor-pointer transition select-none ${
+                        className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl border cursor-pointer transition select-none ${
                           bleedMode === 'ai'
-                            ? 'bg-violet-50/80 border-violet-500 text-violet-900 shadow-xs'
+                            ? 'bg-violet-50/80 border-violet-500 text-violet-900 shadow-xs font-bold'
                             : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
                         }`}
                       >
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <input
-                            type="radio"
-                            name="bleedMode"
-                            checked={bleedMode === 'ai'}
-                            onChange={() => setBleedMode('ai')}
-                            className="text-violet-600 focus:ring-violet-500 cursor-pointer"
-                          />
-                          <span className="font-bold text-xs">AI</span>
-                        </div>
-                        <span className="text-[9px] text-slate-500 leading-tight">
-                          AI Outpainting (LaMa hiện có)
-                        </span>
+                        <input
+                          type="radio"
+                          name="bleedMode"
+                          checked={bleedMode === 'ai'}
+                          onChange={() => setBleedMode('ai')}
+                          className="text-violet-600 focus:ring-violet-500 cursor-pointer"
+                        />
+                        <span className="font-bold text-xs">AI</span>
                       </label>
                     </div>
                   </div>
@@ -2307,38 +2293,28 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                   {/* Action buttons */}
                   {bleedMode !== 'off' && (
                     <div className="space-y-2 pt-1">
-                      {bleedMode === 'offset' && (
-                        <button
-                          type="button"
-                          disabled={isProcessingBleed}
-                          onClick={applyOffsetBleed}
-                          className="w-full py-2.5 px-4 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition cursor-pointer"
-                        >
-                          <Zap size={14} />
-                          <span>Tạo tràn lề Offset ({bleedPercent}%)</span>
-                        </button>
-                      )}
-
-                      {bleedMode === 'ai' && (
-                        <button
-                          type="button"
-                          disabled={isProcessingBleed}
-                          onClick={applyAIBleed}
-                          className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition cursor-pointer"
-                        >
-                          {isProcessingBleed ? (
-                            <>
-                              <Loader2 size={14} className="animate-spin" />
-                              <span>Đang xử lý AI LaMa...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles size={14} />
-                              <span>Mở rộng biên bằng AI (+{bleedPercent}%)</span>
-                            </>
-                          )}
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        disabled={isProcessingBleed}
+                        onClick={bleedMode === 'offset' ? applyOffsetBleed : applyAIBleed}
+                        className={`w-full py-2.5 px-4 rounded-xl ${
+                          bleedMode === 'offset'
+                            ? 'bg-violet-600 hover:bg-violet-700'
+                            : 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700'
+                        } disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition cursor-pointer`}
+                      >
+                        {isProcessingBleed ? (
+                          <>
+                            <Loader2 size={14} className="animate-spin" />
+                            <span>Đang xử lý...</span>
+                          </>
+                        ) : (
+                          <>
+                            {bleedMode === 'offset' ? <Zap size={14} /> : <Sparkles size={14} />}
+                            <span>Outpainting</span>
+                          </>
+                        )}
+                      </button>
 
                       {originalBackupSrc && (
                         <button
