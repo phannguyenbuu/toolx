@@ -609,6 +609,12 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
   const [bleedPercent, setBleedPercent] = useState<number>(10);
   const [isProcessingBleed, setIsProcessingBleed] = useState(false);
   const [originalBackupSrc, setOriginalBackupSrc] = useState<string | null>(null);
+  const [originalBleedBounds, setOriginalBleedBounds] = useState<{
+    leftRatio: number;
+    rightRatio: number;
+    topRatio: number;
+    bottomRatio: number;
+  } | null>(null);
   const [bleedStatusMsg, setBleedStatusMsg] = useState<string | null>(null);
 
   // Dragging state for Pan
@@ -624,6 +630,8 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
   useEffect(() => {
     if (isOpen) {
       setColorTab('bleed');
+      setOriginalBackupSrc(null);
+      setOriginalBleedBounds(null);
       if (shapeTabs && shapeTabs.length > 0) {
         const clonedTabs: CropModalLayerTab[] = JSON.parse(JSON.stringify(shapeTabs));
         setTabs(clonedTabs);
@@ -770,20 +778,22 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
 
   // Create continuous pixel offset outward (Replicate border clamp in 2D canvas)
   const applyOffsetBleed = () => {
-    if (!imgElement || !imgLoaded || !currentImageSrc) return;
+    if (!currentImageSrc) return;
+    const srcToUse = originalBackupSrc || currentImageSrc;
     if (!originalBackupSrc) {
       setOriginalBackupSrc(currentImageSrc);
     }
     setIsProcessingBleed(true);
-    setBleedStatusMsg('Đang tạo vòng pixel offset tràn lề...');
 
-    setTimeout(() => {
+    const baseImg = new Image();
+    baseImg.crossOrigin = 'anonymous';
+    baseImg.onload = () => {
       try {
-        const origW = imgElement.naturalWidth || imgElement.width;
-        const origH = imgElement.naturalHeight || imgElement.height;
-        const padRatio = Math.max(0.01, bleedPercent / 100);
-        const padW = Math.max(2, Math.round(origW * padRatio));
-        const padH = Math.max(2, Math.round(origH * padRatio));
+        const origW = baseImg.naturalWidth || baseImg.width;
+        const origH = baseImg.naturalHeight || baseImg.height;
+        const halfRatio = (bleedPercent / 100) / 2.0;
+        const padW = Math.max(2, Math.round(origW * halfRatio));
+        const padH = Math.max(2, Math.round(origH * halfRatio));
         const newW = origW + padW * 2;
         const newH = origH + padH * 2;
 
@@ -794,48 +804,57 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
         if (!offCtx) return;
 
         // 1. Draw central original image
-        offCtx.drawImage(imgElement, padW, padH, origW, origH);
+        offCtx.drawImage(baseImg, padW, padH, origW, origH);
 
         // 2. Continuous offset: Stretch top edge outward (1px slice stretched to padH)
-        offCtx.drawImage(imgElement, 0, 0, origW, 1, padW, 0, origW, padH);
+        offCtx.drawImage(baseImg, 0, 0, origW, 1, padW, 0, origW, padH);
 
         // 3. Stretch bottom edge outward (1px slice)
-        offCtx.drawImage(imgElement, 0, origH - 1, origW, 1, padW, padH + origH, origW, padH);
+        offCtx.drawImage(baseImg, 0, origH - 1, origW, 1, padW, padH + origH, origW, padH);
 
         // 4. Stretch left edge outward (1px slice)
-        offCtx.drawImage(imgElement, 0, 0, 1, origH, 0, padH, padW, origH);
+        offCtx.drawImage(baseImg, 0, 0, 1, origH, 0, padH, padW, origH);
 
         // 5. Stretch right edge outward (1px slice)
-        offCtx.drawImage(imgElement, origW - 1, 0, 1, origH, padW + origW, padH, padW, origH);
+        offCtx.drawImage(baseImg, origW - 1, 0, 1, origH, padW + origW, padH, padW, origH);
 
         // 6. 4 Corners (1x1 pixel stretched into corner rects)
-        offCtx.drawImage(imgElement, 0, 0, 1, 1, 0, 0, padW, padH);
-        offCtx.drawImage(imgElement, origW - 1, 0, 1, 1, padW + origW, 0, padW, padH);
-        offCtx.drawImage(imgElement, 0, origH - 1, 1, 1, 0, padH + origH, padW, padH);
-        offCtx.drawImage(imgElement, origW - 1, origH - 1, 1, 1, padW + origW, padH + origH, padW, padH);
+        offCtx.drawImage(baseImg, 0, 0, 1, 1, 0, 0, padW, padH);
+        offCtx.drawImage(baseImg, origW - 1, 0, 1, 1, padW + origW, 0, padW, padH);
+        offCtx.drawImage(baseImg, 0, origH - 1, 1, 1, 0, padH + origH, padW, padH);
+        offCtx.drawImage(baseImg, origW - 1, origH - 1, 1, 1, padW + origW, padH + origH, padW, padH);
 
         const resultDataUrl = offCanvas.toDataURL('image/jpeg', 0.95);
         setCurrentImageSrc(resultDataUrl);
-        setBleedStatusMsg(`Đã tạo tràn lề Offset +${bleedPercent}% thành công!`);
+        setOriginalBleedBounds({
+          leftRatio: padW / newW,
+          rightRatio: padW / newW,
+          topRatio: padH / newH,
+          bottomRatio: padH / newH,
+        });
       } catch (err: any) {
-        setBleedStatusMsg(`Lỗi khi tạo Offset: ${err?.message || err}`);
+        console.error('Lỗi khi tạo Offset:', err);
       } finally {
         setIsProcessingBleed(false);
       }
-    }, 40);
+    };
+    baseImg.onerror = () => {
+      setIsProcessingBleed(false);
+    };
+    baseImg.src = srcToUse;
   };
 
   // Run AI Outpainting using backend LaMa model
   const applyAIBleed = async () => {
     if (!currentImageSrc) return;
+    const srcToUse = originalBackupSrc || currentImageSrc;
     if (!originalBackupSrc) {
       setOriginalBackupSrc(currentImageSrc);
     }
     setIsProcessingBleed(true);
-    setBleedStatusMsg('Đang gửi tới mô hình AI LaMa Outpainter...');
 
     try {
-      const res = await fetch(currentImageSrc);
+      const res = await fetch(srcToUse);
       const blob = await res.blob();
 
       const formData = new FormData();
@@ -857,15 +876,31 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
       const reader = new FileReader();
       reader.onload = (e) => {
         if (e.target?.result) {
-          setCurrentImageSrc(e.target.result as string);
-          setBleedStatusMsg(`Đã mở rộng biên bằng AI (+${bleedPercent}%) thành công!`);
+          const resSrc = e.target.result as string;
+          const baseImg = new Image();
+          baseImg.onload = () => {
+            const origW = baseImg.naturalWidth || baseImg.width;
+            const origH = baseImg.naturalHeight || baseImg.height;
+            const half = (bleedPercent / 100) / 2.0;
+            const padW = Math.round(origW * half);
+            const padH = Math.round(origH * half);
+            const newW = origW + padW * 2;
+            const newH = origH + padH * 2;
+            setOriginalBleedBounds({
+              leftRatio: padW / newW,
+              rightRatio: padW / newW,
+              topRatio: padH / newH,
+              bottomRatio: padH / newH,
+            });
+            setCurrentImageSrc(resSrc);
+          };
+          baseImg.src = srcToUse;
         }
       };
       reader.readAsDataURL(outBlob);
     } catch (err: any) {
       console.warn('AI Outpaint failed, falling back to local offset:', err);
       applyOffsetBleed();
-      setBleedStatusMsg(`Máy chủ AI phản hồi chậm, đã tự động bù xén bằng Offset +${bleedPercent}%.`);
     } finally {
       setIsProcessingBleed(false);
     }
@@ -875,9 +910,42 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     if (originalBackupSrc) {
       setCurrentImageSrc(originalBackupSrc);
       setOriginalBackupSrc(null);
-      setBleedStatusMsg('Đã khôi phục ảnh ban đầu.');
+      setOriginalBleedBounds(null);
     }
   };
+
+  // Original Image Rectangle in local centered coordinates (for drawing red boundary line)
+  const originalImageRect = useMemo(() => {
+    if (!imgElement || !cropBox.w) return null;
+    const naturalW = imgElement.naturalWidth || imgElement.width;
+    const naturalH = imgElement.naturalHeight || imgElement.height;
+    if (!naturalW || !naturalH) return null;
+
+    const imgAspect = naturalW / naturalH;
+    const baseW = cropBox.w;
+    const baseH = baseW / imgAspect;
+    const drawW = baseW * crop.zoom;
+    const drawH = baseH * crop.zoom;
+
+    if (originalBleedBounds) {
+      const x = -drawW / 2 + drawW * originalBleedBounds.leftRatio;
+      const y = -drawH / 2 + drawH * originalBleedBounds.topRatio;
+      const w = drawW * (1 - originalBleedBounds.leftRatio - originalBleedBounds.rightRatio);
+      const h = drawH * (1 - originalBleedBounds.topRatio - originalBleedBounds.bottomRatio);
+      return { x, y, w, h };
+    }
+
+    if (bleedMode !== 'off') {
+      return {
+        x: -drawW / 2,
+        y: -drawH / 2,
+        w: drawW,
+        h: drawH,
+      };
+    }
+
+    return null;
+  }, [imgElement, cropBox.w, crop.zoom, originalBleedBounds, bleedMode]);
 
   // Color adjustment helper
   const updateSetting = <K extends keyof ColorAdjustSettings>(key: K, value: ColorAdjustSettings[K]) => {
@@ -906,6 +974,8 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
       if (result) {
         setCurrentImageSrc(result);
         setCurrentFileName(file.name);
+        setOriginalBackupSrc(null);
+        setOriginalBleedBounds(null);
         handleResetCrop();
       }
     };
@@ -1122,6 +1192,8 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     const srcImg = targetTab.sourceImage;
     const nextSrc = srcImg?.originalThumb || srcImg?.thumb || null;
     setCurrentImageSrc(nextSrc);
+    setOriginalBackupSrc(null);
+    setOriginalBleedBounds(null);
     setCurrentFileName(srcImg?.name || `Layer ${targetTab.name}`);
     setCrop(srcImg?.cropSettings || { ...DEFAULT_CROP_TRANSFORM });
     setColorSettings(srcImg?.colorSettings || { ...DEFAULT_COLOR_SETTINGS });
@@ -1644,6 +1716,58 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                     fill="rgba(10, 15, 30, 0.62)"
                     mask="url(#sourceCropMask)"
                   />
+                </svg>
+              )}
+
+              {/* 2.5 Red Line: Original image border (Đường line đỏ viền ảnh gốc) */}
+              {currentImageSrc && bleedMode !== 'off' && originalImageRect && (
+                <svg
+                  className="absolute inset-0 w-full h-full pointer-events-none z-25 overflow-visible"
+                  width={viewportSize.w}
+                  height={viewportSize.h}
+                >
+                  <g
+                    transform={`translate(${cropBox.x + cropBox.w / 2 + crop.panX}, ${cropBox.y + cropBox.h / 2 + crop.panY}) rotate(${crop.rotation}) scale(${crop.flipH ? -1 : 1}, ${crop.flipV ? -1 : 1})`}
+                  >
+                    {/* Red border line */}
+                    <rect
+                      x={originalImageRect.x}
+                      y={originalImageRect.y}
+                      width={originalImageRect.w}
+                      height={originalImageRect.h}
+                      fill="none"
+                      stroke="#ef4444"
+                      strokeWidth={1.8}
+                      strokeDasharray="6 3"
+                      style={{ filter: 'drop-shadow(0 0 1.5px rgba(0,0,0,0.85))' }}
+                    />
+
+                    {/* Corner accent marks in solid red for precision */}
+                    <path
+                      d={`M ${originalImageRect.x} ${originalImageRect.y + 10} L ${originalImageRect.x} ${originalImageRect.y} L ${originalImageRect.x + 10} ${originalImageRect.y}`}
+                      fill="none"
+                      stroke="#dc2626"
+                      strokeWidth={2.5}
+                    />
+                    <path
+                      d={`M ${originalImageRect.x + originalImageRect.w - 10} ${originalImageRect.y} L ${originalImageRect.x + originalImageRect.w} ${originalImageRect.y} L ${originalImageRect.x + originalImageRect.w} ${originalImageRect.y + 10}`}
+                      fill="none"
+                      stroke="#dc2626"
+                      strokeWidth={2.5}
+                    />
+                    <path
+                      d={`M ${originalImageRect.x} ${originalImageRect.y + originalImageRect.h - 10} L ${originalImageRect.x} ${originalImageRect.y + originalImageRect.h} L ${originalImageRect.x + 10} ${originalImageRect.y + originalImageRect.h}`}
+                      fill="none"
+                      stroke="#dc2626"
+                      strokeWidth={2.5}
+                    />
+                    <path
+                      d={`M ${originalImageRect.x + originalImageRect.w - 10} ${originalImageRect.y + originalImageRect.h} L ${originalImageRect.x + originalImageRect.w} ${originalImageRect.y + originalImageRect.h} L ${originalImageRect.x + originalImageRect.w} ${originalImageRect.y + originalImageRect.h - 10}`}
+                      fill="none"
+                      stroke="#dc2626"
+                      strokeWidth={2.5}
+                    />
+                  </g>
                 </svg>
               )}
 
@@ -2264,6 +2388,13 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                         <span>1% (Mỏng)</span>
                         <span>15%</span>
                         <span>30% (Rộng)</span>
+                      </div>
+
+                      {/* Indicator viền đỏ */}
+                      <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-50/80 border border-red-200/80 text-[11px] text-red-700 select-none">
+                        <span className="w-3.5 h-0.5 bg-red-500 rounded-full inline-block" />
+                        <span className="font-semibold">Đường viền đỏ:</span>
+                        <span className="text-red-600">Viền ảnh gốc</span>
                       </div>
                     </div>
                   )}
