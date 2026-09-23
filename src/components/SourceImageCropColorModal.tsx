@@ -372,22 +372,15 @@ const DimDropdownCombobox: React.FC<DimDropdownComboboxProps> = ({
       {/* Dropdown Menu */}
       {isOpen && (
         <div className="absolute right-0 top-full mt-1.5 w-52 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 max-h-64 overflow-y-auto backdrop-blur-md">
-          {/* Mục ưu tiên hàng đầu: Kích thước chuẩn của ảnh (Mặc định) */}
+          {/* Mục ưu tiên hàng đầu: Kích thước chuẩn của ảnh (Ảnh gốc) */}
           {stdStr && (
-            <div className="px-2 pt-1 pb-1.5 border-b border-violet-100 bg-violet-50/70 mb-1">
-              <div className="text-[9px] uppercase tracking-wider font-bold text-violet-700 flex items-center justify-between mb-1">
-                <span className="flex items-center gap-1">
-                  <Sparkles size={11} className="text-violet-600" />
-                  <span>Kích thước chuẩn ảnh</span>
-                </span>
-                <span className="text-[8px] px-1.5 py-0.2 rounded bg-violet-200 text-violet-800 font-bold">Mặc định</span>
-              </div>
+            <div className="px-1.5 pt-1 pb-1 border-b border-slate-100">
               <div
                 onClick={() => handleSelectSuggestion(stdStr)}
-                className={`flex items-center justify-between px-2 py-1.5 rounded-lg text-xs cursor-pointer select-none transition ${
+                className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs cursor-pointer select-none transition ${
                   (currentFormatted === stdStr || inputVal === stdStr)
                     ? 'bg-violet-600 text-white font-bold shadow-xs'
-                    : 'hover:bg-violet-100 text-slate-800 font-semibold'
+                    : 'hover:bg-violet-50 text-slate-800 font-semibold'
                 }`}
               >
                 <div className="flex items-center gap-1.5 font-mono">
