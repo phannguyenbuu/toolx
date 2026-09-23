@@ -1,6 +1,9 @@
 import { AdvancedRenderSettings, DEFAULT_RENDER_SETTINGS } from '../components/RenderSettingsModal';
 import { ColorAdjustSettings, DEFAULT_COLOR_SETTINGS } from '../utils/colorAdjustment';
 
+export type { AdvancedRenderSettings };
+export { DEFAULT_RENDER_SETTINGS };
+
 export interface RenderColorProfile {
   id: string;
   name: string;
