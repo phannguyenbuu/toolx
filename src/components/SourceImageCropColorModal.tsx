@@ -599,7 +599,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     ...DEFAULT_COLOR_SETTINGS,
     ...(initialColorSettings || {})
   }));
-  const [colorTab, setColorTab] = useState<'balance' | 'curves' | 'brightness' | 'hsl' | 'cmyk' | 'rgb' | 'bleed'>('balance');
+  const [colorTab, setColorTab] = useState<'balance' | 'curves' | 'brightness' | 'hsl' | 'cmyk' | 'rgb' | 'bleed'>('bleed');
   const [curveChannel, setCurveChannel] = useState<CurveChannelType>('rgb');
   const [showOriginal, setShowOriginal] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
@@ -623,6 +623,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
   // Sync props on open
   useEffect(() => {
     if (isOpen) {
+      setColorTab('bleed');
       if (shapeTabs && shapeTabs.length > 0) {
         const clonedTabs: CropModalLayerTab[] = JSON.parse(JSON.stringify(shapeTabs));
         setTabs(clonedTabs);
@@ -1848,7 +1849,23 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
               </div>
             </div>
 
-            {/* Navtabs Row 1: Nhóm Cân bằng, Curves, Sáng / Tương phản */}
+            {/* Navtabs Row 1: Hàng riêng biệt Outpainting đưa lên đầu tiên (mở default) */}
+            <div className="border-b border-slate-200 bg-slate-50/70 text-[10px] font-bold text-center">
+              <button
+                type="button"
+                onClick={() => setColorTab('bleed')}
+                className={`w-full py-1.5 px-3 transition border-b-2 cursor-pointer flex items-center justify-center gap-1.5 ${
+                  colorTab === 'bleed'
+                    ? 'border-violet-600 text-violet-700 bg-white font-bold shadow-2xs'
+                    : 'border-transparent text-slate-600 hover:text-violet-700 hover:bg-slate-50'
+                }`}
+              >
+                <Sparkles size={13} className={colorTab === 'bleed' ? 'text-violet-600' : 'text-violet-500'} />
+                <span className="text-[11px] font-bold">Outpainting</span>
+              </button>
+            </div>
+
+            {/* Navtabs Row 2: Nhóm Cân bằng, Curves, Sáng / Tương phản */}
             <div className="grid grid-cols-3 border-b border-slate-200 text-[10px] font-bold text-center bg-slate-100/70">
               <button
                 type="button"
@@ -1885,7 +1902,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
               </button>
             </div>
 
-            {/* Navtabs Row 2: Nhóm HSL, CMYK, RGB */}
+            {/* Navtabs Row 3: Nhóm HSL, CMYK, RGB */}
             <div className="grid grid-cols-3 border-b border-slate-200 text-[10px] font-bold text-center bg-slate-100/40">
               <button
                 type="button"
@@ -1919,29 +1936,6 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                 }`}
               >
                 RGB
-              </button>
-            </div>
-
-            {/* Navtabs Row 3: Hàng riêng biệt Outpaint (luôn expand 100% full width) */}
-            <div className="border-b border-slate-200 bg-slate-50/70 text-[10px] font-bold text-center">
-              <button
-                type="button"
-                onClick={() => setColorTab('bleed')}
-                className={`w-full py-1.5 px-3 transition border-b-2 cursor-pointer flex items-center justify-center gap-1.5 ${
-                  colorTab === 'bleed'
-                    ? 'border-violet-600 text-violet-700 bg-white font-bold shadow-2xs'
-                    : 'border-transparent text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50/50 bg-emerald-50/20'
-                }`}
-              >
-                <Sparkles size={13} className={colorTab === 'bleed' ? 'text-violet-600' : 'text-emerald-600 animate-pulse'} />
-                <span className="tracking-wide uppercase text-[11px] font-bold">Outpaint</span>
-                <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
-                  bleedMode === 'off'
-                    ? 'bg-slate-200 text-slate-600'
-                    : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                }`}>
-                  {bleedMode === 'off' ? 'Off' : `${bleedMode.toUpperCase()} +${bleedPercent}%`}
-                </span>
               </button>
             </div>
 
@@ -2195,7 +2189,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                   <div className="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80 text-[11px] text-emerald-900 space-y-1">
                     <div className="font-bold flex items-center gap-1.5 text-emerald-800">
                       <Sparkles size={13} className="text-emerald-600" />
-                      <span>Studio Outpaint (Bù Xén Tràn Lề)</span>
+                      <span>Outpainting (Bù Xén Tràn Lề)</span>
                     </div>
                     <p className="text-[10px] text-emerald-700 leading-relaxed">
                       Mở rộng biên ảnh ra ngoài khung cắt để chống lệch mép, viền trắng khi cắt/bế thành phẩm in ấn.
