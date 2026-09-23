@@ -957,6 +957,8 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
     activeTabId?: string;
     bleedBounds?: { leftRatio: number; rightRatio: number; topRatio: number; bottomRatio: number } | null;
     bleedPercent?: number;
+    bleedMm?: number;
+    addedGapMm?: number;
   }) => {
     if (result.updatedTabs && result.updatedTabs.length > 0) {
       setShapeTabs(result.updatedTabs as ShapeTabItem[]);
@@ -983,12 +985,22 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
       bleedPercent: result.bleedPercent || undefined,
     };
 
-    setConfig(c => ({
-      ...c,
-      itemW: result.w_mm,
-      itemH: result.h_mm,
-      shape: currentTab.shape || c.shape,
-    }));
+    setConfig(c => {
+      const nextPadding = (result.addedGapMm && result.addedGapMm > 0)
+        ? Math.round(((c.padding || 0) + result.addedGapMm) * 10) / 10
+        : c.padding;
+      const nextCutBleed = (result.bleedMm !== undefined && result.bleedMm > 0)
+        ? result.bleedMm
+        : (result.bleedBounds ? Math.round((result.w_mm * ((result.bleedPercent || 10) / 100) / 2) * 10) / 10 : c.cutBleed);
+      return {
+        ...c,
+        itemW: result.w_mm,
+        itemH: result.h_mm,
+        padding: nextPadding,
+        cutBleed: nextCutBleed,
+        shape: currentTab.shape || c.shape,
+      };
+    });
 
     updateActiveTabProp({
       sourceImage: newPageItem,
@@ -7964,6 +7976,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
         itemH={activeTab?.shape === 'circle' ? (activeTab?.itemW || config.itemW) : (activeTab?.itemH || config.itemH)}
         shape={activeTab?.shape || config.shape}
         cutBleed={config.cutBleed || 2}
+        gap={config.padding || 0}
         initialColorSettings={activeTab?.sourceImage?.colorSettings || editingSourcePage?.colorSettings}
         initialCropSettings={activeTab?.sourceImage?.cropSettings || editingSourcePage?.cropSettings}
         initialBleedBounds={activeTab?.sourceImage?.bleedBounds || (allPages.length > 0 ? allPages[0]?.bleedBounds : null)}

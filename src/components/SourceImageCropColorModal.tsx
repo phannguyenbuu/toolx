@@ -535,6 +535,7 @@ interface SourceImageCropColorModalProps {
   itemH: number; // mm
   shape?: string; // 'rect' | 'circle' | 'oval' | 'trapezoid' | 'triangle' | 'hexagon' | ...
   cutBleed?: number; // mm (bù tràn lề outpaint)
+  gap?: number; // mm (khoảng cách giữa các tem)
   initialColorSettings?: ColorAdjustSettings;
   initialCropSettings?: CropTransform;
   initialBleedBounds?: { leftRatio: number; rightRatio: number; topRatio: number; bottomRatio: number } | null;
@@ -553,6 +554,8 @@ interface SourceImageCropColorModalProps {
     activeTabId?: string;
     bleedBounds?: { leftRatio: number; rightRatio: number; topRatio: number; bottomRatio: number } | null;
     bleedPercent?: number;
+    bleedMm?: number;
+    addedGapMm?: number;
   }) => void;
 }
 
@@ -565,6 +568,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
   itemH,
   shape = 'rect',
   cutBleed = 2,
+  gap = 0,
   initialColorSettings,
   initialCropSettings,
   initialBleedBounds,
@@ -623,6 +627,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
   } | null>(null);
   const [originalDimensions, setOriginalDimensions] = useState<{ w: number; h: number } | null>(null);
   const [bleedStatusMsg, setBleedStatusMsg] = useState<string | null>(null);
+  const [bleedGapMode, setBleedGapMode] = useState<'expand_gap' | 'shrink_item'>('expand_gap');
 
   // Dragging state for Pan
   const [isDragging, setIsDragging] = useState(false);
@@ -1375,12 +1380,26 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     const fullExportDataUrl = currentImageSrc ? (renderCurrentExportDataUrl() || currentImageSrc) : '';
     const currentEffH = localShape === 'circle' ? localItemW : localItemH;
 
+    const isBleedActive = bleedMode !== 'off' && !!originalBleedBounds;
+    const bleedMm = isBleedActive ? effectiveBleedMm : 0;
+    const addedGap = (isBleedActive && bleedGapMode === 'expand_gap')
+      ? Math.round(effectiveBleedMm * 2 * 10) / 10
+      : 0;
+    const finalItemW = (isBleedActive && bleedGapMode === 'shrink_item')
+      ? Math.max(1, Math.round((localItemW - effectiveBleedMm * 2) * 10) / 10)
+      : localItemW;
+    const finalItemH = localShape === 'circle'
+      ? finalItemW
+      : ((isBleedActive && bleedGapMode === 'shrink_item')
+          ? Math.max(1, Math.round((localItemH - effectiveBleedMm * 2) * 10) / 10)
+          : currentEffH);
+
     const finalTabs = tabs.map(t => {
       if (t.id === currentTabId) {
         return {
           ...t,
-          itemW: localItemW,
-          itemH: currentEffH,
+          itemW: finalItemW,
+          itemH: finalItemH,
           shape: localShape as any,
           quantity: localQuantity,
           sourceImage: currentImageSrc ? {
@@ -1389,8 +1408,8 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
             thumb: previewThumb || currentImageSrc,
             originalThumb: fullExportDataUrl || currentImageSrc,
             name: currentFileName,
-            w: localItemW,
-            h: currentEffH,
+            w: finalItemW,
+            h: finalItemH,
             rotation: 0,
             cropSettings: crop,
             colorSettings: colorSettings,
@@ -1405,8 +1424,8 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     onApply({
       dataUrl: previewThumb || currentImageSrc || '',
       originalImage: fullExportDataUrl || currentImageSrc || '',
-      w_mm: localItemW,
-      h_mm: currentEffH,
+      w_mm: finalItemW,
+      h_mm: finalItemH,
       colorSettings,
       cropSettings: crop,
       filename: currentFileName,
@@ -1414,6 +1433,8 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
       activeTabId: currentTabId,
       bleedBounds: originalBleedBounds,
       bleedPercent: bleedMode !== 'off' ? bleedPercent : 0,
+      bleedMm,
+      addedGapMm: addedGap,
     });
     onClose();
   };
@@ -2389,11 +2410,61 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                         <span>30% (Rộng)</span>
                       </div>
 
-                      {/* Indicator viền đỏ */}
-                      <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-50/80 border border-red-200/80 text-[11px] text-red-700 select-none">
-                        <span className="w-3.5 h-0.5 bg-red-500 rounded-full inline-block" />
-                        <span className="font-semibold">Đường viền đỏ:</span>
-                        <span className="text-red-600">Viền ảnh gốc</span>
+                      {/* Tùy chọn xử lý khoảng cách Gap & Kích thước tem khi bình trang */}
+                      <div className="space-y-1.5 pt-1 border-t border-slate-200/70">
+                        <div className="text-[11px] font-semibold text-slate-700">Khi bình trang:</div>
+                        <div className="space-y-1.5">
+                          {/* Option 1: Tự động cộng bleed size vào Gap (Mặc định) */}
+                          <label
+                            className={`flex items-start gap-2 p-2 rounded-xl border cursor-pointer transition select-none ${
+                              bleedGapMode === 'expand_gap'
+                                ? 'bg-violet-50/80 border-violet-400 text-violet-900 shadow-2xs'
+                                : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="bleedGapMode"
+                              checked={bleedGapMode === 'expand_gap'}
+                              onChange={() => setBleedGapMode('expand_gap')}
+                              className="mt-0.5 text-violet-600 focus:ring-violet-500 cursor-pointer"
+                            />
+                            <div className="text-xs">
+                              <div className="font-bold flex items-center gap-1.5">
+                                <span>Tự động cộng Gap (+{Math.round(effectiveBleedMm * 2 * 10) / 10}mm)</span>
+                                <span className="text-[9px] px-1.5 py-0.2 rounded bg-violet-200/80 text-violet-800 font-bold">Mặc định</span>
+                              </div>
+                              <div className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                                Kích thước tem giữ nguyên ({localItemW} × {localShape === 'circle' ? localItemW : localItemH} mm), Gap tự cộng thêm bleed ({gap}mm ➔ {Math.round((gap + effectiveBleedMm * 2) * 10) / 10}mm) để tính lại sắp xếp tờ in.
+                              </div>
+                            </div>
+                          </label>
+
+                          {/* Option 2: Giữ nguyên Gap (Kích thước tem nhỏ lại) */}
+                          <label
+                            className={`flex items-start gap-2 p-2 rounded-xl border cursor-pointer transition select-none ${
+                              bleedGapMode === 'shrink_item'
+                                ? 'bg-violet-50/80 border-violet-400 text-violet-900 shadow-2xs'
+                                : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="bleedGapMode"
+                              checked={bleedGapMode === 'shrink_item'}
+                              onChange={() => setBleedGapMode('shrink_item')}
+                              className="mt-0.5 text-violet-600 focus:ring-violet-500 cursor-pointer"
+                            />
+                            <div className="text-xs">
+                              <div className="font-bold">
+                                <span>Giữ nguyên Gap (Tem nhỏ lại còn {Math.max(1, Math.round((localItemW - effectiveBleedMm * 2) * 10) / 10)} × {localShape === 'circle' ? Math.max(1, Math.round((localItemW - effectiveBleedMm * 2) * 10) / 10) : Math.max(1, Math.round((localItemH - effectiveBleedMm * 2) * 10) / 10)} mm)</span>
+                              </div>
+                              <div className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                                Giữ nguyên khoảng cách Gap ({gap}mm), kích thước tem thu nhỏ tương ứng vùng thực in từ bản gốc.
+                              </div>
+                            </div>
+                          </label>
+                        </div>
                       </div>
                     </div>
                   )}
