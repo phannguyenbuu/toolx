@@ -187,6 +187,13 @@ interface SourcePage {
   rotation: number; // 0, 90, 180, 270
   cropSettings?: CropTransform;
   colorSettings?: ColorAdjustSettings;
+  bleedPercent?: number;
+  bleedBounds?: {
+    leftRatio: number;
+    rightRatio: number;
+    topRatio: number;
+    bottomRatio: number;
+  };
 }
 
 type PageItem = SourcePage;
@@ -948,6 +955,8 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
     filename?: string;
     updatedTabs?: any[];
     activeTabId?: string;
+    bleedBounds?: { leftRatio: number; rightRatio: number; topRatio: number; bottomRatio: number } | null;
+    bleedPercent?: number;
   }) => {
     if (result.updatedTabs && result.updatedTabs.length > 0) {
       setShapeTabs(result.updatedTabs as ShapeTabItem[]);
@@ -969,7 +978,9 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
       h: result.h_mm,
       rotation: 0,
       cropSettings: result.cropSettings,
-      colorSettings: result.colorSettings
+      colorSettings: result.colorSettings,
+      bleedBounds: result.bleedBounds || undefined,
+      bleedPercent: result.bleedPercent || undefined,
     };
 
     setConfig(c => ({
@@ -1002,7 +1013,9 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
               w: result.w_mm,
               h: result.h_mm,
               cropSettings: result.cropSettings,
-              colorSettings: result.colorSettings
+              colorSettings: result.colorSettings,
+              bleedBounds: result.bleedBounds || undefined,
+              bleedPercent: result.bleedPercent || undefined,
             };
           }
           return p;
@@ -5884,6 +5897,49 @@ Chỉ trả về JSON, không giải thích thêm.`;
                                     ) : (
                                       <g fill="none" stroke={itemColor} strokeWidth="0.8" dangerouslySetInnerHTML={{ __html: innerSvg }} />
                                     )}
+
+                                    {/* 4. Dashed red contour for original image / cut line */}
+                                    {(() => {
+                                      const itemSrcObj = (it.sourceImage as any)
+                                        || (correspondingTab?.sourceImage as any)
+                                        || (activeTab?.sourceImage as any)
+                                        || page
+                                        || (allPages.length > 0 ? allPages[i % allPages.length] : null);
+                                      const itemBleedBounds = itemSrcObj?.bleedBounds;
+                                      const itemCutBleed = config.cutBleed || 0;
+                                      if ((itemBleedBounds || itemCutBleed > 0) && previewSrc) {
+                                        const insetScale = itemBleedBounds
+                                          ? (1 - (itemBleedBounds.leftRatio + itemBleedBounds.rightRatio))
+                                          : Math.max(0.7, 1 - (itemCutBleed * 2) / Math.max(1, itW));
+                                        const cX = vbMinX + vbW / 2;
+                                        const cY = vbMinY + vbH / 2;
+                                        return (
+                                          <g transform={`translate(${cX}, ${cY}) scale(${insetScale}) translate(${-cX}, ${-cY})`}>
+                                            {pathD ? (
+                                              <path
+                                                d={pathD}
+                                                fill="none"
+                                                stroke="#ef4444"
+                                                strokeWidth={Math.max(0.6, Math.min(vbW, vbH) * 0.012)}
+                                                strokeDasharray="5 3"
+                                                style={{ filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.85))' }}
+                                              />
+                                            ) : (
+                                              <g
+                                                fill="none"
+                                                stroke="#ef4444"
+                                                strokeWidth="1.2"
+                                                strokeDasharray="5 3"
+                                                dangerouslySetInnerHTML={{
+                                                  __html: innerSvg.replace(/stroke=["'][^"']*["']/gi, 'stroke="#ef4444"'),
+                                                }}
+                                              />
+                                            )}
+                                          </g>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                   </svg>
 
                                   {numberHandle}
@@ -5988,6 +6044,34 @@ Chỉ trả về JSON, không giải thích thêm.`;
                                       <path d={pathD} fill={`${itemColor}25`} />
                                     )}
                                     <path d={pathD} fill="none" stroke={itemColor} strokeWidth="1" shapeRendering="geometricPrecision" />
+                                    {/* Dashed red shape for bleed / cut line */}
+                                    {(() => {
+                                      const itemSrcObj = (it.sourceImage as any)
+                                        || (correspondingTab?.sourceImage as any)
+                                        || (activeTab?.sourceImage as any)
+                                        || page
+                                        || (allPages.length > 0 ? allPages[i % allPages.length] : null);
+                                      const itemBleedBounds = itemSrcObj?.bleedBounds;
+                                      const itemCutBleed = config.cutBleed || 0;
+                                      if ((itemBleedBounds || itemCutBleed > 0) && previewSrc) {
+                                        const insetScale = itemBleedBounds
+                                          ? (1 - (itemBleedBounds.leftRatio + itemBleedBounds.rightRatio))
+                                          : Math.max(0.7, (w - itemCutBleed * scale * 2) / Math.max(1, w));
+                                        return (
+                                          <g transform={`translate(${w / 2}, ${h / 2}) scale(${insetScale}) translate(${-w / 2}, ${-h / 2})`}>
+                                            <path
+                                              d={pathD}
+                                              fill="none"
+                                              stroke="#ef4444"
+                                              strokeWidth="1.8"
+                                              strokeDasharray="5 3"
+                                              style={{ filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.85))' }}
+                                            />
+                                          </g>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                   </svg>
                                   {numberHandle}
                                   {pageOverlay}
@@ -6115,6 +6199,60 @@ Chỉ trả về JSON, không giải thích thêm.`;
                                     );
                                   })()}
                                 </div>
+
+                                {/* Dashed red line indicating original image boundary / cut line */}
+                                {(() => {
+                                  if (!previewSrc) return null;
+                                  const itemSrcObj = (it.sourceImage as any)
+                                    || (correspondingTab?.sourceImage as any)
+                                    || (activeTab?.sourceImage as any)
+                                    || page
+                                    || (allPages.length > 0 ? allPages[i % allPages.length] : null);
+                                  const itemBleedBounds = itemSrcObj?.bleedBounds;
+                                  const itemCutBleed = config.cutBleed || 0;
+
+                                  let rx = 0;
+                                  let ry = 0;
+                                  let rw = 0;
+                                  let rh = 0;
+                                  let showLine = false;
+
+                                  if (itemBleedBounds) {
+                                    rx = actualW * scale * itemBleedBounds.leftRatio;
+                                    ry = actualH * scale * itemBleedBounds.topRatio;
+                                    rw = actualW * scale * (1 - itemBleedBounds.leftRatio - itemBleedBounds.rightRatio);
+                                    rh = actualH * scale * (1 - itemBleedBounds.topRatio - itemBleedBounds.bottomRatio);
+                                    showLine = rw > 2 && rh > 2;
+                                  } else if (itemCutBleed > 0) {
+                                    const insetPx = itemCutBleed * scale;
+                                    rx = insetPx;
+                                    ry = insetPx;
+                                    rw = actualW * scale - insetPx * 2;
+                                    rh = actualH * scale - insetPx * 2;
+                                    showLine = rw > 2 && rh > 2;
+                                  }
+
+                                  if (!showLine) return null;
+
+                                  return (
+                                    <div
+                                      className="absolute pointer-events-none border-2 border-dashed border-red-500"
+                                      style={{
+                                        left: `${rx}px`,
+                                        top: `${ry}px`,
+                                        width: `${rw}px`,
+                                        height: `${rh}px`,
+                                        zIndex: 15,
+                                        borderRadius: itemShape === 'circle' || itemShape === 'oval'
+                                          ? '50%'
+                                          : (itemCornerRadius > 0
+                                              ? `${Math.max(0, (itemCornerRadius - (itemBleedBounds ? itemBleedBounds.leftRatio * actualW : itemCutBleed)) * scale)}px`
+                                              : '0px'),
+                                        boxShadow: '0 0 2px rgba(0,0,0,0.85), inset 0 0 2px rgba(0,0,0,0.4)',
+                                      }}
+                                    />
+                                  );
+                                })()}
 
                                 {numberHandle}
                                 {pageOverlay}
@@ -7827,6 +7965,8 @@ Chỉ trả về JSON, không giải thích thêm.`;
         cutBleed={config.cutBleed || 2}
         initialColorSettings={activeTab?.sourceImage?.colorSettings || editingSourcePage?.colorSettings}
         initialCropSettings={activeTab?.sourceImage?.cropSettings || editingSourcePage?.cropSettings}
+        initialBleedBounds={activeTab?.sourceImage?.bleedBounds || (allPages.length > 0 ? allPages[0]?.bleedBounds : null)}
+        initialBleedPercent={activeTab?.sourceImage?.bleedPercent || (allPages.length > 0 ? allPages[0]?.bleedPercent : undefined)}
         shapeTabs={shapeTabs as any}
         activeTabId={activeTabId}
         onApply={handleApplyCroppedColorImage}
