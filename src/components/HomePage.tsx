@@ -39,7 +39,7 @@ const menuCards: MenuCard[] = [
   { id: 'pdf-processor', title: 'Thông Tin PDF', description: 'Kiểm tra trang màu, trang trắng đen, khổ PDF', icon: FileType, gradient: 'from-purple-500 to-pink-600' },
   { id: 'render-pdf', title: 'Render PDF', description: 'Kết xuất file PDF sang ảnh độ nét cao', icon: Printer, gradient: 'from-blue-500 to-cyan-600' },
   { id: 'die-cutting', title: 'Tạo Khuôn Hộp', description: 'Thiết kế mẫu hộp và xuất khuôn bế', icon: Box, gradient: 'from-pink-500 to-rose-600' },
-  { id: 'imposition-advanced', title: 'Bình Trang', description: 'Sắp xếp layout in offset', icon: LayoutGrid, gradient: 'from-cyan-500 to-blue-600' },
+  { id: 'imposition-advanced', title: 'Bình Tem', description: 'Sắp xếp layout in offset', icon: LayoutGrid, gradient: 'from-cyan-500 to-blue-600' },
   { id: 'price-calc-offset', title: 'Tính Giá In', description: 'Tính toán chi phí in ấn', icon: Calculator, gradient: 'from-amber-500 to-red-500' },
   { id: 'customers', title: 'Kinh Doanh', description: 'Quản lý khách hàng, báo giá', icon: Briefcase, gradient: 'from-emerald-500 to-teal-500' },
 ];

@@ -4477,7 +4477,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
       <header className="bg-gradient-to-r from-violet-600 to-indigo-600 text-white px-4 py-3 flex items-center justify-between shadow-lg flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="bg-white/20 p-2 rounded-lg"><LayoutGrid size={22} /></div>
-          <div><h1 className="text-lg font-medium">Bế tem</h1><p className="text-violet-200 text-xs">Công cụ xếp hình in ấn</p></div>
+          <div><h1 className="text-lg font-medium">Bình tem</h1><p className="text-violet-200 text-xs">Công cụ xếp hình in ấn</p></div>
         </div>
         <div className="flex items-center gap-3">
           {/* Workspace Management */}

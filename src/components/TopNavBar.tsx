@@ -217,7 +217,7 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
         },
         {
           id: "imposition-advanced",
-          name: "Bế tem",
+          name: "Bình tem",
           icon: LayoutGrid,
           desc: "Bình layout offset tự động, xếp đa tầng & tối ưu khổ in",
         },
