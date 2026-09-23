@@ -18,6 +18,7 @@ module.exports = function(app) {
     '/inpaint',
     '/inpaint/status',
     '/outpaint',
+    '/outpaint-bleed',
     '/remove-bg',
     '/export-pdf',
     '/replace-images',
