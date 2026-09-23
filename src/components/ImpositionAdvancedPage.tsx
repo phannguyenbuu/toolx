@@ -482,7 +482,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
     useTotalLimit: false,
     useCrop: false, cropLen: 5, cropDist: 3, cropThick: 0.25, cropColor: '#000000',
     fitMode: 'fill', colorMode: 'original', dpi: 300, autoRotate: true, autoRotateImage: true, processMode: 'vector',
-    cutBleed: 0,
+    cutBleed: 3,
     // Advanced features
     usePrintArea: false, printAreaW: 320, printAreaH: 470,
     marginTop: 5, marginBot: 5, marginLeft: 5, marginRight: 5,
@@ -1577,7 +1577,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
         pageW: 210, pageH: 297, printW: 190, printH: 277, totalOrder: 1000,
         useCrop: true, cropLen: 5, cropDist: 3, cropThick: 0.25, cropColor: '#000000',
         fitMode: 'fill' as const, colorMode: 'cmyk' as const, dpi: 300, autoRotate: true, processMode: 'vector' as const,
-        cutBleed: 2,
+        cutBleed: 3,
         usePrintArea: false, printAreaW: 190, printAreaH: 277,
         marginTop: 10, marginBot: 10, marginLeft: 10, marginRight: 10,
         marginTop2: 10, marginBot2: 10, marginLeft2: 10, marginRight2: 10,
@@ -1595,7 +1595,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
         pageW: 210, pageH: 297, printW: 190, printH: 277, totalOrder: 500,
         useCrop: false, cropLen: 5, cropDist: 3, cropThick: 0.25, cropColor: '#000000',
         fitMode: 'fill' as const, colorMode: 'cmyk' as const, dpi: 300, autoRotate: false, processMode: 'vector' as const,
-        cutBleed: 1,
+        cutBleed: 3,
         usePrintArea: false, printAreaW: 190, printAreaH: 277,
         marginTop: 10, marginBot: 10, marginLeft: 10, marginRight: 10,
         marginTop2: 10, marginBot2: 10, marginLeft2: 10, marginRight2: 10,
@@ -1670,7 +1670,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
       useTotalLimit: false,
       useCrop: false, cropLen: 5, cropDist: 3, cropThick: 0.25, cropColor: '#000000',
       fitMode: 'fill', colorMode: 'original', dpi: 300, autoRotate: true, processMode: 'vector',
-      cutBleed: 0,
+      cutBleed: 3,
       usePrintArea: false, printAreaW: 320, printAreaH: 470,
       marginTop: 5, marginBot: 5, marginLeft: 5, marginRight: 5,
       marginTop2: 5, marginBot2: 5, marginLeft2: 5, marginRight2: 5,
@@ -5155,17 +5155,20 @@ Chỉ trả về JSON, không giải thích thêm.`;
                 {/* Bù cắt (Bleed) - Icon + Tooltip */}
                 <div
                   className="flex items-center justify-between bg-slate-50 hover:bg-slate-100/80 border border-slate-200/90 rounded-xl px-2.5 py-1.5 transition-all focus-within:ring-2 focus-within:ring-violet-300 focus-within:border-violet-500 focus-within:bg-white shadow-2xs"
-                  title="Bù cắt / Tràn viền (Cut Bleed)"
+                  title="Bù cắt / Tràn viền (Cut Bleed) - Mặc định và tối thiểu 3mm"
                 >
-                  <div className="flex items-center text-slate-500 shrink-0" title="Bù cắt / Tràn viền (Cut Bleed)">
+                  <div className="flex items-center text-slate-500 shrink-0" title="Bù cắt / Tràn viền (Cut Bleed) - Mặc định và tối thiểu 3mm">
                     <Scissors size={14} />
                   </div>
                   <div className="flex items-center gap-0.5 shrink-0">
                     <DebouncedNumberInput
-                      step={0.1}
+                      step={0.5}
                       min={0}
                       value={config.cutBleed}
-                      onChange={v => setConfig(c => ({ ...c, cutBleed: v }))}
+                      onChange={v => {
+                        const finalV = v > 0 && v < 3 ? 3 : v;
+                        setConfig(c => ({ ...c, cutBleed: finalV }));
+                      }}
                       className="w-12 bg-transparent text-right font-bold text-xs text-slate-800 focus:outline-none"
                     />
                     <span className="text-[9px] text-slate-400 font-medium">mm</span>

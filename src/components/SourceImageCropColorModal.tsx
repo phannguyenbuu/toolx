@@ -609,7 +609,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
   itemW,
   itemH,
   shape = 'rect',
-  cutBleed = 2,
+  cutBleed = 3,
   gap = 0,
   initialColorSettings,
   initialCropSettings,
@@ -659,9 +659,13 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
   const [showOriginal, setShowOriginal] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
 
-  // Bleed Studio state (Off / Offset / AI / Color)
+  // Bleed Studio state (Off / Offset / AI / Color) - Mặc định và tối thiểu 3mm
   const [bleedMode, setBleedMode] = useState<'off' | 'offset' | 'ai' | 'color'>('ai');
-  const [bleedPercent, setBleedPercent] = useState<number>(10);
+  const [bleedMm, setBleedMm] = useState<number>(() => Math.max(3, cutBleed || 3));
+  const [bleedPercent, setBleedPercent] = useState<number>(() => {
+    const curW = itemW || 100;
+    return Math.round(((3 * 2) / curW) * 100 * 10) / 10;
+  });
   const [bleedBgColor, setBleedBgColor] = useState<string>('#ffffff');
   const [isProcessingBleed, setIsProcessingBleed] = useState(false);
   const [isExtractingPdf, setIsExtractingPdf] = useState(false);
@@ -722,7 +726,13 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
         const existingBounds = srcImg?.bleedBounds || initialBleedBounds || null;
         setOriginalBleedBounds(existingBounds);
         if (srcImg?.bleedPercent || initialBleedPercent) {
-          setBleedPercent(srcImg?.bleedPercent || initialBleedPercent || 5);
+          const bp = srcImg?.bleedPercent || initialBleedPercent || 6;
+          setBleedPercent(bp);
+          const computedMm = Math.round((curW * (bp / 100) / 2) * 10) / 10;
+          setBleedMm(Math.max(3, computedMm));
+        } else {
+          setBleedMm(Math.max(3, cutBleed || 3));
+          setBleedPercent(Math.round(((3 * 2) / curW) * 100 * 10) / 10);
         }
       } else {
         const fallbackTab: CropModalLayerTab = {
@@ -849,12 +859,11 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     return { x, y, w, h };
   }, [viewportSize, targetRatio]);
 
-  // Bleed / Outpaint pixel size calculation
+  // Bleed / Outpaint pixel size calculation (Mặc định và tối thiểu 3mm)
   const effectiveBleedMm = useMemo(() => {
     if (bleedMode === 'off') return 0;
-    const percentMm = Math.round((localItemW * (bleedPercent / 100) / 2) * 10) / 10;
-    return Math.max(1, percentMm);
-  }, [bleedMode, localItemW, bleedPercent]);
+    return Math.max(3, bleedMm);
+  }, [bleedMode, bleedMm]);
 
   const pxPerMm = useMemo(() => {
     return (cropBox.w && localItemW) ? (cropBox.w / localItemW) : 1;
@@ -879,9 +888,11 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     setIsProcessingBleed(true);
 
     try {
-      const halfRatio = (bleedPercent / 100) / 2.0;
-      const padW = Math.max(2, Math.round(origW * halfRatio));
-      const padH = Math.max(2, Math.round(origH * halfRatio));
+      const curItemH = (localShape === 'circle' ? localItemW : localItemH) || localItemW;
+      const pxPerMmW = localItemW > 0 ? (origW / localItemW) : 11.81;
+      const pxPerMmH = curItemH > 0 ? (origH / curItemH) : 11.81;
+      const padW = Math.max(2, Math.round(effectiveBleedMm * pxPerMmW));
+      const padH = Math.max(2, Math.round(effectiveBleedMm * pxPerMmH));
       const newW = origW + padW * 2;
       const newH = origH + padH * 2;
 
@@ -943,9 +954,11 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     setIsProcessingBleed(true);
 
     try {
-      const halfRatio = (bleedPercent / 100) / 2.0;
-      const padW = Math.max(2, Math.round(origW * halfRatio));
-      const padH = Math.max(2, Math.round(origH * halfRatio));
+      const curItemH = (localShape === 'circle' ? localItemW : localItemH) || localItemW;
+      const pxPerMmW = localItemW > 0 ? (origW / localItemW) : 11.81;
+      const pxPerMmH = curItemH > 0 ? (origH / curItemH) : 11.81;
+      const padW = Math.max(2, Math.round(effectiveBleedMm * pxPerMmW));
+      const padH = Math.max(2, Math.round(effectiveBleedMm * pxPerMmH));
       const newW = origW + padW * 2;
       const newH = origH + padH * 2;
 
@@ -990,9 +1003,11 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     }
     setIsProcessingBleed(true);
 
-    const half = (bleedPercent / 100) / 2.0;
-    const padW = Math.round(origW * half);
-    const padH = Math.round(origH * half);
+    const curItemH = (localShape === 'circle' ? localItemW : localItemH) || localItemW;
+    const pxPerMmW = localItemW > 0 ? (origW / localItemW) : 11.81;
+    const pxPerMmH = curItemH > 0 ? (origH / curItemH) : 11.81;
+    const padW = Math.max(2, Math.round(effectiveBleedMm * pxPerMmW));
+    const padH = Math.max(2, Math.round(effectiveBleedMm * pxPerMmH));
     const newW = origW + padW * 2;
     const newH = origH + padH * 2;
     const bounds = {
@@ -1008,7 +1023,8 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
 
       const formData = new FormData();
       formData.append('file', blob, 'source.jpg');
-      formData.append('percent', (bleedPercent / 100).toFixed(2));
+      formData.append('bleed_mm', String(effectiveBleedMm));
+      formData.append('percent', ((effectiveBleedMm * 2) / localItemW).toFixed(4));
       formData.append('mode', 'smart_portrait');
       formData.append('format', 'image');
 
@@ -1486,6 +1502,11 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     setOriginalBleedBounds(srcImg?.bleedBounds || null);
     if (srcImg?.bleedPercent) {
       setBleedPercent(srcImg.bleedPercent);
+      const computedMm = Math.round((targetW * (srcImg.bleedPercent / 100) / 2) * 10) / 10;
+      setBleedMm(Math.max(3, computedMm));
+    } else {
+      setBleedMm(3);
+      setBleedPercent(Math.round(((3 * 2) / targetW) * 100 * 10) / 10);
     }
     setOriginalDimensions(null);
     setCurrentFileName(srcImg?.name || `Layer ${targetTab.name}`);
@@ -2693,23 +2714,46 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                     <div className="space-y-2.5 p-3 bg-slate-50 rounded-xl border border-slate-200">
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-[11px] font-semibold text-slate-700">Độ rộng bù xén (Bleed):</span>
-                        <span className="px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 font-mono font-bold text-xs">
-                          {bleedPercent}% (~{Math.round((localItemW * (bleedPercent / 100) / 2) * 10) / 10} mm mỗi cạnh)
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="number"
+                            min={3}
+                            max={20}
+                            step={0.5}
+                            value={bleedMm}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              if (!isNaN(val)) {
+                                const clamped = Math.max(3, Math.round(val * 10) / 10);
+                                setBleedMm(clamped);
+                                setBleedPercent(Math.round(((clamped * 2) / localItemW) * 100 * 10) / 10);
+                              }
+                            }}
+                            className="w-16 px-1.5 py-0.5 text-right font-mono font-bold text-xs bg-white border border-slate-300 rounded-md text-violet-800 focus:outline-none focus:ring-1 focus:ring-violet-400"
+                          />
+                          <span className="px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 font-mono font-bold text-xs">
+                            {effectiveBleedMm} mm mỗi cạnh
+                          </span>
+                        </div>
                       </div>
                       <input
                         type="range"
-                        min={1}
-                        max={30}
-                        step={1}
-                        value={bleedPercent}
-                        onChange={(e) => setBleedPercent(Number(e.target.value))}
+                        min={3}
+                        max={15}
+                        step={0.5}
+                        value={bleedMm}
+                        onChange={(e) => {
+                          const val = Math.max(3, Number(e.target.value));
+                          setBleedMm(val);
+                          setBleedPercent(Math.round(((val * 2) / localItemW) * 100 * 10) / 10);
+                        }}
                         className="w-full accent-violet-600 cursor-pointer"
                       />
-                      <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-                        <span>1% (Mỏng)</span>
-                        <span>15%</span>
-                        <span>30% (Rộng)</span>
+                      <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono">
+                        <span className="font-bold text-violet-700">3 mm (Mặc định chuẩn in)</span>
+                        <span>6 mm</span>
+                        <span>10 mm</span>
+                        <span>15 mm</span>
                       </div>
 
                       {/* Chọn màu nền bù xén (Outpaint Background Color) */}

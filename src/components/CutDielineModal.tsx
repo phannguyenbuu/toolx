@@ -61,7 +61,7 @@ export const CutDielineModal: React.FC<CutDielineModalProps> = ({
   defaultItemW,
   defaultItemH,
   defaultShape,
-  defaultCutBleed = 0,
+  defaultCutBleed = 3,
   defaultCornerRadius = 0,
   shapeTabs = [],
   currentSheetIndex = 0,
