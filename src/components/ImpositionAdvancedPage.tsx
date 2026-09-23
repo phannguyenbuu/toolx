@@ -21,6 +21,7 @@ import { probeGoAgent, renderPdfViaGoAgent, GoAgentInfo, GOAGENT_DEFAULT_PORT } 
 import { agentJobService } from '../services/agentJobService';
 import * as api from '../services/api';
 import * as pdfjsLib from 'pdfjs-dist';
+import { extractPdfPages, isPdfFile } from '../utils/pdfPageExtractor';
 
 // Set worker path for pdf.js
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
@@ -904,9 +905,93 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
     });
   }, [updateActiveTabProp]);
 
-  const handleSourceImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSourceImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Khi người dùng tải file PDF: trích xuất mỗi trang thành 1 layer riêng biệt
+    if (isPdfFile(file)) {
+      try {
+        const pages = await extractPdfPages(file);
+        if (pages.length === 0) {
+          safeToastError('Không tìm thấy trang nào trong file PDF');
+          return;
+        }
+
+        const page1 = pages[0];
+        const newPageItems: PageItem[] = pages.map((p, idx) => ({
+          fileIndex: idx,
+          pageIndex: p.pageIndex,
+          thumb: p.thumbUrl,
+          originalThumb: p.dataUrl,
+          baseThumb: p.thumbUrl,
+          name: p.name,
+          w: p.widthMm,
+          h: p.heightMm,
+          rotation: 0,
+        }));
+
+        // Gán trang 1 vào activeTab hiện tại, và các trang 2..N vào các Layer Tab mới
+        const newShapeTabs: ShapeTabItem[] = [];
+        const baseTab = activeTab || shapeTabs[0];
+        newShapeTabs.push({
+          ...baseTab,
+          name: baseTab?.name || 'A',
+          shape: 'rect',
+          itemW: page1.widthMm,
+          itemH: page1.heightMm,
+          sourceImage: newPageItems[0],
+        });
+
+        for (let pIdx = 1; pIdx < pages.length; pIdx++) {
+          const p = pages[pIdx];
+          const nextIdx = newShapeTabs.length;
+          const letter = String.fromCharCode(65 + (nextIdx % 26)) + (nextIdx >= 26 ? Math.floor(nextIdx / 26) : '');
+          const newId = `tab-pdf-${Date.now()}-${pIdx}-${Math.random().toString(36).substr(2, 3)}`;
+          const newColor = TAB_COLORS[nextIdx % TAB_COLORS.length];
+          newShapeTabs.push({
+            id: newId,
+            name: letter,
+            enabled: true,
+            shape: 'rect',
+            itemW: p.widthMm,
+            itemH: p.heightMm,
+            quantity: 10,
+            useTotalLimit: true,
+            cornerRadius: 0,
+            color: newColor,
+            autoRotateImage: true,
+            canRotate: true,
+            sourceImage: newPageItems[pIdx],
+            vectorMaskResult: null,
+            customSvgData: '',
+          });
+        }
+
+        if (newShapeTabs.length > 1) {
+          newShapeTabs.forEach(t => { t.useTotalLimit = true; });
+        }
+
+        setShapeTabs(newShapeTabs);
+        setAllPages(prev => [...newPageItems, ...prev]);
+        setConfig(prev => ({
+          ...prev,
+          itemW: page1.widthMm,
+          itemH: page1.heightMm,
+        }));
+        setEditingSourcePage(newPageItems[0]);
+        setIsCropColorModalOpen(true);
+        safeToastSuccess(`✓ Đã nạp ${pages.length} trang PDF thành ${pages.length} Layer!`);
+      } catch (err: any) {
+        console.error('Lỗi khi mở file PDF:', err);
+        safeToastError(`Lỗi đọc file PDF: ${err.message || 'File PDF không hợp lệ'}`);
+      } finally {
+        e.target.value = '';
+      }
+      return;
+    }
+
+    // Tải ảnh thông thường (PNG, JPG, WebP...)
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const dataUrl = ev.target?.result as string;
@@ -4392,7 +4477,7 @@ Chỉ trả về JSON, không giải thích thêm.`;
       <header className="bg-gradient-to-r from-violet-600 to-indigo-600 text-white px-4 py-3 flex items-center justify-between shadow-lg flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="bg-white/20 p-2 rounded-lg"><LayoutGrid size={22} /></div>
-          <div><h1 className="text-lg font-medium">Bình trang cao cấp</h1><p className="text-violet-200 text-xs">Công cụ xếp hình in ấn</p></div>
+          <div><h1 className="text-lg font-medium">Bế tem</h1><p className="text-violet-200 text-xs">Công cụ xếp hình in ấn</p></div>
         </div>
         <div className="flex items-center gap-3">
           {/* Workspace Management */}
@@ -4729,9 +4814,14 @@ Chỉ trả về JSON, không giải thích thêm.`;
 
                 {/* Nút 1: Ảnh nguồn (Bên trái, màu green, chiều cao 2 hàng) */}
                 <div className="relative group/srcbtn shrink-0 w-28">
-                  <button
-                    type="button"
-                    onClick={handleOpenSourceEditor}
+                  <div
+                    onClick={() => {
+                      if (activeTab.sourceImage?.thumb || (allPages.length > 0 && allPages[0]?.thumb)) {
+                        handleOpenSourceEditor();
+                      } else {
+                        sourceImageInputRef.current?.click();
+                      }
+                    }}
                     className={`w-28 h-full min-h-[62px] rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer border overflow-hidden relative select-none ${
                       (activeTab.sourceImage?.thumb || (allPages.length > 0 && allPages[0]?.thumb))
                         ? 'bg-slate-900 border-emerald-500 shadow-sm ring-2 ring-emerald-200'
@@ -4739,8 +4829,8 @@ Chỉ trả về JSON, không giải thích thêm.`;
                     }`}
                     title={
                       (activeTab.sourceImage?.thumb || (allPages.length > 0 && allPages[0]?.thumb))
-                        ? 'Ảnh nguồn: Bấm để Crop & Cân bằng màu sắc cho mẫu này'
-                        : 'Chọn ảnh nguồn để Crop & Cân bằng màu sắc cho mẫu này'
+                        ? 'Ảnh nguồn: Bấm để Sửa Crop/Màu hoặc Đổi file/PDF'
+                        : 'Chọn ảnh hoặc file PDF để nạp vào Layer'
                     }
                   >
                     {(activeTab.sourceImage?.thumb || (allPages.length > 0 && allPages[0]?.thumb)) ? (
@@ -4750,19 +4840,33 @@ Chỉ trả về JSON, không giải thích thêm.`;
                           alt="Nguồn"
                           className="w-full h-full object-cover"
                         />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/srcbtn:opacity-100 transition flex flex-col items-center justify-center text-white">
-                          <ImagePlus size={16} />
-                          <span className="text-[9px] font-bold mt-0.5">Sửa Crop/Màu</span>
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/srcbtn:opacity-100 transition flex flex-col items-center justify-center gap-1 p-1">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleOpenSourceEditor(); }}
+                            className="w-full py-0.5 px-1 bg-violet-600 hover:bg-violet-700 text-white rounded text-[9px] font-bold flex items-center justify-center gap-1 shadow-xs transition"
+                          >
+                            <ImagePlus size={11} />
+                            <span>Crop/Màu</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); sourceImageInputRef.current?.click(); }}
+                            className="w-full py-0.5 px-1 bg-slate-700 hover:bg-slate-600 text-white rounded text-[9px] font-bold flex items-center justify-center gap-1 shadow-xs transition"
+                          >
+                            <Upload size={11} />
+                            <span>Đổi PDF/Ảnh</span>
+                          </button>
                         </div>
                       </div>
                     ) : (
                       <>
                         <ImagePlus size={18} className="mb-0.5 text-emerald-600" />
-                        <span className="text-[11px] font-bold tracking-tight text-emerald-800">Ảnh nguồn</span>
-                        <span className="text-[8px] text-emerald-600/90 font-medium leading-none mt-0.5">Crop & Cân màu</span>
+                        <span className="text-[11px] font-bold tracking-tight text-emerald-800">Ảnh / PDF nguồn</span>
+                        <span className="text-[8px] text-emerald-600/90 font-medium leading-none mt-0.5">Mỗi trang 1 layer</span>
                       </>
                     )}
-                  </button>
+                  </div>
                 </div>
 
                 {/* Cụm 2: 6 Shapes (Hình dạng cơ bản, 2 hàng x 3 cột) */}

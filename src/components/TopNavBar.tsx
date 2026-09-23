@@ -189,7 +189,7 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
     },
     {
       id: "die-cutting",
-      name: "Thiết kế bao bì",
+      name: "Bế hộp",
       icon: Package,
       category: "Bao bì & Hộp",
       description: "Thiết kế khuôn bế hộp carton, gấp 3D & bình khuôn tự động",
@@ -217,7 +217,7 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
         },
         {
           id: "imposition-advanced",
-          name: "Bình trang cao cấp",
+          name: "Bế tem",
           icon: LayoutGrid,
           desc: "Bình layout offset tự động, xếp đa tầng & tối ưu khổ in",
         },

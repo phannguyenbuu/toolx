@@ -1,0 +1,95 @@
+import * as pdfjsLib from 'pdfjs-dist';
+import { createClientThumbnail } from './imageThumbnail';
+
+// Initialize pdf.js worker if not already configured
+if (typeof window !== 'undefined' && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+}
+
+export interface ExtractedPdfPage {
+  pageIndex: number; // 1, 2, 3...
+  totalPages: number;
+  dataUrl: string; // High-resolution data URL (PNG)
+  thumbUrl: string; // Lightweight preview thumbnail (~20KB)
+  widthMm: number;
+  heightMm: number;
+  name: string;
+}
+
+export function isPdfFile(file: File): boolean {
+  if (!file) return false;
+  return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+}
+
+/**
+ * Extract each page of a PDF file into high-res images and thumbnails.
+ * Useful for mapping each PDF page to an individual imposition/design Layer.
+ */
+export async function extractPdfPages(
+  fileOrBuffer: File | Blob | ArrayBuffer,
+  fileName?: string
+): Promise<ExtractedPdfPage[]> {
+  try {
+    const arrayBuffer = fileOrBuffer instanceof ArrayBuffer
+      ? fileOrBuffer
+      : await fileOrBuffer.arrayBuffer();
+
+    const baseName = fileName
+      ? fileName.replace(/\.pdf$/i, '')
+      : (fileOrBuffer instanceof File ? fileOrBuffer.name.replace(/\.pdf$/i, '') : 'Tài liệu PDF');
+
+    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    const pdf = await loadingTask.promise;
+    const numPages = pdf.numPages;
+
+    const extracted: ExtractedPdfPage[] = [];
+
+    for (let p = 1; p <= numPages; p++) {
+      const page = await pdf.getPage(p);
+
+      // Scale 1.0 base viewport to get point dimensions (72 pt = 1 inch = 25.4 mm)
+      const baseVp = page.getViewport({ scale: 1.0 });
+      const widthMm = Math.max(1, Math.round((baseVp.width * 25.4 / 72) * 10) / 10);
+      const heightMm = Math.max(1, Math.round((baseVp.height * 25.4 / 72) * 10) / 10);
+
+      // Render at high resolution (target max ~2000px dimension for sharp print prepress)
+      const maxPt = Math.max(baseVp.width, baseVp.height);
+      const targetScale = Math.min(2.5, Math.max(1.5, 1800 / Math.max(1, maxPt)));
+      const renderVp = page.getViewport({ scale: targetScale });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(renderVp.width);
+      canvas.height = Math.round(renderVp.height);
+      const ctx = canvas.getContext('2d');
+
+      if (ctx) {
+        // ALWAYS fill crisp white background so transparent PDF pages never turn black!
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        await page.render({
+          canvasContext: ctx,
+          viewport: renderVp,
+        }).promise;
+
+        const dataUrl = canvas.toDataURL('image/png');
+        const thumbUrl = await createClientThumbnail(canvas, 320, 0.8) || dataUrl;
+
+        extracted.push({
+          pageIndex: p,
+          totalPages: numPages,
+          dataUrl,
+          thumbUrl,
+          widthMm,
+          heightMm,
+          name: numPages > 1 ? `${baseName} - Trang ${p}` : baseName,
+        });
+      }
+    }
+
+    return extracted;
+  } catch (err) {
+    console.error('Lỗi khi trích xuất các trang PDF:', err);
+    throw err;
+  }
+}

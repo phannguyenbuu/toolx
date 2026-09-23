@@ -3,7 +3,7 @@ import {
   X, Check, RotateCw, RotateCcw, FlipHorizontal, FlipVertical,
   ZoomIn, ZoomOut, Move, Eye, EyeOff, Upload, Sparkles,
   RefreshCw, Scissors, Grid, Layers, Plus, Edit3,
-  ChevronDown, Zap, Loader2, Trash2
+  ChevronDown, Zap, Loader2, Trash2, Maximize2
 } from 'lucide-react';
 import {
   ColorAdjustSettings,
@@ -14,6 +14,7 @@ import {
   isDefaultColorSettings
 } from '../utils/colorAdjustment';
 import { ColorCurveEditor, CurveChannelType } from './ColorCurveEditor';
+import { extractPdfPages, isPdfFile } from '../utils/pdfPageExtractor';
 
 export interface CropTransform {
   zoom: number; // 0.2 .. 5.0
@@ -614,10 +615,12 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
   const [showOriginal, setShowOriginal] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
 
-  // Bleed Studio state (Off / Offset / AI)
-  const [bleedMode, setBleedMode] = useState<'off' | 'offset' | 'ai'>('ai');
+  // Bleed Studio state (Off / Offset / AI / Color)
+  const [bleedMode, setBleedMode] = useState<'off' | 'offset' | 'ai' | 'color'>('ai');
   const [bleedPercent, setBleedPercent] = useState<number>(10);
+  const [bleedBgColor, setBleedBgColor] = useState<string>('#ffffff');
   const [isProcessingBleed, setIsProcessingBleed] = useState(false);
+  const [isExtractingPdf, setIsExtractingPdf] = useState(false);
   const [originalBackupSrc, setOriginalBackupSrc] = useState<string | null>(null);
   const [originalBleedBounds, setOriginalBleedBounds] = useState<{
     leftRatio: number;
@@ -825,6 +828,10 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
       const offCtx = offCanvas.getContext('2d');
       if (!offCtx) return;
 
+      // Fill background with chosen bleed color first
+      offCtx.fillStyle = bleedBgColor || '#ffffff';
+      offCtx.fillRect(0, 0, newW, newH);
+
       // 1. Draw central original image
       offCtx.drawImage(imgElement, padW, padH, origW, origH);
 
@@ -846,7 +853,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
       offCtx.drawImage(imgElement, 0, origH - 1, 1, 1, 0, padH + origH, padW, padH);
       offCtx.drawImage(imgElement, origW - 1, origH - 1, 1, 1, padW + origW, padH + origH, padW, padH);
 
-      const resultDataUrl = offCanvas.toDataURL('image/jpeg', 0.95);
+      const resultDataUrl = offCanvas.toDataURL('image/png');
       setOriginalBleedBounds({
         leftRatio: padW / newW,
         rightRatio: padW / newW,
@@ -854,8 +861,53 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
         bottomRatio: padH / newH,
       });
       setCurrentImageSrc(resultDataUrl);
+      setBleedStatusMsg(`✓ Đã tạo Offset tràn lề +${effectiveBleedMm}mm`);
+      setTimeout(() => setBleedStatusMsg(null), 3000);
     } catch (err: any) {
       console.error('Lỗi khi tạo Offset:', err);
+    } finally {
+      setIsProcessingBleed(false);
+    }
+  };
+
+  // Create solid color bleed expansion
+  const applyColorBleed = () => {
+    if (!imgElement || !imgLoaded || !currentImageSrc) return;
+    if (!originalBackupSrc) setOriginalBackupSrc(currentImageSrc);
+    const origW = originalDimensions?.w || imgElement.naturalWidth || imgElement.width;
+    const origH = originalDimensions?.h || imgElement.naturalHeight || imgElement.height;
+    if (!originalDimensions) setOriginalDimensions({ w: origW, h: origH });
+    setIsProcessingBleed(true);
+
+    try {
+      const halfRatio = (bleedPercent / 100) / 2.0;
+      const padW = Math.max(2, Math.round(origW * halfRatio));
+      const padH = Math.max(2, Math.round(origH * halfRatio));
+      const newW = origW + padW * 2;
+      const newH = origH + padH * 2;
+
+      const offCanvas = document.createElement('canvas');
+      offCanvas.width = newW;
+      offCanvas.height = newH;
+      const offCtx = offCanvas.getContext('2d');
+      if (!offCtx) return;
+
+      offCtx.fillStyle = bleedBgColor || '#ffffff';
+      offCtx.fillRect(0, 0, newW, newH);
+      offCtx.drawImage(imgElement, padW, padH, origW, origH);
+
+      const resultDataUrl = offCanvas.toDataURL('image/png');
+      setOriginalBleedBounds({
+        leftRatio: padW / newW,
+        rightRatio: padW / newW,
+        topRatio: padH / newH,
+        bottomRatio: padH / newH,
+      });
+      setCurrentImageSrc(resultDataUrl);
+      setBleedStatusMsg(`✓ Đã tạo bù xén nền màu (${bleedBgColor.toUpperCase()}) +${effectiveBleedMm}mm`);
+      setTimeout(() => setBleedStatusMsg(null), 3000);
+    } catch (err) {
+      console.error('Lỗi khi tạo Color Bleed:', err);
     } finally {
       setIsProcessingBleed(false);
     }
@@ -982,10 +1034,128 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     setCrop({ ...DEFAULT_CROP_TRANSFORM });
   };
 
-  // Upload new image from local
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Tự động khớp kích thước tem theo tỷ lệ khung hình thật của ảnh gốc
+  const handleFitImageAspect = () => {
+    if (!imgElement || !imgLoaded) return;
+    const isRotated90 = (crop.rotation % 180 !== 0);
+    const naturalW = isRotated90 ? (imgElement.naturalHeight || imgElement.height) : (imgElement.naturalWidth || imgElement.width);
+    const naturalH = isRotated90 ? (imgElement.naturalWidth || imgElement.width) : (imgElement.naturalHeight || imgElement.height);
+    if (!naturalW || !naturalH) return;
+
+    const ratio = naturalW / naturalH;
+    // Giữ nguyên chiều rộng localItemW, tự tính lại chiều cao localItemH
+    const newH = Math.max(1, Math.round((localItemW / ratio) * 10) / 10);
+    setLocalItemH(newH);
+    setCrop(c => ({ ...c, aspectMode: 'item', panX: 0, panY: 0, zoom: 1 }));
+    setTabs(prev => prev.map(t => t.id === currentTabId ? { ...t, itemH: newH } : t));
+    setBleedStatusMsg(`✓ Đã khớp tỷ lệ tem: ${localItemW} × ${newH} mm (tỷ lệ ${(Math.round(ratio * 100) / 100)})`);
+    setTimeout(() => setBleedStatusMsg(null), 3000);
+  };
+
+  // Upload new image or PDF from local
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Handle PDF upload: extract all pages and create 1 Layer per page
+    if (isPdfFile(file)) {
+      setIsExtractingPdf(true);
+      setBleedStatusMsg('Đang giải nén các trang PDF...');
+      try {
+        const pages = await extractPdfPages(file);
+        if (pages.length === 0) {
+          throw new Error('Không có trang nào trong file PDF');
+        }
+
+        // Page 1: Apply to current active tab
+        const page1 = pages[0];
+        setCurrentImageSrc(page1.dataUrl);
+        setCurrentFileName(page1.name);
+        setLocalItemW(page1.widthMm);
+        setLocalItemH(page1.heightMm);
+        setOriginalBackupSrc(null);
+        setOriginalBleedBounds(null);
+        setOriginalDimensions({ w: page1.widthMm, h: page1.heightMm });
+        handleResetCrop();
+
+        // If multi-page PDF, create one Layer tab per additional page!
+        if (pages.length > 1) {
+          const newTabs: CropModalLayerTab[] = [...tabs];
+          // Update current tab
+          const curIdx = newTabs.findIndex(t => t.id === currentTabId);
+          if (curIdx >= 0) {
+            newTabs[curIdx] = {
+              ...newTabs[curIdx],
+              name: newTabs[curIdx].name || 'A',
+              itemW: page1.widthMm,
+              itemH: page1.heightMm,
+              sourceImage: {
+                fileIndex: 0,
+                pageIndex: 1,
+                thumb: page1.thumbUrl,
+                originalThumb: page1.dataUrl,
+                name: page1.name,
+                w: page1.widthMm,
+                h: page1.heightMm,
+                rotation: 0,
+                cropSettings: { ...DEFAULT_CROP_TRANSFORM },
+                colorSettings: { ...DEFAULT_COLOR_SETTINGS },
+              }
+            };
+          }
+
+          // Append pages 2..N
+          for (let pIdx = 1; pIdx < pages.length; pIdx++) {
+            const p = pages[pIdx];
+            const nextIdx = newTabs.length;
+            const letter = String.fromCharCode(65 + (nextIdx % 26)) + (nextIdx >= 26 ? Math.floor(nextIdx / 26) : '');
+            const newId = `tab-pdf-${Date.now()}-${pIdx}-${Math.random().toString(36).substr(2, 3)}`;
+            const newColor = TAB_COLORS[nextIdx % TAB_COLORS.length];
+            newTabs.push({
+              id: newId,
+              name: letter,
+              enabled: true,
+              shape: 'rect',
+              itemW: p.widthMm,
+              itemH: p.heightMm,
+              quantity: 10,
+              useTotalLimit: true,
+              cornerRadius: 0,
+              color: newColor,
+              autoRotateImage: true,
+              canRotate: true,
+              sourceImage: {
+                fileIndex: pIdx,
+                pageIndex: p.pageIndex,
+                thumb: p.thumbUrl,
+                originalThumb: p.dataUrl,
+                name: p.name,
+                w: p.widthMm,
+                h: p.heightMm,
+                rotation: 0,
+                cropSettings: { ...DEFAULT_CROP_TRANSFORM },
+                colorSettings: { ...DEFAULT_COLOR_SETTINGS },
+              }
+            });
+          }
+          setTabs(newTabs);
+          setBleedStatusMsg(`✓ Đã nạp ${pages.length} trang PDF thành ${pages.length} Layer!`);
+          setTimeout(() => setBleedStatusMsg(null), 4000);
+        } else {
+          setBleedStatusMsg(`✓ Đã nạp trang PDF thành công (${page1.widthMm} × ${page1.heightMm} mm)`);
+          setTimeout(() => setBleedStatusMsg(null), 3000);
+        }
+      } catch (err: any) {
+        console.error('Lỗi khi mở file PDF:', err);
+        alert(`Lỗi đọc file PDF: ${err.message || 'File PDF không hợp lệ'}`);
+      } finally {
+        setIsExtractingPdf(false);
+      }
+      e.target.value = '';
+      return;
+    }
+
+    // Normal image upload (PNG, JPG, WebP, etc.)
     const reader = new FileReader();
     reader.onload = ev => {
       const result = ev.target?.result as string;
@@ -1054,6 +1224,9 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     canvas.height = vh;
 
     ctx.clearRect(0, 0, vw, vh);
+    // Fill crop box background with chosen bleedBgColor (clean white by default)
+    ctx.fillStyle = bleedBgColor || '#ffffff';
+    ctx.fillRect(cropBox.x, cropBox.y, cropBox.w, cropBox.h);
     ctx.save();
 
     // Center of crop box in the viewport
@@ -1084,7 +1257,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
         console.error('Error applying color adjustment:', err);
       }
     }
-  }, [isOpen, imgElement, imgLoaded, cropBox, crop, colorSettings, showOriginal, viewportSize]);
+  }, [isOpen, imgElement, imgLoaded, cropBox, crop, colorSettings, showOriginal, viewportSize, bleedBgColor]);
 
   // Export high-resolution canvas dataUrl
   const renderCurrentExportDataUrl = useCallback((): string | null => {
@@ -1098,6 +1271,10 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     offCanvas.height = exportH;
     const offCtx = offCanvas.getContext('2d');
     if (!offCtx) return currentImageSrc;
+
+    // Fill background color first (prevents letterbox transparent turning black!)
+    offCtx.fillStyle = bleedBgColor || '#ffffff';
+    offCtx.fillRect(0, 0, exportW, exportH);
 
     offCtx.save();
     offCtx.translate(exportW / 2 + crop.panX * exportScale, exportH / 2 + crop.panY * exportScale);
@@ -1121,7 +1298,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
       }
     }
     return offCanvas.toDataURL('image/png', 0.95);
-  }, [imgElement, imgLoaded, cropBox.w, cropBox.h, crop, colorSettings, currentImageSrc]);
+  }, [imgElement, imgLoaded, cropBox.w, cropBox.h, crop, colorSettings, currentImageSrc, bleedBgColor]);
 
   // Generate lightweight thumbnail (max 320px, JPEG 0.8, ~20KB) for fast UI/DOM rendering
   const renderPreviewThumbnail = useCallback((maxDim: number = 320): string | null => {
@@ -1137,6 +1314,10 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     offCanvas.height = exportH;
     const offCtx = offCanvas.getContext('2d');
     if (!offCtx) return currentImageSrc;
+
+    // Fill background color first (prevents JPEG encoding transparent as black!)
+    offCtx.fillStyle = bleedBgColor || '#ffffff';
+    offCtx.fillRect(0, 0, exportW, exportH);
 
     offCtx.save();
     offCtx.translate(exportW / 2 + crop.panX * scale, exportH / 2 + crop.panY * scale);
@@ -1160,7 +1341,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
       }
     }
     return offCanvas.toDataURL('image/jpeg', 0.8);
-  }, [imgElement, imgLoaded, cropBox.w, cropBox.h, crop, colorSettings, currentImageSrc]);
+  }, [imgElement, imgLoaded, cropBox.w, cropBox.h, crop, colorSettings, currentImageSrc, bleedBgColor]);
 
   // --- LAYER MANAGEMENT HANDLERS (CLONED FROM CANVAS) ---
   const handleSwitchTab = (targetTabId: string) => {
@@ -1621,6 +1802,17 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                     {mode === 'item' ? 'Theo tem' : mode === '1:1' ? '1:1 Vuông' : mode}
                   </button>
                 ))}
+
+                <button
+                  type="button"
+                  onClick={handleFitImageAspect}
+                  disabled={!imgLoaded}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-medium transition cursor-pointer border bg-indigo-950/80 hover:bg-indigo-900 border-indigo-700/80 text-indigo-200 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
+                  title="Tự động chỉnh chiều cao tem khớp đúng tỷ lệ ảnh gốc (không bị méo hay thừa viền)"
+                >
+                  <Maximize2 size={11} className="text-indigo-400" />
+                  <span>Khớp tỷ lệ ảnh</span>
+                </button>
               </div>
 
               {/* Transform controls: Rotate, Flip, Reset */}
@@ -2331,10 +2523,10 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
               {colorTab === 'bleed' && (
                 <div className="space-y-3">
                   {/* Mode Radio Buttons */}
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-4 gap-1.5">
                     {/* Mode OFF */}
                     <label
-                      className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl border cursor-pointer transition select-none ${
+                      className={`flex items-center justify-center gap-1 py-2 px-1.5 rounded-xl border cursor-pointer transition select-none ${
                         bleedMode === 'off'
                           ? 'bg-violet-50/80 border-violet-500 text-violet-900 shadow-xs font-bold'
                           : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
@@ -2345,14 +2537,32 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                         name="bleedMode"
                         checked={bleedMode === 'off'}
                         onChange={() => setBleedMode('off')}
-                        className="text-violet-600 focus:ring-violet-500 cursor-pointer"
+                        className="text-violet-600 focus:ring-violet-500 cursor-pointer sr-only"
                       />
-                      <span className="font-bold text-xs">Off</span>
+                      <span className="font-bold text-[11px]">Tắt</span>
+                    </label>
+
+                    {/* Mode COLOR */}
+                    <label
+                      className={`flex items-center justify-center gap-1 py-2 px-1.5 rounded-xl border cursor-pointer transition select-none ${
+                        bleedMode === 'color'
+                          ? 'bg-violet-50/80 border-violet-500 text-violet-900 shadow-xs font-bold'
+                          : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="bleedMode"
+                        checked={bleedMode === 'color'}
+                        onChange={() => setBleedMode('color')}
+                        className="text-violet-600 focus:ring-violet-500 cursor-pointer sr-only"
+                      />
+                      <span className="font-bold text-[11px]">Màu nền</span>
                     </label>
 
                     {/* Mode OFFSET */}
                     <label
-                      className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl border cursor-pointer transition select-none ${
+                      className={`flex items-center justify-center gap-1 py-2 px-1.5 rounded-xl border cursor-pointer transition select-none ${
                         bleedMode === 'offset'
                           ? 'bg-violet-50/80 border-violet-500 text-violet-900 shadow-xs font-bold'
                           : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
@@ -2363,14 +2573,14 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                         name="bleedMode"
                         checked={bleedMode === 'offset'}
                         onChange={() => setBleedMode('offset')}
-                        className="text-violet-600 focus:ring-violet-500 cursor-pointer"
+                        className="text-violet-600 focus:ring-violet-500 cursor-pointer sr-only"
                       />
-                      <span className="font-bold text-xs">Offset</span>
+                      <span className="font-bold text-[11px]">Offset viền</span>
                     </label>
 
                     {/* Mode AI */}
                     <label
-                      className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl border cursor-pointer transition select-none ${
+                      className={`flex items-center justify-center gap-1 py-2 px-1.5 rounded-xl border cursor-pointer transition select-none ${
                         bleedMode === 'ai'
                           ? 'bg-violet-50/80 border-violet-500 text-violet-900 shadow-xs font-bold'
                           : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
@@ -2381,16 +2591,17 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                         name="bleedMode"
                         checked={bleedMode === 'ai'}
                         onChange={() => setBleedMode('ai')}
-                        className="text-violet-600 focus:ring-violet-500 cursor-pointer"
+                        className="text-violet-600 focus:ring-violet-500 cursor-pointer sr-only"
                       />
-                      <span className="font-bold text-xs">AI</span>
+                      <span className="font-bold text-[11px]">AI LaMa</span>
                     </label>
                   </div>
 
-                  {/* Slider: Tỉ lệ % từ 1 đến 30% */}
+                  {/* Slider & Background color controls */}
                   {bleedMode !== 'off' && (
-                    <div className="space-y-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
-                      <div className="flex items-center justify-end text-xs">
+                    <div className="space-y-2.5 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[11px] font-semibold text-slate-700">Độ rộng bù xén (Bleed):</span>
                         <span className="px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 font-mono font-bold text-xs">
                           {bleedPercent}% (~{Math.round((localItemW * (bleedPercent / 100) / 2) * 10) / 10} mm mỗi cạnh)
                         </span>
@@ -2410,8 +2621,47 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                         <span>30% (Rộng)</span>
                       </div>
 
+                      {/* Chọn màu nền bù xén (Outpaint Background Color) */}
+                      <div className="space-y-1.5 pt-1.5 border-t border-slate-200/70">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-semibold text-slate-700">Màu nền bù xén:</span>
+                          <span className="text-[10px] font-mono text-slate-500">{bleedBgColor.toUpperCase()}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {[
+                            { label: 'Trắng', val: '#ffffff', bg: '#ffffff', border: '#cbd5e1' },
+                            { label: 'Đen', val: '#000000', bg: '#000000', border: '#475569' },
+                            { label: 'Giấy kraft', val: '#f5efe6', bg: '#f5efe6', border: '#d6c7b2' },
+                          ].map(c => (
+                            <button
+                              key={c.val}
+                              type="button"
+                              onClick={() => setBleedBgColor(c.val)}
+                              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border transition cursor-pointer ${
+                                bleedBgColor.toLowerCase() === c.val.toLowerCase()
+                                  ? 'border-violet-500 bg-violet-50 text-violet-900 ring-1 ring-violet-300 font-bold'
+                                  : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                              }`}
+                            >
+                              <span className="w-3 h-3 rounded-full border shadow-2xs inline-block" style={{ backgroundColor: c.bg, borderColor: c.border }} />
+                              <span>{c.label}</span>
+                            </button>
+                          ))}
+                          <label className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer shadow-2xs">
+                            <span className="w-3 h-3 rounded-full border border-slate-300 shadow-2xs inline-block" style={{ backgroundColor: bleedBgColor }} />
+                            <span>Tùy chọn</span>
+                            <input
+                              type="color"
+                              value={bleedBgColor}
+                              onChange={e => setBleedBgColor(e.target.value)}
+                              className="sr-only"
+                            />
+                          </label>
+                        </div>
+                      </div>
+
                       {/* Tùy chọn xử lý khoảng cách Gap & Kích thước tem khi bình trang */}
-                      <div className="space-y-1.5 pt-1 border-t border-slate-200/70">
+                      <div className="space-y-1.5 pt-1.5 border-t border-slate-200/70">
                         <div className="text-[11px] font-semibold text-slate-700">Khi bình trang:</div>
                         <div className="space-y-1.5">
                           {/* Option 1: Tự động cộng bleed size vào Gap (Mặc định) */}
@@ -2475,9 +2725,11 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                       <button
                         type="button"
                         disabled={isProcessingBleed}
-                        onClick={bleedMode === 'offset' ? applyOffsetBleed : applyAIBleed}
+                        onClick={bleedMode === 'color' ? applyColorBleed : (bleedMode === 'offset' ? applyOffsetBleed : applyAIBleed)}
                         className={`w-full py-2.5 px-4 rounded-xl ${
-                          bleedMode === 'offset'
+                          bleedMode === 'color'
+                            ? 'bg-emerald-600 hover:bg-emerald-700'
+                            : bleedMode === 'offset'
                             ? 'bg-violet-600 hover:bg-violet-700'
                             : 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700'
                         } disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition cursor-pointer`}
@@ -2489,8 +2741,8 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                           </>
                         ) : (
                           <>
-                            {bleedMode === 'offset' ? <Zap size={14} /> : <Sparkles size={14} />}
-                            <span>Outpainting</span>
+                            {bleedMode === 'color' ? <Sparkles size={14} /> : (bleedMode === 'offset' ? <Zap size={14} /> : <Sparkles size={14} />)}
+                            <span>{bleedMode === 'color' ? 'Tạo bù xén màu nền' : (bleedMode === 'offset' ? 'Tạo bù xén Offset viền' : 'Tạo bù xén AI Outpaint')}</span>
                           </>
                         )}
                       </button>
