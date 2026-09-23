@@ -2860,11 +2860,9 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                       <button
                         type="button"
                         disabled={isProcessingBleed}
-                        onClick={bleedMode === 'color' ? applyColorBleed : (bleedMode === 'offset' ? applyOffsetBleed : applyAIBleed)}
+                        onClick={bleedMode === 'offset' ? applyOffsetBleed : applyAIBleed}
                         className={`w-full py-2.5 px-4 rounded-xl ${
-                          bleedMode === 'color'
-                            ? 'bg-emerald-600 hover:bg-emerald-700'
-                            : bleedMode === 'offset'
+                          bleedMode === 'offset'
                             ? 'bg-violet-600 hover:bg-violet-700'
                             : 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700'
                         } disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition cursor-pointer`}
@@ -2876,8 +2874,8 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                           </>
                         ) : (
                           <>
-                            {bleedMode === 'color' ? <Sparkles size={14} /> : (bleedMode === 'offset' ? <Zap size={14} /> : <Sparkles size={14} />)}
-                            <span>{bleedMode === 'color' ? 'Tạo bù xén màu nền' : (bleedMode === 'offset' ? 'Tạo bù xén Offset viền' : 'Tạo bù xén AI Outpaint')}</span>
+                            {bleedMode === 'offset' ? <Zap size={14} /> : <Sparkles size={14} />}
+                            <span>{bleedMode === 'offset' ? 'Tạo bù xén Offset' : 'Tạo bù xén AI'}</span>
                           </>
                         )}
                       </button>
