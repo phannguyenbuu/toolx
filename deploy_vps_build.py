@@ -81,7 +81,7 @@ def deploy_to_vps():
         err = stderr.read().decode('utf-8')
         
         if "DEPLOY_SUCCESS" in out:
-            print("🎉 TRIỂN KHAI THÀNH CÔNG LÊN https://admin.toolxprint.com/!")
+            print("🎉 TRIỂN KHAI THÀNH CÔNG LÊN https://toolxprint.com/ và https://admin.toolxprint.com/!")
         else:
             print("--- STDOUT ---", out)
             print("--- STDERR ---", err)
