@@ -22,6 +22,7 @@ import { agentJobService } from '../services/agentJobService';
 import * as api from '../services/api';
 import * as pdfjsLib from 'pdfjs-dist';
 import { extractPdfPages, isPdfFile } from '../utils/pdfPageExtractor';
+import { calculateStandardImageDimensionsMm } from '../utils/imageDimensions';
 
 // Set worker path for pdf.js
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
@@ -997,23 +998,46 @@ export const ImpositionAdvancedPage: React.FC<ImpositionPageProps> = ({ onClose 
       const dataUrl = ev.target?.result as string;
       if (!dataUrl) return;
       const lightweightThumb = await createClientThumbnail(dataUrl, 320, 0.75);
-      const newPageItem: PageItem = {
-        fileIndex: allPages.length,
-        pageIndex: 1,
-        thumb: lightweightThumb || dataUrl,
-        originalThumb: dataUrl,
-        baseThumb: lightweightThumb || dataUrl,
-        name: file.name,
-        w: config.itemW,
-        h: config.shape === 'circle' ? config.itemW : config.itemH,
-        rotation: 0
+
+      // Nhận diện kích thước chuẩn in ấn của ảnh (DPI, Aspect Snap) & đặt làm mặc định
+      const img = new Image();
+      img.onload = async () => {
+        const nw = img.naturalWidth || img.width;
+        const nh = img.naturalHeight || img.height;
+        const std = await calculateStandardImageDimensionsMm(nw, nh, file);
+        const finalW = std.w;
+        const finalH = config.shape === 'circle' ? std.w : std.h;
+
+        const newPageItem: PageItem = {
+          fileIndex: allPages.length,
+          pageIndex: 1,
+          thumb: lightweightThumb || dataUrl,
+          originalThumb: dataUrl,
+          baseThumb: lightweightThumb || dataUrl,
+          name: file.name,
+          w: finalW,
+          h: finalH,
+          rotation: 0
+        };
+
+        setConfig(c => ({
+          ...c,
+          itemW: finalW,
+          itemH: c.shape === 'circle' ? finalW : finalH,
+        }));
+
+        updateActiveTabProp({
+          sourceImage: newPageItem,
+          itemW: finalW,
+          itemH: activeTab.shape === 'circle' ? finalW : finalH,
+        });
+
+        setAllPages(prev => (prev.length === 0 ? [newPageItem] : [newPageItem, ...prev]));
+        setEditingSourcePage(newPageItem);
+        setIsCropColorModalOpen(true);
+        safeToastSuccess(`✓ Đã nạp ảnh & đặt kích thước chuẩn: ${finalW} × ${finalH} mm`);
       };
-      updateActiveTabProp({
-        sourceImage: newPageItem,
-      });
-      setAllPages(prev => (prev.length === 0 ? [newPageItem] : [newPageItem, ...prev]));
-      setEditingSourcePage(newPageItem);
-      setIsCropColorModalOpen(true);
+      img.src = dataUrl;
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -5065,6 +5089,34 @@ Chỉ trả về JSON, không giải thích thêm.`;
                   </div>
                 )}
               </div>
+
+              {/* Pill khôi phục kích thước chuẩn ảnh gốc nếu đã bị sửa đổi */}
+              {activeTab.sourceImage && (activeTab.sourceImage.w || 0) > 0 && (activeTab.sourceImage.h || 0) > 0 && (
+                (config.itemW !== activeTab.sourceImage.w || (config.shape !== 'circle' && config.itemH !== activeTab.sourceImage.h)) ? (
+                  <div className="flex items-center justify-between px-2.5 py-1 mb-2 bg-amber-50/90 border border-amber-200/90 rounded-xl text-[11px] text-amber-800 animate-fadeIn">
+                    <span className="flex items-center gap-1.5 truncate">
+                      <Sparkles size={12} className="text-amber-600 shrink-0" />
+                      <span className="truncate">
+                        Chuẩn ảnh: <strong className="font-mono">{activeTab.sourceImage.w} × {config.shape === 'circle' ? activeTab.sourceImage.w : activeTab.sourceImage.h} mm</strong>
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const targetW = activeTab.sourceImage!.w;
+                        const targetH = config.shape === 'circle' ? targetW : activeTab.sourceImage!.h;
+                        setConfig(c => ({ ...c, itemW: targetW, itemH: targetH }));
+                        updateActiveTabProp({ itemW: targetW, itemH: targetH });
+                        safeToastSuccess(`Đã đặt lại về kích thước chuẩn ảnh: ${targetW} × ${targetH} mm`);
+                      }}
+                      className="px-2 py-0.5 text-[10px] font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-md cursor-pointer transition shadow-2xs shrink-0 ml-1"
+                      title="Bấm để khôi phục kích thước chuẩn ảnh gốc ban đầu"
+                    >
+                      Khôi phục chuẩn
+                    </button>
+                  </div>
+                ) : null
+              )}
 
               {/* Input Row 2: Khoảng cách (Gap), Bù cắt (Bleed), Bo góc (Radius), và nút Trang cuối nếu có dư */}
               <div

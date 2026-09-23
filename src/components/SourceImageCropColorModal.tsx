@@ -15,6 +15,7 @@ import {
 } from '../utils/colorAdjustment';
 import { ColorCurveEditor, CurveChannelType } from './ColorCurveEditor';
 import { extractPdfPages, isPdfFile } from '../utils/pdfPageExtractor';
+import { calculateStandardImageDimensionsMm } from '../utils/imageDimensions';
 
 export interface CropTransform {
   zoom: number; // 0.2 .. 5.0
@@ -206,6 +207,7 @@ interface DimDropdownComboboxProps {
   h: number;
   onChange: (newW: number, newH: number) => void;
   className?: string;
+  imageStandardDim?: { w: number; h: number } | null;
 }
 
 const DimDropdownCombobox: React.FC<DimDropdownComboboxProps> = ({
@@ -214,11 +216,17 @@ const DimDropdownCombobox: React.FC<DimDropdownComboboxProps> = ({
   h,
   onChange,
   className = '',
+  imageStandardDim,
 }) => {
   const isCircle = shape === 'circle';
   const formatStr = useCallback((width: number, height: number, circle: boolean) => {
     return circle ? `${width}` : `${width}x${height}`;
   }, []);
+
+  const stdStr = useMemo(() => {
+    if (!imageStandardDim || !imageStandardDim.w || !imageStandardDim.h) return null;
+    return formatStr(imageStandardDim.w, isCircle ? imageStandardDim.w : imageStandardDim.h, isCircle);
+  }, [imageStandardDim, isCircle, formatStr]);
 
   const [inputVal, setInputVal] = useState<string>(() => formatStr(w, h, isCircle));
   const [isOpen, setIsOpen] = useState(false);
@@ -226,8 +234,9 @@ const DimDropdownCombobox: React.FC<DimDropdownComboboxProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const isFocusedRef = useRef(false);
 
-  // Load suggestions from localStorage
+  // Load suggestions from localStorage & prioritize image standard size
   const loadSuggestions = useCallback(() => {
+    let baseList: string[] = [];
     try {
       const raw = localStorage.getItem(STORAGE_KEY_SUGGESTIONS);
       if (raw) {
@@ -235,18 +244,24 @@ const DimDropdownCombobox: React.FC<DimDropdownComboboxProps> = ({
         if (Array.isArray(parsed) && parsed.length > 0) {
           if (isCircle) {
             const circleItems = parsed.filter(s => !s.includes('x') && !s.includes('*') && !s.includes(' '));
-            setSuggestions(Array.from(new Set([...circleItems, ...DEFAULT_CIRCLE_SUGGESTIONS])));
-            return;
+            baseList = Array.from(new Set([...circleItems, ...DEFAULT_CIRCLE_SUGGESTIONS]));
           } else {
             const rectItems = parsed.filter(s => s.includes('x') || s.includes('*') || s.includes(' '));
-            setSuggestions(Array.from(new Set([...rectItems, ...DEFAULT_RECT_SUGGESTIONS])));
-            return;
+            baseList = Array.from(new Set([...rectItems, ...DEFAULT_RECT_SUGGESTIONS]));
           }
         }
       }
     } catch {}
-    setSuggestions(isCircle ? DEFAULT_CIRCLE_SUGGESTIONS : DEFAULT_RECT_SUGGESTIONS);
-  }, [isCircle]);
+    if (baseList.length === 0) {
+      baseList = isCircle ? DEFAULT_CIRCLE_SUGGESTIONS : DEFAULT_RECT_SUGGESTIONS;
+    }
+
+    if (stdStr) {
+      setSuggestions([stdStr, ...baseList.filter(s => s !== stdStr)]);
+    } else {
+      setSuggestions(baseList);
+    }
+  }, [isCircle, stdStr]);
 
   useEffect(() => {
     loadSuggestions();
@@ -348,7 +363,7 @@ const DimDropdownCombobox: React.FC<DimDropdownComboboxProps> = ({
           type="button"
           onClick={() => setIsOpen(!isOpen)}
           className="p-0.5 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition cursor-pointer"
-          title="Chọn kích thước từ gợi ý / lịch sử"
+          title="Chọn kích thước từ gợi ý / chuẩn ảnh"
         >
           <ChevronDown size={12} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
         </button>
@@ -356,13 +371,46 @@ const DimDropdownCombobox: React.FC<DimDropdownComboboxProps> = ({
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-1.5 w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 max-h-56 overflow-y-auto backdrop-blur-md">
+        <div className="absolute right-0 top-full mt-1.5 w-52 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 max-h-64 overflow-y-auto backdrop-blur-md">
+          {/* Mục ưu tiên hàng đầu: Kích thước chuẩn của ảnh (Mặc định) */}
+          {stdStr && (
+            <div className="px-2 pt-1 pb-1.5 border-b border-violet-100 bg-violet-50/70 mb-1">
+              <div className="text-[9px] uppercase tracking-wider font-bold text-violet-700 flex items-center justify-between mb-1">
+                <span className="flex items-center gap-1">
+                  <Sparkles size={11} className="text-violet-600" />
+                  <span>Kích thước chuẩn ảnh</span>
+                </span>
+                <span className="text-[8px] px-1.5 py-0.2 rounded bg-violet-200 text-violet-800 font-bold">Mặc định</span>
+              </div>
+              <div
+                onClick={() => handleSelectSuggestion(stdStr)}
+                className={`flex items-center justify-between px-2 py-1.5 rounded-lg text-xs cursor-pointer select-none transition ${
+                  (currentFormatted === stdStr || inputVal === stdStr)
+                    ? 'bg-violet-600 text-white font-bold shadow-xs'
+                    : 'hover:bg-violet-100 text-slate-800 font-semibold'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-mono">
+                  {(currentFormatted === stdStr || inputVal === stdStr) ? (
+                    <Check size={12} className="text-white" />
+                  ) : (
+                    <span className="w-3" />
+                  )}
+                  <span>{isCircle ? `Ø ${stdStr} mm` : `${stdStr.replace('x', ' × ')} mm`}</span>
+                </div>
+                <span className={`text-[10px] font-sans ${currentFormatted === stdStr || inputVal === stdStr ? 'text-violet-100 font-medium' : 'text-violet-600 font-semibold'}`}>
+                  Ảnh gốc
+                </span>
+              </div>
+            </div>
+          )}
+
           <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 flex items-center justify-between">
             <span>Kích thước gợi ý</span>
             <span className="text-[9px] text-violet-600 font-mono">mm</span>
           </div>
           <div className="py-1">
-            {suggestions.map((s) => {
+            {suggestions.filter(s => s !== stdStr).map((s) => {
               const isSelected = s === currentFormatted || s === inputVal;
               return (
                 <div
@@ -593,6 +641,9 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
   const [localShape, setLocalShape] = useState<string>(shape || 'rect');
   const [localQuantity, setLocalQuantity] = useState<number>(10);
 
+  // Standard image dimensions (in mm) for dropdown prioritization & default sizing
+  const [imageStandardDim, setImageStandardDim] = useState<{ w: number; h: number } | null>(null);
+
   // Source image state
   const [currentImageSrc, setCurrentImageSrc] = useState<string | null>(imageUrl);
   const [currentFileName, setCurrentFileName] = useState<string>(imageName);
@@ -663,6 +714,13 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
         setLocalQuantity(curTab.quantity || 10);
 
         const srcImg = curTab.sourceImage;
+        if (srcImg?.w && srcImg?.h) {
+          setImageStandardDim({ w: srcImg.w, h: srcImg.h });
+        } else if (itemW && itemH) {
+          setImageStandardDim({ w: itemW, h: curTab.shape === 'circle' ? itemW : itemH });
+        } else {
+          setImageStandardDim(null);
+        }
         const srcUrl = srcImg?.originalThumb || srcImg?.thumb || imageUrl || null;
         setCurrentImageSrc(srcUrl);
         setCurrentFileName(srcImg?.name || imageName || `Layer ${curTab.name}`);
@@ -708,6 +766,11 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
         setLocalItemH(fallbackTab.itemH);
         setLocalShape(fallbackTab.shape);
         setLocalQuantity(fallbackTab.quantity);
+        if (itemW && itemH) {
+          setImageStandardDim({ w: itemW, h: shape === 'circle' ? itemW : itemH });
+        } else {
+          setImageStandardDim(null);
+        }
         setCurrentImageSrc(imageUrl);
         setCurrentFileName(imageName);
         if (initialColorSettings) setColorSettings({ ...initialColorSettings });
@@ -734,6 +797,13 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     img.onload = () => {
       setImgElement(img);
       setImgLoaded(true);
+      const nw = img.naturalWidth || img.width;
+      const nh = img.naturalHeight || img.height;
+      if (nw > 0 && nh > 0) {
+        calculateStandardImageDimensionsMm(nw, nh).then(std => {
+          setImageStandardDim(prev => prev || { w: std.w, h: std.h });
+        });
+      }
     };
     img.onerror = () => {
       setImgLoaded(false);
@@ -1071,6 +1141,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
         const page1 = pages[0];
         setCurrentImageSrc(page1.dataUrl);
         setCurrentFileName(page1.name);
+        setImageStandardDim({ w: page1.widthMm, h: page1.heightMm });
         setLocalItemW(page1.widthMm);
         setLocalItemH(page1.heightMm);
         setOriginalBackupSrc(null);
@@ -1139,7 +1210,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
             });
           }
           setTabs(newTabs);
-          setBleedStatusMsg(`✓ Đã nạp ${pages.length} trang PDF thành ${pages.length} Layer!`);
+          setBleedStatusMsg(`✓ Đã nạp ${pages.length} trang PDF thành ${pages.length} Layer (kích thước chuẩn ${page1.widthMm} × ${page1.heightMm} mm)!`);
           setTimeout(() => setBleedStatusMsg(null), 4000);
         } else {
           setBleedStatusMsg(`✓ Đã nạp trang PDF thành công (${page1.widthMm} × ${page1.heightMm} mm)`);
@@ -1166,6 +1237,27 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
         setOriginalBleedBounds(null);
         setOriginalDimensions(null);
         handleResetCrop();
+
+        // Tự động nhận diện kích thước chuẩn của ảnh (DPI, Aspect Snap) & đặt làm mặc định
+        const img = new Image();
+        img.onload = async () => {
+          const nw = img.naturalWidth || img.width;
+          const nh = img.naturalHeight || img.height;
+          const std = await calculateStandardImageDimensionsMm(nw, nh, file);
+          const finalW = std.w;
+          const finalH = localShape === 'circle' ? std.w : std.h;
+          setImageStandardDim({ w: finalW, h: finalH });
+          setLocalItemW(finalW);
+          setLocalItemH(finalH);
+          setTabs(prev => prev.map(t => t.id === currentTabId ? {
+            ...t,
+            itemW: finalW,
+            itemH: finalH,
+          } : t));
+          setBleedStatusMsg(`✓ Đã ưu tiên kích thước chuẩn của ảnh: ${finalW} × ${finalH} mm (mặc định)`);
+          setTimeout(() => setBleedStatusMsg(null), 3500);
+        };
+        img.src = result;
       }
     };
     reader.readAsDataURL(file);
@@ -1390,6 +1482,11 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     setLocalQuantity(targetTab.quantity || 10);
 
     const srcImg = targetTab.sourceImage;
+    if (srcImg?.w && srcImg?.h) {
+      setImageStandardDim({ w: srcImg.w, h: srcImg.h });
+    } else {
+      setImageStandardDim(null);
+    }
     const nextSrc = srcImg?.originalThumb || srcImg?.thumb || null;
     setCurrentImageSrc(nextSrc);
     setOriginalBackupSrc(null);
@@ -2161,6 +2258,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                 w={localItemW}
                 h={localShape === 'circle' ? localItemW : localItemH}
                 onChange={handleDimChange}
+                imageStandardDim={imageStandardDim}
               />
             </div>
 
