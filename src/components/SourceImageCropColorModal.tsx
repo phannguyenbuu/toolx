@@ -2185,84 +2185,68 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
 
               {/* TAB: BLEED STUDIO */}
               {colorTab === 'bleed' && (
-                <div className="space-y-4">
-                  <div className="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80 text-[11px] text-emerald-900 space-y-1">
-                    <div className="font-bold flex items-center gap-1.5 text-emerald-800">
-                      <Sparkles size={13} className="text-emerald-600" />
-                      <span>Outpainting (Bù Xén Tràn Lề)</span>
-                    </div>
-                    <p className="text-[10px] text-emerald-700 leading-relaxed">
-                      Mở rộng biên ảnh ra ngoài khung cắt để chống lệch mép, viền trắng khi cắt/bế thành phẩm in ấn.
-                    </p>
-                  </div>
-
+                <div className="space-y-3">
                   {/* Mode Radio Buttons */}
-                  <div className="space-y-2">
-                    <span className="text-[11px] font-bold text-slate-700 block">
-                      Chọn kiểu tràn lề:
-                    </span>
-                    <div className="grid grid-cols-3 gap-2">
-                      {/* Mode OFF */}
-                      <label
-                        className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl border cursor-pointer transition select-none ${
-                          bleedMode === 'off'
-                            ? 'bg-violet-50/80 border-violet-500 text-violet-900 shadow-xs font-bold'
-                            : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="bleedMode"
-                          checked={bleedMode === 'off'}
-                          onChange={() => setBleedMode('off')}
-                          className="text-violet-600 focus:ring-violet-500 cursor-pointer"
-                        />
-                        <span className="font-bold text-xs">Off</span>
-                      </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {/* Mode OFF */}
+                    <label
+                      className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl border cursor-pointer transition select-none ${
+                        bleedMode === 'off'
+                          ? 'bg-violet-50/80 border-violet-500 text-violet-900 shadow-xs font-bold'
+                          : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="bleedMode"
+                        checked={bleedMode === 'off'}
+                        onChange={() => setBleedMode('off')}
+                        className="text-violet-600 focus:ring-violet-500 cursor-pointer"
+                      />
+                      <span className="font-bold text-xs">Off</span>
+                    </label>
 
-                      {/* Mode OFFSET */}
-                      <label
-                        className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl border cursor-pointer transition select-none ${
-                          bleedMode === 'offset'
-                            ? 'bg-violet-50/80 border-violet-500 text-violet-900 shadow-xs font-bold'
-                            : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="bleedMode"
-                          checked={bleedMode === 'offset'}
-                          onChange={() => setBleedMode('offset')}
-                          className="text-violet-600 focus:ring-violet-500 cursor-pointer"
-                        />
-                        <span className="font-bold text-xs">Offset</span>
-                      </label>
+                    {/* Mode OFFSET */}
+                    <label
+                      className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl border cursor-pointer transition select-none ${
+                        bleedMode === 'offset'
+                          ? 'bg-violet-50/80 border-violet-500 text-violet-900 shadow-xs font-bold'
+                          : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="bleedMode"
+                        checked={bleedMode === 'offset'}
+                        onChange={() => setBleedMode('offset')}
+                        className="text-violet-600 focus:ring-violet-500 cursor-pointer"
+                      />
+                      <span className="font-bold text-xs">Offset</span>
+                    </label>
 
-                      {/* Mode AI */}
-                      <label
-                        className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl border cursor-pointer transition select-none ${
-                          bleedMode === 'ai'
-                            ? 'bg-violet-50/80 border-violet-500 text-violet-900 shadow-xs font-bold'
-                            : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="bleedMode"
-                          checked={bleedMode === 'ai'}
-                          onChange={() => setBleedMode('ai')}
-                          className="text-violet-600 focus:ring-violet-500 cursor-pointer"
-                        />
-                        <span className="font-bold text-xs">AI</span>
-                      </label>
-                    </div>
+                    {/* Mode AI */}
+                    <label
+                      className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl border cursor-pointer transition select-none ${
+                        bleedMode === 'ai'
+                          ? 'bg-violet-50/80 border-violet-500 text-violet-900 shadow-xs font-bold'
+                          : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="bleedMode"
+                        checked={bleedMode === 'ai'}
+                        onChange={() => setBleedMode('ai')}
+                        className="text-violet-600 focus:ring-violet-500 cursor-pointer"
+                      />
+                      <span className="font-bold text-xs">AI</span>
+                    </label>
                   </div>
 
                   {/* Slider: Tỉ lệ % từ 1 đến 30% */}
                   {bleedMode !== 'off' && (
                     <div className="space-y-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-slate-700">Tỉ lệ mở rộng tràn lề:</span>
+                      <div className="flex items-center justify-end text-xs">
                         <span className="px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 font-mono font-bold text-xs">
                           {bleedPercent}% (~{Math.round((localItemW * (bleedPercent / 100) / 2) * 10) / 10} mm mỗi cạnh)
                         </span>
@@ -2319,12 +2303,6 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                           <RotateCcw size={13} />
                           <span>Khôi phục ảnh gốc trước khi bù xén</span>
                         </button>
-                      )}
-
-                      {bleedStatusMsg && (
-                        <div className="text-[11px] text-slate-600 italic bg-slate-100 p-2 rounded-lg text-center">
-                          {bleedStatusMsg}
-                        </div>
                       )}
                     </div>
                   )}
