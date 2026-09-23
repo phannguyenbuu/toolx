@@ -5920,16 +5920,16 @@ Chỉ trả về JSON, không giải thích thêm.`;
                                                 d={pathD}
                                                 fill="none"
                                                 stroke="#ef4444"
-                                                strokeWidth={Math.max(0.6, Math.min(vbW, vbH) * 0.012)}
-                                                strokeDasharray="5 3"
-                                                style={{ filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.85))' }}
+                                                strokeWidth={Math.max(0.35, Math.min(vbW, vbH) * 0.005)}
+                                                strokeDasharray="4 2"
+                                                style={{ filter: 'drop-shadow(0 0 1px rgba(0,0,0,0.6))' }}
                                               />
                                             ) : (
                                               <g
                                                 fill="none"
                                                 stroke="#ef4444"
-                                                strokeWidth="1.2"
-                                                strokeDasharray="5 3"
+                                                strokeWidth="0.7"
+                                                strokeDasharray="4 2"
                                                 dangerouslySetInnerHTML={{
                                                   __html: innerSvg.replace(/stroke=["'][^"']*["']/gi, 'stroke="#ef4444"'),
                                                 }}
@@ -6063,9 +6063,9 @@ Chỉ trả về JSON, không giải thích thêm.`;
                                               d={pathD}
                                               fill="none"
                                               stroke="#ef4444"
-                                              strokeWidth="1.8"
-                                              strokeDasharray="5 3"
-                                              style={{ filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.85))' }}
+                                              strokeWidth="0.8"
+                                              strokeDasharray="4 2"
+                                              style={{ filter: 'drop-shadow(0 0 1px rgba(0,0,0,0.6))' }}
                                             />
                                           </g>
                                         );
@@ -6236,19 +6236,20 @@ Chỉ trả về JSON, không giải thích thêm.`;
 
                                   return (
                                     <div
-                                      className="absolute pointer-events-none border-2 border-dashed border-red-500"
+                                      className="absolute pointer-events-none"
                                       style={{
                                         left: `${rx}px`,
                                         top: `${ry}px`,
                                         width: `${rw}px`,
                                         height: `${rh}px`,
                                         zIndex: 15,
+                                        border: '1px dashed #ef4444',
                                         borderRadius: itemShape === 'circle' || itemShape === 'oval'
                                           ? '50%'
                                           : (itemCornerRadius > 0
                                               ? `${Math.max(0, (itemCornerRadius - (itemBleedBounds ? itemBleedBounds.leftRatio * actualW : itemCutBleed)) * scale)}px`
                                               : '0px'),
-                                        boxShadow: '0 0 2px rgba(0,0,0,0.85), inset 0 0 2px rgba(0,0,0,0.4)',
+                                        boxShadow: '0 0 1px rgba(0,0,0,0.6)',
                                       }}
                                     />
                                   );

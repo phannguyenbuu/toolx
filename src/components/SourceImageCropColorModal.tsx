@@ -1743,7 +1743,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                 </svg>
               )}
 
-              {/* 2.5 Red Line: Original image border (Đường line đỏ viền ảnh gốc) */}
+              {/* 2.5 Red Line: Original image border (Đường line đỏ viền ảnh gốc siêu mảnh vừa đủ nhìn) */}
               {currentImageSrc && (bleedMode !== 'off' || !!originalBleedBounds) && originalImageRect && (
                 <svg
                   className="absolute inset-0 w-full h-full pointer-events-none overflow-visible"
@@ -1754,7 +1754,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                   <g
                     transform={`translate(${cropBox.x + cropBox.w / 2 + crop.panX}, ${cropBox.y + cropBox.h / 2 + crop.panY}) rotate(${crop.rotation}) scale(${crop.flipH ? -1 : 1}, ${crop.flipV ? -1 : 1})`}
                   >
-                    {/* Red dashed line */}
+                    {/* Red dashed line siêu mảnh 1px */}
                     <rect
                       x={originalImageRect.x}
                       y={originalImageRect.y}
@@ -1762,62 +1762,10 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
                       height={originalImageRect.h}
                       fill="none"
                       stroke="#ef4444"
-                      strokeWidth={2.5}
-                      strokeDasharray="8 4"
-                      style={{ filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.9))' }}
+                      strokeWidth={1}
+                      strokeDasharray="5 3"
+                      style={{ filter: 'drop-shadow(0 0 1px rgba(0,0,0,0.8))' }}
                     />
-
-                    {/* Corner accent marks in solid red for precision */}
-                    <path
-                      d={`M ${originalImageRect.x} ${originalImageRect.y + 12} L ${originalImageRect.x} ${originalImageRect.y} L ${originalImageRect.x + 12} ${originalImageRect.y}`}
-                      fill="none"
-                      stroke="#dc2626"
-                      strokeWidth={3}
-                    />
-                    <path
-                      d={`M ${originalImageRect.x + originalImageRect.w - 12} ${originalImageRect.y} L ${originalImageRect.x + originalImageRect.w} ${originalImageRect.y} L ${originalImageRect.x + originalImageRect.w} ${originalImageRect.y + 12}`}
-                      fill="none"
-                      stroke="#dc2626"
-                      strokeWidth={3}
-                    />
-                    <path
-                      d={`M ${originalImageRect.x} ${originalImageRect.y + originalImageRect.h - 12} L ${originalImageRect.x} ${originalImageRect.y + originalImageRect.h} L ${originalImageRect.x + 12} ${originalImageRect.y + originalImageRect.h}`}
-                      fill="none"
-                      stroke="#dc2626"
-                      strokeWidth={3}
-                    />
-                    <path
-                      d={`M ${originalImageRect.x + originalImageRect.w - 12} ${originalImageRect.y + originalImageRect.h} L ${originalImageRect.x + originalImageRect.w} ${originalImageRect.y + originalImageRect.h} L ${originalImageRect.x + originalImageRect.w} ${originalImageRect.y + originalImageRect.h - 12}`}
-                      fill="none"
-                      stroke="#dc2626"
-                      strokeWidth={3}
-                    />
-
-                    {/* Badge: Dấu ảnh gốc */}
-                    <g transform={`translate(${originalImageRect.x + 8}, ${originalImageRect.y + 8})`}>
-                      <rect
-                        x={0}
-                        y={0}
-                        width={58}
-                        height={18}
-                        rx={4}
-                        fill="#dc2626"
-                        fillOpacity={0.92}
-                        stroke="#fca5a5"
-                        strokeWidth={0.8}
-                      />
-                      <text
-                        x={29}
-                        y={12.5}
-                        textAnchor="middle"
-                        fill="#ffffff"
-                        fontSize="10"
-                        fontWeight="bold"
-                        fontFamily="sans-serif"
-                      >
-                        Ảnh gốc
-                      </text>
-                    </g>
                   </g>
                 </svg>
               )}
