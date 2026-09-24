@@ -1,0 +1,248 @@
+import {
+  FileText,
+  Receipt,
+  FileSpreadsheet,
+  LayoutGrid,
+  Calculator,
+  Printer,
+  Zap,
+  Database,
+  Package,
+  Users,
+  Wand2,
+  Eraser,
+  ImagePlus,
+  Layers,
+  ScanLine,
+  Palette,
+  FolderOpen,
+  Star,
+  Gift,
+  Crown,
+  Sparkles,
+} from 'lucide-react';
+import { AccountPlanInfo, MenuItemDef } from './types';
+
+export const accountPlans: AccountPlanInfo[] = [
+  {
+    id: 'free',
+    name: 'Miễn phí',
+    price: 0,
+    features: ['5 phiên làm việc', '100 lượt xuất PDF/tháng', 'Hỗ trợ cơ bản'],
+    color: 'gray',
+    icon: Star,
+  },
+  {
+    id: 'basic',
+    name: 'Cơ bản',
+    price: 99000,
+    features: [
+      '20 phiên làm việc',
+      '500 lượt xuất PDF/tháng',
+      'Hỗ trợ email',
+      'Không quảng cáo',
+    ],
+    color: 'blue',
+    icon: Gift,
+  },
+  {
+    id: 'pro',
+    name: 'Chuyên nghiệp',
+    price: 299000,
+    features: [
+      'Không giới hạn phiên',
+      'Không giới hạn xuất PDF',
+      'Hỗ trợ ưu tiên',
+      'API truy cập',
+      'Tính năng AI',
+    ],
+    color: 'purple',
+    icon: Crown,
+  },
+  {
+    id: 'enterprise',
+    name: 'Doanh nghiệp',
+    price: 999000,
+    features: [
+      'Tất cả tính năng Pro',
+      'Hỗ trợ 24/7',
+      'Tùy chỉnh thương hiệu',
+      'Đào tạo nhân viên',
+      'SLA cam kết',
+    ],
+    color: 'amber',
+    icon: Sparkles,
+  },
+];
+
+export const formatCurrency = (amount: number): string => {
+  return new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+  }).format(amount);
+};
+
+export const menuDefinitions: MenuItemDef[] = [
+  {
+    id: 'pdf-processor',
+    name: 'Thông tin PDF',
+    icon: FileText,
+    category: 'Tiện ích PDF',
+    description: 'Phân tích, trích xuất trang & kiểm tra thông số file in ấn',
+    color: 'blue',
+  },
+  {
+    id: 'render-pdf',
+    name: 'Render PDF',
+    icon: Printer,
+    category: 'Prepress Studio',
+    description: 'Tách màu CMYK Prepress, Color Bar & Rasterize độ phân giải cao',
+    color: 'indigo',
+  },
+  {
+    id: 'die-cutting',
+    name: 'Bế hộp',
+    icon: Package,
+    category: 'Bao bì & Hộp',
+    description: 'Thiết kế khuôn bế hộp carton, gấp 3D & bình khuôn tự động',
+    color: 'indigo',
+  },
+  {
+    id: 'imposition-group',
+    name: 'Bình trang & VDP',
+    icon: LayoutGrid,
+    category: 'Chế bản in ấn',
+    description: 'Bình trang offset nhiều tầng & in ấn dữ liệu biến đổi',
+    color: 'indigo',
+    subItems: [
+      {
+        id: 'label-designer',
+        name: 'Biến đổi dữ liệu',
+        icon: FileSpreadsheet,
+        desc: 'Thiết kế nhãn mác, barcode & in dữ liệu biến đổi (VDP)',
+      },
+      {
+        id: 'imposition-basic',
+        name: 'Bình trang cơ bản',
+        icon: LayoutGrid,
+        desc: 'Bình trang đơn file nhanh, xuất PDF & SVG khuôn bế',
+      },
+      {
+        id: 'imposition-advanced',
+        name: 'Bình tem',
+        icon: LayoutGrid,
+        desc: 'Bình layout offset tự động, xếp đa tầng & tối ưu khổ in',
+      },
+    ],
+  },
+  {
+    id: 'price-group',
+    name: 'Tính giá in ấn',
+    icon: Calculator,
+    category: 'Dự toán chi phí',
+    description: 'Công cụ tính giá in ấn tự động & quản lý vật tư giấy',
+    color: 'indigo',
+    subItems: [
+      {
+        id: 'price-calc-offset',
+        name: 'Tính giá in Offset',
+        icon: Printer,
+        desc: 'Báo giá bài in thương mại, số lượng lớn & tối ưu chi phí',
+      },
+      {
+        id: 'price-calc-fast',
+        name: 'Tính giá in nhanh',
+        icon: Zap,
+        desc: 'Tính giá in kỹ thuật số theo trang, số lượng nhỏ',
+      },
+      {
+        id: 'paper-price',
+        name: 'Bảng giá Giấy',
+        icon: Database,
+        desc: 'Quản lý danh mục & bảng giá giấy nguyên liệu',
+      },
+    ],
+  },
+  {
+    id: 'ai-group',
+    name: 'AI Tools Studio',
+    icon: Wand2,
+    category: 'Trí tuệ nhân tạo',
+    description: 'Bộ công cụ AI xử lý ảnh đồ họa & phục chế in ấn',
+    color: 'purple',
+    subItems: [
+      {
+        id: 'ai-inpaint',
+        name: 'Xóa vùng ảnh (Inpaint)',
+        icon: Eraser,
+        desc: 'Xóa chi tiết thừa và tái tạo nền ảnh liền mạch',
+      },
+      {
+        id: 'ai-outpaint',
+        name: 'Mở rộng ảnh (Outpaint)',
+        icon: ImagePlus,
+        desc: 'Mở rộng góc nhìn và bố cục khung hình bằng AI',
+      },
+      {
+        id: 'ai-remove-bg',
+        name: 'Xóa nền ảnh',
+        icon: Layers,
+        desc: 'Tách nền ảnh tự động với độ sắc nét cao',
+      },
+      {
+        id: 'ai-upscale',
+        name: 'Nâng cấp chất lượng',
+        icon: ScanLine,
+        desc: 'Tăng độ phân giải 2x/4x cho file in khổ lớn',
+      },
+      {
+        id: 'ai-color',
+        name: 'Chuyển đổi màu',
+        icon: Palette,
+        desc: 'Hiệu chỉnh và đồng bộ hệ màu thiết kế tự động',
+      },
+    ],
+  },
+  {
+    id: 'file-manager',
+    name: 'Tệp & Dữ liệu',
+    icon: FolderOpen,
+    category: 'Cloud Storage',
+    description: 'Quản lý và đồng bộ file dự án trên Supabase Cloud',
+    color: 'blue',
+  },
+  {
+    id: 'business-group',
+    name: 'Kinh doanh & CRM',
+    icon: Users,
+    category: 'Quản trị xưởng in',
+    description: 'Quản trị khách hàng, đơn hàng sản xuất & hóa đơn báo giá',
+    color: 'indigo',
+    subItems: [
+      {
+        id: 'orders',
+        name: 'Đơn hàng',
+        icon: Package,
+        desc: 'Theo dõi tiến độ đơn hàng sản xuất',
+      },
+      {
+        id: 'customers',
+        name: 'Khách hàng',
+        icon: Users,
+        desc: 'Danh bạ & lịch sử giao dịch khách hàng',
+      },
+      {
+        id: 'quotes',
+        name: 'Báo giá',
+        icon: FileText,
+        desc: 'Lập & xuất báo giá in ấn chuyên nghiệp',
+      },
+      {
+        id: 'invoices',
+        name: 'Hóa đơn',
+        icon: Receipt,
+        desc: 'Quản lý hóa đơn chứng từ & thanh toán',
+      },
+    ],
+  },
+];
