@@ -19,6 +19,9 @@ export interface ShapeTabItem {
   autoRotate?: boolean; // legacy / packing canRotate
   autoRotateImage?: boolean; // Tự xoay ảnh vừa khung tem cho riêng layer này
   canRotate?: boolean; // Cho phép thuật toán xoay tem khi xếp khổ
+  fileId?: string; // ID nhóm file gốc
+  fileName?: string; // Tên tệp gốc (vd: file.pdf, anh.png)
+  fileType?: 'pdf' | 'image' | 'shape';
 }
 
 export const TAB_COLORS = ['#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#3b82f6', '#84cc16', '#6366f1'];
