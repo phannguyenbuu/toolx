@@ -215,6 +215,13 @@ export const ImpositionAdvancedPage: React.FC<ImpositionAdvancedPageProps> = ({ 
         loadWorkspace={workspaceHook.loadWorkspace}
         deleteWorkspace={workspaceHook.deleteWorkspace}
         allPages={allPages}
+        setAllPages={setAllPages}
+        shapeTabs={shapeTabs}
+        setShapeTabs={setShapeTabs}
+        activeTabId={activeTabId}
+        setActiveTabId={setActiveTabId}
+        config={config}
+        setConfig={setConfig}
         setIsDataModalOpen={setIsDataModalOpen}
         setIsAiModalOpen={setIsAiModalOpen}
         setAiPreviewPages={() => {}}

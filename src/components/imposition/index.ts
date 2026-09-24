@@ -11,6 +11,7 @@ export * from './useImpositionHistory';
 export * from './useImpositionActions';
 export * from './useCanvasContainer';
 export * from './ImpositionHeader';
+export * from './ImpositionFileDropdown';
 export * from './ImpositionLayerBar';
 export * from './ImpositionLayerHeader';
 export * from './ImpositionLayerCard';

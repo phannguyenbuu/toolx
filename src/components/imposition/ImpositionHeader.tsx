@@ -15,8 +15,9 @@ import {
   X
 } from 'lucide-react';
 import { LayoutPlan } from '../../utils/layoutSolver';
-import { PageItem, WorkspaceItem } from './types';
+import { PageItem, WorkspaceItem, ShapeTabItem, ImpositionConfig } from './types';
 import { safeToastInfo, safeToastSuccess, safeToastError } from './impositionHelpers';
+import { ImpositionFileDropdown } from './ImpositionFileDropdown';
 
 export interface ImpositionHeaderProps {
   savedWorkspaces: WorkspaceItem[];
@@ -29,6 +30,13 @@ export interface ImpositionHeaderProps {
   loadWorkspace: (ws: any) => void;
   deleteWorkspace: (name: string) => void;
   allPages: PageItem[];
+  setAllPages: React.Dispatch<React.SetStateAction<PageItem[]>>;
+  shapeTabs: ShapeTabItem[];
+  setShapeTabs: React.Dispatch<React.SetStateAction<ShapeTabItem[]>>;
+  activeTabId: string;
+  setActiveTabId: (id: string) => void;
+  config: ImpositionConfig;
+  setConfig: React.Dispatch<React.SetStateAction<ImpositionConfig>>;
   setIsDataModalOpen: (open: boolean) => void;
   setIsAiModalOpen: (open: boolean) => void;
   setAiPreviewPages: (pages: PageItem[]) => void;
@@ -58,6 +66,13 @@ export const ImpositionHeader: React.FC<ImpositionHeaderProps> = ({
   loadWorkspace,
   deleteWorkspace,
   allPages,
+  setAllPages,
+  shapeTabs,
+  setShapeTabs,
+  activeTabId,
+  setActiveTabId,
+  config,
+  setConfig,
   setIsDataModalOpen,
   setIsAiModalOpen,
   setAiPreviewPages,
@@ -85,6 +100,18 @@ export const ImpositionHeader: React.FC<ImpositionHeaderProps> = ({
           <h1 className="text-lg font-medium">Bình tem</h1>
           <p className="text-violet-200 text-xs">Công cụ xếp hình in ấn</p>
         </div>
+
+        {/* Danh mục file Dropdown */}
+        <ImpositionFileDropdown
+          shapeTabs={shapeTabs}
+          setShapeTabs={setShapeTabs}
+          activeTabId={activeTabId}
+          setActiveTabId={setActiveTabId}
+          config={config}
+          setConfig={setConfig}
+          allPages={allPages}
+          setAllPages={setAllPages}
+        />
       </div>
       <div className="flex items-center gap-3">
         {/* Workspace Management */}
