@@ -18,33 +18,37 @@ const loadedScripts = new Map<string, Promise<void>>();
 const initializedContainers = new Set<string>();
 
 function loadScript(url: string): Promise<void> {
-  if (loadedScripts.has(url)) {
-    return loadedScripts.get(url)!;
+  const cacheBustUrl = url.includes('remoteEntry.js')
+    ? (url.includes('?') ? `${url}&_t=${Date.now()}` : `${url}?_t=${Date.now()}`)
+    : url;
+
+  if (loadedScripts.has(cacheBustUrl)) {
+    return loadedScripts.get(cacheBustUrl)!;
   }
 
   const promise = new Promise<void>((resolve, reject) => {
     // Kiểm tra xem script đã tồn tại trong DOM chưa
-    const existingScript = document.querySelector(`script[src="${url}"]`);
+    const existingScript = document.querySelector(`script[src="${cacheBustUrl}"]`);
     if (existingScript) {
       resolve();
       return;
     }
 
     const script = document.createElement('script');
-    script.src = url;
+    script.src = cacheBustUrl;
     script.type = 'text/javascript';
     script.async = true;
 
     script.onload = () => resolve();
     script.onerror = () => {
-      loadedScripts.delete(url);
-      reject(new Error(`[ModuleFederation] Không thể nạp script remote từ ${url}`));
+      loadedScripts.delete(cacheBustUrl);
+      reject(new Error(`[ModuleFederation] Không thể nạp script remote từ ${cacheBustUrl}`));
     };
 
     document.head.appendChild(script);
   });
 
-  loadedScripts.set(url, promise);
+  loadedScripts.set(cacheBustUrl, promise);
   return promise;
 }
 
