@@ -9,6 +9,7 @@ export * from './useImpositionAutoSave';
 export * from './useImpositionWorkspace';
 export * from './useImpositionHistory';
 export * from './useImpositionActions';
+export * from './useCanvasContainer';
 export * from './ImpositionHeader';
 export * from './ImpositionLayerBar';
 export * from './ImpositionLayerHeader';

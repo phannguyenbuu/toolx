@@ -12,6 +12,7 @@ import {
   calculateSlotTotalRotation,
   getPageForSlot,
   calculatePlans,
+  useCanvasContainer,
   useImpositionWorkspace,
   useImpositionHistory,
   useImpositionAutoSave,
@@ -62,7 +63,6 @@ export const ImpositionAdvancedPage: React.FC<ImpositionAdvancedPageProps> = ({ 
   const isMultiShape = shapeTabs.length > 1;
 
   // Zoom / Pan
-  const containerRef = useRef<HTMLElement>(null);
   const [canvasZoom, setCanvasZoom] = useState(1);
   const [canvasPan, setCanvasPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
@@ -70,6 +70,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionAdvancedPageProps> = ({ 
   const panOffsetRef = useRef({ x: 0, y: 0 });
   const layoutFingerprintRef = useRef('');
   const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false);
+  const { containerRef, scale } = useCanvasContainer(config, setCanvasZoom);
 
   // Modals & UI States
   const [isDataModalOpen, setIsDataModalOpen] = useState(false);
@@ -149,10 +150,6 @@ export const ImpositionAdvancedPage: React.FC<ImpositionAdvancedPageProps> = ({ 
       lastSheetBlankCount: rem > 0 ? currentPlan.items.length - rem : 0
     };
   }, [currentPlan, allPages.length, isMultiShape, totalSheets]);
-
-  const scale = useMemo(() => {
-    return Math.min(1.5, 300 / Math.max(config.pageW || 300, config.pageH || 300));
-  }, [config.pageW, config.pageH]);
 
   // Layer update helper
   const updateActiveTabProp = useCallback((props: Partial<ShapeTabItem>) => {
@@ -246,7 +243,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionAdvancedPageProps> = ({ 
       {/* 2. Main Workspace Area */}
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Left Side: Layers, Controls, Plans */}
-        <aside className="w-80 border-r border-slate-200 bg-white flex flex-col flex-shrink-0 z-10 shadow-xs">
+        <aside className="w-[576px] max-w-[45vw] bg-white border-r border-slate-200 flex flex-col overflow-y-auto flex-shrink-0 select-none z-10 shadow-xs">
           <ImpositionLayerBar
             shapeTabs={shapeTabs}
             activeTabId={activeTabId}
