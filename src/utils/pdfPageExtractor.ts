@@ -21,30 +21,75 @@ export function isPdfFile(file: File): boolean {
   return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 }
 
+export interface ExtractPdfOptions {
+  fileName?: string;
+  startPage?: number; // 1-indexed (mặc định 1)
+  maxPages?: number;  // số trang tối đa cần trích xuất (ví dụ 10)
+  onProgress?: (current: number, total: number) => void;
+}
+
+/**
+ * Đọc nhanh thông tin số trang và dung lượng PDF mà không tốn công render hình ảnh
+ */
+export async function inspectPdfMetadata(
+  fileOrBuffer: File | Blob | ArrayBuffer
+): Promise<{ numPages: number; sizeBytes: number }> {
+  try {
+    const arrayBuffer = fileOrBuffer instanceof ArrayBuffer
+      ? fileOrBuffer
+      : await fileOrBuffer.arrayBuffer();
+
+    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    const pdf = await loadingTask.promise;
+    const sizeBytes = fileOrBuffer instanceof File || fileOrBuffer instanceof Blob
+      ? fileOrBuffer.size
+      : arrayBuffer.byteLength;
+
+    return {
+      numPages: pdf.numPages,
+      sizeBytes,
+    };
+  } catch (err) {
+    console.error('Lỗi khi đọc metadata PDF:', err);
+    throw err;
+  }
+}
+
 /**
  * Extract each page of a PDF file into high-res images and thumbnails.
  * Useful for mapping each PDF page to an individual imposition/design Layer.
  */
 export async function extractPdfPages(
   fileOrBuffer: File | Blob | ArrayBuffer,
-  fileName?: string
+  optionsOrName?: string | ExtractPdfOptions
 ): Promise<ExtractedPdfPage[]> {
   try {
+    const options: ExtractPdfOptions = typeof optionsOrName === 'string'
+      ? { fileName: optionsOrName }
+      : (optionsOrName || {});
+
     const arrayBuffer = fileOrBuffer instanceof ArrayBuffer
       ? fileOrBuffer
       : await fileOrBuffer.arrayBuffer();
 
-    const baseName = fileName
-      ? fileName.replace(/\.pdf$/i, '')
+    const baseName = options.fileName
+      ? options.fileName.replace(/\.pdf$/i, '')
       : (fileOrBuffer instanceof File ? fileOrBuffer.name.replace(/\.pdf$/i, '') : 'Tài liệu PDF');
 
     const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
     const pdf = await loadingTask.promise;
     const numPages = pdf.numPages;
 
+    const startPage = Math.max(1, Math.min(numPages, options.startPage || 1));
+    const maxPages = options.maxPages && options.maxPages > 0 ? options.maxPages : Infinity;
+    const endPage = Math.min(numPages, startPage + maxPages - 1);
+
     const extracted: ExtractedPdfPage[] = [];
 
-    for (let p = 1; p <= numPages; p++) {
+    for (let p = startPage; p <= endPage; p++) {
+      if (options.onProgress) {
+        options.onProgress(p - startPage + 1, endPage - startPage + 1);
+      }
       const page = await pdf.getPage(p);
 
       // Scale 1.0 base viewport to get point dimensions (72 pt = 1 inch = 25.4 mm)

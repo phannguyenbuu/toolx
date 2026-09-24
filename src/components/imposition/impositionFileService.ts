@@ -1,5 +1,5 @@
 import { ShapeTabItem, PageItem, TAB_COLORS } from './types';
-import { extractPdfPages, isPdfFile } from '../../utils/pdfPageExtractor';
+import { ExtractedPdfPage } from '../../utils/pdfPageExtractor';
 import { calculateStandardImageDimensionsMm } from '../../utils/imageDimensions';
 import { createClientThumbnail } from '../../utils/imageThumbnail';
 
@@ -114,4 +114,97 @@ export function processImageFile(file: File): Promise<{
     reader.onerror = () => reject(new Error(`Không thể đọc file ${file.name}`));
     reader.readAsDataURL(file);
   });
+}
+
+/**
+ * Tạo danh sách ShapeTabItem từ các trang PDF đã trích xuất
+ */
+export function createShapeTabsFromPdfPages(
+  pdfPages: ExtractedPdfPage[],
+  fileId: string,
+  fileName: string,
+  startTabIndex: number
+): { tabs: ShapeTabItem[]; pages: PageItem[] } {
+  const tabs: ShapeTabItem[] = [];
+  const pages: PageItem[] = [];
+
+  pdfPages.forEach((p, idx) => {
+    const pageItem: PageItem = {
+      fileIndex: idx,
+      pageIndex: p.pageIndex,
+      thumb: p.thumbUrl,
+      originalThumb: p.dataUrl,
+      baseThumb: p.thumbUrl,
+      name: p.name,
+      w: p.widthMm,
+      h: p.heightMm,
+      rotation: 0,
+    };
+    pages.push(pageItem);
+
+    const tabIndex = startTabIndex + tabs.length;
+    const letter = getTabLetter(tabIndex);
+    const color = TAB_COLORS[tabIndex % TAB_COLORS.length] || '#8b5cf6';
+    const tabId = `tab-pdf-${Date.now()}-${p.pageIndex}-${Math.random().toString(36).substring(2, 6)}`;
+
+    tabs.push({
+      id: tabId,
+      name: letter,
+      enabled: true,
+      shape: 'rect',
+      itemW: p.widthMm,
+      itemH: p.heightMm,
+      quantity: 10,
+      useTotalLimit: false,
+      cornerRadius: 0,
+      sourceImage: pageItem,
+      vectorMaskResult: null,
+      customSvgData: '',
+      color,
+      canRotate: true,
+      autoRotateImage: true,
+      fileId,
+      fileName,
+      fileType: 'pdf',
+    });
+  });
+
+  return { tabs, pages };
+}
+
+/**
+ * Tạo ShapeTabItem từ kết quả xử lý ảnh đơn
+ */
+export function createShapeTabFromImage(
+  res: { pageItem: PageItem; widthMm: number; heightMm: number },
+  fileId: string,
+  fileName: string,
+  tabIndex: number
+): { tab: ShapeTabItem; page: PageItem } {
+  const letter = getTabLetter(tabIndex);
+  const color = TAB_COLORS[tabIndex % TAB_COLORS.length] || '#8b5cf6';
+  const tabId = `tab-img-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+
+  const tab: ShapeTabItem = {
+    id: tabId,
+    name: letter,
+    enabled: true,
+    shape: 'rect',
+    itemW: res.widthMm,
+    itemH: res.heightMm,
+    quantity: 10,
+    useTotalLimit: false,
+    cornerRadius: 0,
+    sourceImage: res.pageItem,
+    vectorMaskResult: null,
+    customSvgData: '',
+    color,
+    canRotate: true,
+    autoRotateImage: true,
+    fileId,
+    fileName,
+    fileType: 'image',
+  };
+
+  return { tab, page: res.pageItem };
 }

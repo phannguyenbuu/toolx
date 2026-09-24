@@ -35,3 +35,4 @@ export * from './modals/ImpositionExportModal';
 export * from './modals/ImpositionRenderModal';
 export * from './modals/ImpositionRenderSuccessModal';
 export * from './modals/ImpositionSortJobModal';
+export * from './modals/ImpositionLargeFileModal';
