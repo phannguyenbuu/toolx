@@ -30,6 +30,8 @@ yarn-error.log*
 __pycache__/
 *.py[cod]
 *.class
+*.sqlite
+*.sqlite3
 venv/
 env/
 python-services/venv/
@@ -37,6 +39,7 @@ python-services/__pycache__/
 python-services/output/
 python-services/models/
 python-services/uploads/
+python-services/source_files/
 python-services/test_*.jpg
 python-services/test_*.py
 python-services/create_sample.py

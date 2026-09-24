@@ -1,15 +1,13 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   FolderOpen,
   UploadCloud,
-  Trash2,
   ChevronDown,
-  Layers,
-  FileText,
-  Image as ImageIcon,
   Loader2,
-  Shapes
+  Cloud,
+  CheckCircle2
 } from 'lucide-react';
+import { ImpositionFileItem } from './ImpositionFileItem';
 import { ShapeTabItem, ImpositionConfig, PageItem } from './types';
 import { safeToastSuccess, safeToastError, safeToastInfo } from './impositionHelpers';
 import { extractPdfPages, isPdfFile, inspectPdfMetadata } from '../../utils/pdfPageExtractor';
@@ -18,6 +16,9 @@ import {
   processImageFile,
   createShapeTabsFromPdfPages,
   createShapeTabFromImage,
+  fetchServerFiles,
+  syncFilesToServer,
+  deleteFileFromServer,
   FileGroupItem
 } from './impositionFileService';
 import {
@@ -26,6 +27,7 @@ import {
   LargeFileChoice
 } from './modals/ImpositionLargeFileModal';
 import { useWindowFileDrop } from './useWindowFileDrop';
+import { useSupabaseAuth as useAuth } from '../auth/SupabaseAuthContext';
 
 export interface ImpositionFileDropdownProps {
   shapeTabs: ShapeTabItem[];
@@ -48,6 +50,7 @@ export const ImpositionFileDropdown: React.FC<ImpositionFileDropdownProps> = ({
   allPages,
   setAllPages,
 }) => {
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processStatus, setProcessStatus] = useState('');
@@ -61,6 +64,36 @@ export const ImpositionFileDropdown: React.FC<ImpositionFileDropdownProps> = ({
   const fileGroups = useMemo<FileGroupItem[]>(() => {
     return groupTabsByFile(shapeTabs, activeTabId);
   }, [shapeTabs, activeTabId]);
+
+  // Tự động tải danh sách tệp lưu bền từ server khi vào trang
+  useEffect(() => {
+    fetchServerFiles().then((serverFiles) => {
+      if (serverFiles && serverFiles.length > 0) {
+        setShapeTabs((currentTabs) => {
+          const isOnlyDefaultEmpty = currentTabs.length === 1 && !currentTabs[0].sourceImage;
+          if (isOnlyDefaultEmpty) {
+            const allTabs: ShapeTabItem[] = [];
+            const allPgs: PageItem[] = [];
+            serverFiles.forEach((f) => {
+              if (f.tabs && f.tabs.length > 0) {
+                f.tabs.forEach((t) => {
+                  allTabs.push(t);
+                  if (t.sourceImage) allPgs.push(t.sourceImage);
+                });
+              }
+            });
+            if (allTabs.length > 0) {
+              setAllPages((prev) => [...prev, ...allPgs]);
+              setActiveTabId(allTabs[0].id);
+              setConfig((c) => ({ ...c, itemW: allTabs[0].itemW, itemH: allTabs[0].itemH }));
+              return allTabs;
+            }
+          }
+          return currentTabs;
+        });
+      }
+    });
+  }, []);
 
   // Hàm chờ người dùng chọn phương án xử lý tệp nặng / nhiều trang
   const requestLargeFileChoice = (data: LargeFilePromptData): Promise<LargeFileChoice> => {
@@ -93,12 +126,10 @@ export const ImpositionFileDropdown: React.FC<ImpositionFileDropdownProps> = ({
         setProcessStatus(`Đang kiểm tra ${file.name} (${i + 1}/${files.length})...`);
 
         if (isPdfFile(file)) {
-          // 1. Kiểm tra nhanh metadata (số trang & dung lượng)
           const meta = await inspectPdfMetadata(file);
           let startPage = 1;
           let maxPages: number | undefined = undefined;
 
-          // Cảnh báo nếu số trang > 10 hoặc file nặng (>= 15MB) có nhiều hơn 1 trang
           if (meta.numPages > 10 || (meta.sizeBytes >= 15 * 1024 * 1024 && meta.numPages > 1)) {
             setProcessStatus(`Chờ lựa chọn cho tệp ${file.name}...`);
             const choice = await requestLargeFileChoice({
@@ -114,7 +145,6 @@ export const ImpositionFileDropdown: React.FC<ImpositionFileDropdownProps> = ({
               startPage = choice.startPage || 1;
               maxPages = 10;
             }
-            // choice.mode === 'all': giữ nguyên startPage = 1, maxPages = undefined
           }
 
           setProcessStatus(`Đang trích xuất trang cho ${file.name}...`);
@@ -147,11 +177,8 @@ export const ImpositionFileDropdown: React.FC<ImpositionFileDropdownProps> = ({
         }
       }
 
-      if (accumulatedTabs.length === 0) {
-        return;
-      }
+      if (accumulatedTabs.length === 0) return;
 
-      // Kiểm tra nếu Tab A ban đầu còn trống -> thay thế Tab A bằng trang đầu tiên
       const isFirstTabEmpty = shapeTabs.length === 1 && !shapeTabs[0].sourceImage;
       let nextTabs: ShapeTabItem[];
 
@@ -181,6 +208,10 @@ export const ImpositionFileDropdown: React.FC<ImpositionFileDropdownProps> = ({
       setShapeTabs(nextTabs);
       setAllPages((prev) => [...prev, ...accumulatedPages]);
       safeToastSuccess(`Đã nạp thành công ${accumulatedTabs.length} layer!`);
+
+      // Tự động lưu bền vững lên máy chủ
+      const updatedGroups = groupTabsByFile(nextTabs, activeTabId);
+      syncFilesToServer(updatedGroups);
     } catch (err: any) {
       console.error('Lỗi khi nạp tệp:', err);
       safeToastError(`Lỗi khi nạp tệp: ${err.message || err}`);
@@ -191,7 +222,7 @@ export const ImpositionFileDropdown: React.FC<ImpositionFileDropdownProps> = ({
     }
   };
 
-  // Hỗ trợ kéo thả tệp từ ngoài Desktop vào bất cứ vị trí nào trên cửa sổ trình duyệt
+  // Hỗ trợ kéo thả tệp từ Desktop vào toàn màn hình
   const isWindowDragging = useWindowFileDrop((files) => {
     handleProcessFiles(files);
   });
@@ -207,6 +238,8 @@ export const ImpositionFileDropdown: React.FC<ImpositionFileDropdownProps> = ({
     e.stopPropagation();
     const group = fileGroups.find((g) => g.fileId === fileId);
     if (!group) return;
+
+    deleteFileFromServer(fileId);
 
     const tabIdsToDelete = new Set(group.tabs.map((t) => t.id));
     const remainingTabs = shapeTabs.filter((t) => !tabIdsToDelete.has(t.id));
@@ -247,7 +280,6 @@ export const ImpositionFileDropdown: React.FC<ImpositionFileDropdownProps> = ({
 
   return (
     <>
-      {/* Modal cảnh báo tệp nhiều trang & dung lượng lớn */}
       <ImpositionLargeFileModal
         isOpen={Boolean(largeFilePrompt)}
         data={largeFilePrompt}
@@ -255,7 +287,6 @@ export const ImpositionFileDropdown: React.FC<ImpositionFileDropdownProps> = ({
         onClose={() => handleLargeFileChoice({ mode: 'skip' })}
       />
 
-      {/* Overlay khi kéo tệp từ máy tính vào toàn màn hình */}
       {isWindowDragging && (
         <div className="fixed inset-0 z-[150] bg-violet-900/60 backdrop-blur-xs border-4 border-dashed border-white flex flex-col items-center justify-center text-white pointer-events-none animate-fadeIn select-none">
           <UploadCloud size={64} className="animate-bounce mb-3 text-violet-200" />
@@ -279,7 +310,7 @@ export const ImpositionFileDropdown: React.FC<ImpositionFileDropdownProps> = ({
           type="button"
           onClick={() => setIsOpen((prev) => !prev)}
           className="flex items-center gap-2 px-3 py-1.5 bg-white/15 hover:bg-white/25 active:bg-white/30 text-white border border-white/20 rounded-xl text-xs font-medium backdrop-blur-sm transition-all shadow-xs cursor-pointer select-none"
-          title="Quản lý danh mục tệp in (Hỗ trợ tải nhiều file, PDF đa trang)"
+          title="Quản lý danh mục tệp in (Lưu bền trên máy chủ)"
         >
           <FolderOpen size={15} className="text-violet-200" />
           <span className="font-semibold">Danh mục file</span>
@@ -292,15 +323,19 @@ export const ImpositionFileDropdown: React.FC<ImpositionFileDropdownProps> = ({
         {/* Popover Menu Dropdown */}
         {isOpen && (
           <div
-            className="absolute top-full left-0 mt-2 w-[420px] max-w-[92vw] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-[100] text-slate-800 animate-fadeIn select-none flex flex-col"
+            className="absolute top-full left-0 mt-2 w-[430px] max-w-[92vw] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-[100] text-slate-800 animate-fadeIn select-none flex flex-col"
             style={{ maxHeight: '520px' }}
           >
             {/* Header của Popup */}
-            <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FolderOpen size={16} className="text-violet-600" />
                 <span className="font-bold text-xs text-slate-800 tracking-wide uppercase">
-                  Danh mục Tệp in ({fileGroups.length})
+                  Tệp in ({fileGroups.length})
+                </span>
+                <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-100/70 font-semibold px-2 py-0.5 rounded-full" title="Tệp được lưu trữ bền vững trên server">
+                  <Cloud size={10} className="text-emerald-600" />
+                  <span>Lưu bền server</span>
                 </span>
               </div>
               <button
@@ -347,7 +382,7 @@ export const ImpositionFileDropdown: React.FC<ImpositionFileDropdownProps> = ({
                     <span className="text-xs font-bold">Kéo thả nhiều file PDF / Ảnh vào đây</span>
                   </div>
                   <p className="text-[11px] text-slate-500">
-                    Hỗ trợ <b>PDF nhiều trang</b> (cảnh báo tệp lớn, tách 10 trang), PNG, JPG, SVG
+                    Hỗ trợ <b>PDF nhiều trang</b> (tách trang, cảnh báo tệp lớn), PNG, JPG, SVG
                   </p>
                 </>
               )}
@@ -355,94 +390,33 @@ export const ImpositionFileDropdown: React.FC<ImpositionFileDropdownProps> = ({
 
             {/* Danh sách các TỆP (chỉ hiển thị tệp, bên dưới hiển thị số layer) */}
             <div className="flex-1 overflow-y-auto divide-y divide-slate-100 px-3 pb-2">
-              {fileGroups.map((group) => {
-                return (
-                  <div
-                    key={group.fileId}
-                    onClick={() => {
-                      if (group.tabs.length > 0) {
-                        setActiveTabId(group.tabs[0].id);
-                      }
-                    }}
-                    className={`flex items-center justify-between p-2.5 rounded-xl transition-all cursor-pointer group my-1 ${
-                      group.hasActiveLayer
-                        ? 'bg-violet-50/90 border border-violet-200 shadow-2xs'
-                        : 'hover:bg-slate-50 border border-transparent'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                      {/* Thumbnail hoặc Icon đại diện cho tệp */}
-                      <div className="relative w-11 h-11 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center flex-shrink-0 shadow-2xs">
-                        {group.thumbUrl ? (
-                          <img src={group.thumbUrl} alt="" className="w-full h-full object-contain" />
-                        ) : group.fileType === 'pdf' ? (
-                          <FileText size={22} className="text-red-500" />
-                        ) : group.fileType === 'image' ? (
-                          <ImageIcon size={22} className="text-blue-500" />
-                        ) : (
-                          <Shapes size={22} className="text-violet-500" />
-                        )}
-
-                        {group.fileType === 'pdf' && (
-                          <span className="absolute bottom-0 right-0 bg-red-600 text-[8px] text-white font-bold px-1 rounded-tl-xs">
-                            PDF
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Thông tin Tệp & số lượng Layer bên dưới */}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-semibold text-slate-800 truncate" title={group.fileName}>
-                            {group.fileName}
-                          </span>
-                          {group.hasActiveLayer && (
-                            <span className="text-[10px] bg-violet-600 text-white font-medium px-1.5 py-0.2 rounded-full flex-shrink-0">
-                              Đang chọn
-                            </span>
-                          )}
-                        </div>
-
-                        {/* BÊN DƯỚI MỖI FILE HIỆN RA CÓ BAO NHIÊU LAYER */}
-                        <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
-                          <span className="inline-flex items-center gap-1 font-medium text-violet-700 bg-violet-100/80 px-1.5 py-0.2 rounded-md text-[10px]">
-                            <Layers size={10} className="text-violet-600" />
-                            {group.layerCount} {group.layerCount > 1 ? 'layers' : 'layer'}
-                          </span>
-                          {group.dimensionsText && (
-                            <>
-                              <span className="text-slate-300">•</span>
-                              <span className="text-[10px] text-slate-500">{group.dimensionsText}</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Nút xóa tệp */}
-                    <div className="flex items-center gap-1 flex-shrink-0 ml-2">
-                      <button
-                        type="button"
-                        onClick={(e) => handleDeleteFile(group.fileId, e)}
-                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                        title={`Xóa tệp "${group.fileName}" (${group.layerCount} layer)`}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+              {fileGroups.map((group) => (
+                <ImpositionFileItem
+                  key={group.fileId}
+                  group={group}
+                  onSelect={() => {
+                    if (group.tabs.length > 0) {
+                      setActiveTabId(group.tabs[0].id);
+                    }
+                  }}
+                  onDelete={(e) => handleDeleteFile(group.fileId, e)}
+                />
+              ))}
             </div>
 
-            {/* Footer thông tin */}
-            <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500">
-              <span className="flex items-center gap-1.5">
-                <span>Tổng số:</span>
-                <b className="text-slate-700">{fileGroups.length} tệp</b>
-                <span>•</span>
-                <b className="text-violet-700">{shapeTabs.length} layer</b>
-              </span>
+            {/* Footer thông tin & Google status */}
+            <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500">
+              <div className="flex items-center gap-2">
+                {user ? (
+                  <span className="flex items-center gap-1 font-semibold text-emerald-700">
+                    <CheckCircle2 size={12} className="text-emerald-600" />
+                    <span className="truncate max-w-[140px]">{user.email || user.fullName}</span>
+                    <span className="text-[10px] text-emerald-600/80 font-normal">(JWT 30 ngày)</span>
+                  </span>
+                ) : (
+                  <span>Tổng số: <b>{fileGroups.length} tệp</b> • <b className="text-violet-700">{shapeTabs.length} layer</b></span>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}

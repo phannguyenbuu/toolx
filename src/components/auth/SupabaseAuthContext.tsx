@@ -10,6 +10,7 @@ export interface SupabaseAuthContextType {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (email: string, password: string, fullName?: string) => Promise<{ success: boolean; error?: string }>;
+  loginWithGoogle: (googleData?: { email?: string; name?: string; fullName?: string; picture?: string; credential?: string }) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   refreshWallet: () => Promise<void>;
   updateWalletBalance: (balance: number) => void;
@@ -26,7 +27,6 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshWallet = useCallback(async () => {
-    // Placeholder - implement if needed
     setWallet({ balance: 0 });
   }, []);
 
@@ -35,10 +35,31 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, []);
 
   useEffect(() => {
-    // Check current session
+    // 1. Kiểm tra JWT lưu bền 30 ngày trong localStorage
+    const savedToken = localStorage.getItem('auth_token');
+    const savedUserStr = localStorage.getItem('auth_user');
+    const savedExpiresAt = localStorage.getItem('auth_token_expires_at');
+
+    if (savedToken && savedUserStr && savedExpiresAt) {
+      const expiresAt = Number(savedExpiresAt);
+      if (Date.now() < expiresAt) {
+        try {
+          const parsedUser = JSON.parse(savedUserStr);
+          setUser(parsedUser);
+          setToken(savedToken);
+          setIsLoading(false);
+          return;
+        } catch (_) {}
+      } else {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('auth_user');
+        localStorage.removeItem('auth_token_expires_at');
+      }
+    }
+
+    // 2. Kiểm tra session Supabase (nếu có)
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (error?.message?.includes('future') || error?.message?.includes('JWT')) {
-        // Clock skew - force refresh
         supabase.auth.refreshSession().then(({ data: { session: refreshed } }) => {
           if (refreshed?.user) {
             setUser({ id: refreshed.user.id, email: refreshed.user.email || '', fullName: refreshed.user.user_metadata?.full_name || refreshed.user.email || '' } as User);
@@ -57,9 +78,10 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         setToken(session.access_token || null);
       }
       setIsLoading(false);
+    }).catch(() => {
+      setIsLoading(false);
     });
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser({
@@ -68,9 +90,6 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
           fullName: session.user.user_metadata?.full_name || session.user.email || '',
         } as User);
         setToken(session.access_token || null);
-      } else {
-        setUser(null);
-        setToken(null);
       }
     });
 
@@ -80,20 +99,22 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const login = useCallback(async (email: string, password: string) => {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      
       if (error) {
         return { success: false, error: error.message };
       }
-
       if (data.user) {
-        setUser({
+        const u = {
           id: data.user.id,
           email: data.user.email || '',
           fullName: data.user.user_metadata?.full_name || data.user.email || '',
-        } as User);
+        } as User;
+        setUser(u);
         setToken(data.session?.access_token || null);
+        const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+        localStorage.setItem('auth_token', data.session?.access_token || '');
+        localStorage.setItem('auth_user', JSON.stringify(u));
+        localStorage.setItem('auth_token_expires_at', String(expiresAt));
       }
-
       return { success: true };
     } catch (error: any) {
       return { success: false, error: error.message || 'Đăng nhập thất bại' };
@@ -105,36 +126,83 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          data: {
-            full_name: fullName || email,
-          },
-        },
+        options: { data: { full_name: fullName || email } },
       });
-
       if (error) {
         return { success: false, error: error.message };
       }
-
       if (data.user) {
-        setUser({
+        const u = {
           id: data.user.id,
           email: data.user.email || '',
           fullName: fullName || data.user.email || '',
-        } as User);
+        } as User;
+        setUser(u);
         setToken(data.session?.access_token || null);
+        const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+        localStorage.setItem('auth_token', data.session?.access_token || '');
+        localStorage.setItem('auth_user', JSON.stringify(u));
+        localStorage.setItem('auth_token_expires_at', String(expiresAt));
       }
-
       return { success: true };
     } catch (error: any) {
       return { success: false, error: error.message || 'Đăng ký thất bại' };
     }
   }, []);
 
+  // Đăng nhập Google & lưu JWT 30 ngày
+  const loginWithGoogle = useCallback(async (googleData?: { email?: string; name?: string; fullName?: string; picture?: string; credential?: string }) => {
+    try {
+      setIsLoading(true);
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(googleData || {}),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Đăng nhập Google thất bại');
+      }
+
+      const data = await res.json();
+      const accessToken = data.access_token || data.token;
+      const userProfile: User = {
+        id: data.user?.id || `usr_google_${Date.now()}`,
+        email: data.user?.email || '',
+        fullName: data.user?.fullName || data.user?.name || data.user?.email || 'Người dùng Google',
+        avatarUrl: data.user?.avatarUrl || data.user?.picture || '',
+        provider: 'google',
+      } as any;
+
+      setUser(userProfile);
+      setToken(accessToken);
+
+      // Lưu JWT 30 ngày (30 * 24 * 3600 * 1000 ms)
+      const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+      localStorage.setItem('auth_token', accessToken);
+      localStorage.setItem('auth_user', JSON.stringify(userProfile));
+      localStorage.setItem('auth_token_expires_at', String(expiresAt));
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('Google login error:', err);
+      return { success: false, error: err.message || 'Lỗi khi đăng nhập bằng Google' };
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   const logout = useCallback(async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut().catch(() => {});
+    } catch (_) {}
     setUser(null);
     setToken(null);
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_user');
+    localStorage.removeItem('auth_token_expires_at');
+    localStorage.removeItem('auth_wallet');
   }, []);
 
   return (
@@ -147,6 +215,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         isAuthenticated: !!user,
         login,
         register,
+        loginWithGoogle,
         logout,
         refreshWallet,
         updateWalletBalance,
@@ -159,8 +228,8 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
 export const useSupabaseAuth = () => {
   const context = useContext(SupabaseAuthContext);
-  if (!context) {
-    throw new Error('useSupabaseAuth must be used within SupabaseAuthProvider');
+  if (context === undefined) {
+    throw new Error('useSupabaseAuth must be used within a SupabaseAuthProvider');
   }
   return context;
 };

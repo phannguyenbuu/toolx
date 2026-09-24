@@ -49,7 +49,11 @@ except ImportError as e:
     print(f"[AI] IOPaint not available: {e}")
 
 app = Flask(__name__)
-# CORS(app)  # Disable Flask CORS, use nginx instead
+from flask_cors import CORS
+CORS(app)
+
+from imposition_storage import register_storage_routes
+register_storage_routes(app)
 
 # Mock file class for PDF generation  
 class MockFile:

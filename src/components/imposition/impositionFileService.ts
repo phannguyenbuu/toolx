@@ -208,3 +208,86 @@ export function createShapeTabFromImage(
 
   return { tab, page: res.pageItem };
 }
+
+const API_BASE = '/api';
+
+/**
+ * Tải danh sách tệp in đã lưu bền vững trên server
+ */
+export async function fetchServerFiles(): Promise<FileGroupItem[]> {
+  try {
+    const token = localStorage.getItem('auth_token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE}/imposition/files`, { headers });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.files || [];
+  } catch (err) {
+    console.warn('[Storage] Không thể tải danh sách tệp từ server:', err);
+    return [];
+  }
+}
+
+/**
+ * Lưu 1 tệp và các layer của nó bền vững lên server
+ */
+export async function saveFileToServer(group: FileGroupItem): Promise<boolean> {
+  try {
+    const token = localStorage.getItem('auth_token');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE}/imposition/files`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(group),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn('[Storage] Lỗi khi lưu tệp lên server:', err);
+    return false;
+  }
+}
+
+/**
+ * Xóa 1 tệp vĩnh viễn khỏi server
+ */
+export async function deleteFileFromServer(fileId: string): Promise<boolean> {
+  try {
+    const token = localStorage.getItem('auth_token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE}/imposition/files/${encodeURIComponent(fileId)}`, {
+      method: 'DELETE',
+      headers,
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn('[Storage] Lỗi khi xóa tệp trên server:', err);
+    return false;
+  }
+}
+
+/**
+ * Đồng bộ toàn bộ danh sách tệp in lên server
+ */
+export async function syncFilesToServer(groups: FileGroupItem[]): Promise<boolean> {
+  try {
+    const token = localStorage.getItem('auth_token');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE}/imposition/files/sync`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ files: groups }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn('[Storage] Lỗi khi đồng bộ tệp lên server:', err);
+    return false;
+  }
+}
