@@ -1,4 +1,4 @@
-export { AutoNumberingModule as default, AutoNumberingModule } from './autoNumbering/index';
+export { AutoNumberingModule, AutoNumberingModule as default } from './AutoNumberingModule';
 export type {
   NumberingMode,
   StandardConfig,
@@ -7,4 +7,4 @@ export type {
   CommonConfig,
   GeneratedRow,
   AutoNumberingModuleProps
-} from './autoNumbering/index';
+} from './types';
