@@ -78,7 +78,7 @@ export function useAIOperations({
       formData.append('boxes', JSON.stringify(boxesData));
       formData.append('expand', '2');
 
-      const res = await fetch(`${API_BASE}/api/inpaint`, {
+      const res = await fetch(`${API_BASE}/inpaint`, {
         method: 'POST',
         body: formData
       });
@@ -158,7 +158,7 @@ export function useAIOperations({
       formData.append('boxes', JSON.stringify(outpaintBoxes));
       formData.append('expand', '5');
 
-      const res = await fetch(`${API_BASE}/api/inpaint`, {
+      const res = await fetch(`${API_BASE}/inpaint`, {
         method: 'POST',
         body: formData
       });

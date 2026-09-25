@@ -8,7 +8,7 @@ export function useAIStatus() {
 
   const checkAIStatus = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/inpaint/status`);
+      const res = await fetch(`${API_BASE}/inpaint/status`);
       if (!res.ok) {
         setAiStatus('unavailable');
         return;
