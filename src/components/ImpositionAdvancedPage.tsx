@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { VectorMaskResult } from './VectorMaskEditorModal';
 import { probeGoAgent, GoAgentInfo, GOAGENT_DEFAULT_PORT } from '../services/goAgentService';
+import { checkPythonServiceHealth } from './impositionBasic/helpers/iccProfileService';
 
 import {
   DEFAULT_CONFIG,
@@ -117,6 +118,18 @@ export const ImpositionAdvancedPage: React.FC<ImpositionAdvancedPageProps> = ({ 
       .catch(() => setGoAgentInfo(null));
   }, []);
 
+  // API health check — kiểm tra Python backend mỗi 30 giây
+  const [apiStatus, setApiStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  useEffect(() => {
+    const check = async () => {
+      const ok = await checkPythonServiceHealth();
+      setApiStatus(ok ? 'online' : 'offline');
+    };
+    check();
+    const iv = setInterval(check, 30000);
+    return () => clearInterval(iv);
+  }, []);
+
   // Layout calculation
   const plans = useMemo(() => {
     return calculatePlans(config, shapeTabs, isMultiShape, allPages);
@@ -220,7 +233,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionAdvancedPageProps> = ({ 
         lastImpositionRender={null}
         setLastImpositionRender={() => {}}
         generateImpositionPdfBlob={() => generateImpositionPdfBlob({
-          allPages, apiStatus: 'offline', currentPlan, config, customScale: 100,
+          allPages, apiStatus, currentPlan, config, customScale: 100,
           backgroundColor, dataMode, impositionStyle: 'sheetwise', impositionStyleEnabled: false,
           xUpQty, standardQty, totalSheets, shapeTabs, isMultiShape, previewSide: 'front'
         })}
