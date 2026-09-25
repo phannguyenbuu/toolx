@@ -170,35 +170,19 @@ export const ImpositionAdvancedPage: React.FC<ImpositionAdvancedPageProps> = ({ 
   const workspaceHook = useImpositionWorkspace(sharedState);
 
   const autoSaveHook = useImpositionAutoSave({
-    config, currentPlanIndex, shapeTabs, activeTabId, allPages,
+    config, setConfig, currentPlanIndex, setCurrentPlanIndex,
+    shapeTabs, setShapeTabs, activeTabId, setActiveTabId,
+    allPages, setAllPages,
     dataMode, dataModeEnabled, impositionStyle, impositionStyleEnabled,
     xUpQty, standardQty, customScale, customSvgData, backgroundColor, vectorMaskResult
   });
 
   const actionsHook = useImpositionActions({
-    config,
-    setConfig,
-    activeTab,
-    updateActiveTabProp,
-    allPages,
-    setAllPages,
-    currentPlan,
-    shapeTabs,
-    isMultiShape,
-    totalSheets,
-    dataMode,
-    standardQty,
-    xUpQty,
-    customSvgData,
-    vectorMaskResult,
-    backgroundColor,
-    selectedRenderEngine,
-    selectedPresetId,
-    goAgentInfo,
-    setShowDownloadModal,
-    setRenderSuccessModal,
-    setIsAiModalOpen,
-    setIsFilePickerOpen
+    config, setConfig, activeTab, updateActiveTabProp, allPages, setAllPages,
+    currentPlan, shapeTabs, isMultiShape, totalSheets, dataMode, standardQty,
+    xUpQty, customSvgData, vectorMaskResult, backgroundColor, selectedRenderEngine,
+    selectedPresetId, goAgentInfo, setShowDownloadModal, setRenderSuccessModal,
+    setIsAiModalOpen, setIsFilePickerOpen
   });
 
   return (
@@ -241,64 +225,80 @@ export const ImpositionAdvancedPage: React.FC<ImpositionAdvancedPageProps> = ({ 
           xUpQty, standardQty, totalSheets, shapeTabs, isMultiShape, previewSide: 'front'
         })}
         handleReset={() => {
+          autoSaveHook.clearAutoSave();
           setConfig(DEFAULT_CONFIG);
           setAllPages([]);
+          setShapeTabs([
+            {
+              id: 'tab-a', name: 'A', enabled: true, shape: 'rect', itemW: 90, itemH: 54,
+              quantity: 10, useTotalLimit: false, cornerRadius: 0, sourceImage: null,
+              vectorMaskResult: null, customSvgData: '', color: '#8b5cf6',
+              autoRotateImage: true, canRotate: true
+            }
+          ]);
         }}
         onClose={onClose}
       />
 
       {/* 2. Main Workspace Area */}
       <div className="flex-1 flex overflow-hidden min-h-0">
-        {/* Left Side: Layers, Controls, Plans */}
-        <aside className="w-[576px] max-w-[45vw] bg-white border-r border-slate-200 flex flex-col overflow-y-auto flex-shrink-0 select-none z-10 shadow-xs">
-          <ImpositionLayerBar
-            shapeTabs={shapeTabs}
-            activeTabId={activeTabId}
-            setActiveTabId={setActiveTabId}
-            setShapeTabs={setShapeTabs}
-            setEditingLayerModalTab={setEditingLayerModalTab}
-            setLayerModalName={setLayerModalName}
-            setLayerModalColor={setLayerModalColor}
-          />
-          <div className="p-3 border-b flex-shrink-0">
-            <ImpositionLayerCard
-              activeTab={activeTab}
+        {/* Left Side: Layer (50vh) & Sắp xếp (50vh) */}
+        <aside className="w-[576px] max-w-[45vw] bg-white border-r border-slate-200 flex flex-col h-full overflow-hidden flex-shrink-0 select-none z-10 shadow-xs">
+          {/* Phân vùng 1: LAYER (chiếm 50vh, cuộn độc lập) */}
+          <div className="h-[50vh] flex flex-col overflow-y-auto border-b border-slate-200 flex-shrink-0">
+            <ImpositionLayerBar
+              shapeTabs={shapeTabs}
+              activeTabId={activeTabId}
+              setActiveTabId={setActiveTabId}
+              setShapeTabs={setShapeTabs}
+              setEditingLayerModalTab={setEditingLayerModalTab}
+              setLayerModalName={setLayerModalName}
+              setLayerModalColor={setLayerModalColor}
+            />
+            <div className="p-3">
+              <ImpositionLayerCard
+                activeTab={activeTab}
+                config={config}
+                setConfig={setConfig}
+                updateActiveTabProp={updateActiveTabProp}
+                allPages={allPages}
+                isMultiShape={isMultiShape}
+                vectorMaskResult={vectorMaskResult}
+                customScale={customScale}
+                totalSheets={totalSheets}
+                currentSheetIndex={currentSheetIndex}
+                setCurrentSheetIndex={setCurrentSheetIndex}
+                hasLastSheetBlanks={hasLastSheetBlanks}
+                lastSheetBlankCount={lastSheetBlankCount}
+                handleOpenSourceEditor={() => setIsCropColorModalOpen(true)}
+                handleSourceImageSelect={actionsHook.handleSourceImageSelect}
+                sourceImageInputRef={sourceImageInputRef}
+                soLuongInputRef={soLuongInputRef}
+                rongInputRef={rongInputRef}
+                caoInputRef={caoInputRef}
+                setIsVectorMaskEditorOpen={setIsVectorMaskEditorOpen}
+                setIsScaleModalOpen={setIsScaleModalOpen}
+              />
+            </div>
+          </div>
+
+          {/* Phân vùng 2: SẮP XẾP (chiếm 50vh, cuộn danh sách phương án) */}
+          <div className="h-[50vh] flex flex-col min-h-0 flex-1 overflow-hidden">
+            <ImpositionPlanPicker
+              plans={plans}
+              currentPlan={currentPlan}
+              currentPlanIndex={currentPlanIndex}
+              setCurrentPlanIndex={setCurrentPlanIndex}
               config={config}
               setConfig={setConfig}
-              updateActiveTabProp={updateActiveTabProp}
-              allPages={allPages}
+              layoutFingerprintRef={layoutFingerprintRef}
+              handleExportSortJob={() => {}}
+              isExportingSortJob={isExportingSortJob}
               isMultiShape={isMultiShape}
-              vectorMaskResult={vectorMaskResult}
-              customScale={customScale}
-              totalSheets={totalSheets}
-              currentSheetIndex={currentSheetIndex}
-              setCurrentSheetIndex={setCurrentSheetIndex}
-              hasLastSheetBlanks={hasLastSheetBlanks}
-              lastSheetBlankCount={lastSheetBlankCount}
-              handleOpenSourceEditor={() => setIsCropColorModalOpen(true)}
-              handleSourceImageSelect={actionsHook.handleSourceImageSelect}
-              sourceImageInputRef={sourceImageInputRef}
-              soLuongInputRef={soLuongInputRef}
-              rongInputRef={rongInputRef}
-              caoInputRef={caoInputRef}
-              setIsVectorMaskEditorOpen={setIsVectorMaskEditorOpen}
-              setIsScaleModalOpen={setIsScaleModalOpen}
+              shapeTabs={shapeTabs}
+              allPages={allPages}
             />
           </div>
-          <ImpositionPlanPicker
-            plans={plans}
-            currentPlan={currentPlan}
-            currentPlanIndex={currentPlanIndex}
-            setCurrentPlanIndex={setCurrentPlanIndex}
-            config={config}
-            setConfig={setConfig}
-            layoutFingerprintRef={layoutFingerprintRef}
-            handleExportSortJob={() => {}}
-            isExportingSortJob={isExportingSortJob}
-            isMultiShape={isMultiShape}
-            shapeTabs={shapeTabs}
-            allPages={allPages}
-          />
         </aside>
 
         {/* Center: Canvas View */}

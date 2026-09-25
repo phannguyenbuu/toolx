@@ -2,6 +2,10 @@ import { ShapeTabItem, PageItem, TAB_COLORS } from './types';
 import { ExtractedPdfPage } from '../../utils/pdfPageExtractor';
 import { calculateStandardImageDimensionsMm } from '../../utils/imageDimensions';
 import { createClientThumbnail } from '../../utils/imageThumbnail';
+import {
+  saveFileGroupsToIndexedDB,
+  loadFileGroupsFromIndexedDB,
+} from './impositionStorageIndexedDB';
 
 export interface FileGroupItem {
   fileId: string;
@@ -212,7 +216,7 @@ export function createShapeTabFromImage(
 const API_BASE = '/api';
 
 /**
- * Tải danh sách tệp in đã lưu bền vững trên server
+ * Tải danh sách tệp in đã lưu bền vững (kết hợp Server & IndexedDB offline-first)
  */
 export async function fetchServerFiles(): Promise<FileGroupItem[]> {
   try {
@@ -221,20 +225,31 @@ export async function fetchServerFiles(): Promise<FileGroupItem[]> {
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
     const res = await fetch(`${API_BASE}/imposition/files`, { headers });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data.files || [];
+    if (res.ok) {
+      const data = await res.json();
+      if (data.files && data.files.length > 0) {
+        saveFileGroupsToIndexedDB(data.files);
+        return data.files;
+      }
+    }
   } catch (err) {
-    console.warn('[Storage] Không thể tải danh sách tệp từ server:', err);
-    return [];
+    console.warn('[Storage] Không thể tải danh sách tệp từ server, sử dụng IndexedDB:', err);
   }
+
+  // Fallback bền vững sang IndexedDB
+  return loadFileGroupsFromIndexedDB();
 }
 
 /**
- * Lưu 1 tệp và các layer của nó bền vững lên server
+ * Lưu 1 tệp và các layer của nó bền vững lên server & IndexedDB
  */
 export async function saveFileToServer(group: FileGroupItem): Promise<boolean> {
   try {
+    loadFileGroupsFromIndexedDB().then((existing) => {
+      const next = [group, ...existing.filter((g) => g.fileId !== group.fileId)];
+      saveFileGroupsToIndexedDB(next);
+    });
+
     const token = localStorage.getItem('auth_token');
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -252,10 +267,14 @@ export async function saveFileToServer(group: FileGroupItem): Promise<boolean> {
 }
 
 /**
- * Xóa 1 tệp vĩnh viễn khỏi server
+ * Xóa 1 tệp vĩnh viễn khỏi server & IndexedDB
  */
 export async function deleteFileFromServer(fileId: string): Promise<boolean> {
   try {
+    loadFileGroupsFromIndexedDB().then((existing) => {
+      saveFileGroupsToIndexedDB(existing.filter((g) => g.fileId !== fileId));
+    });
+
     const token = localStorage.getItem('auth_token');
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -272,10 +291,12 @@ export async function deleteFileFromServer(fileId: string): Promise<boolean> {
 }
 
 /**
- * Đồng bộ toàn bộ danh sách tệp in lên server
+ * Đồng bộ toàn bộ danh sách tệp in lên server & IndexedDB
  */
 export async function syncFilesToServer(groups: FileGroupItem[]): Promise<boolean> {
   try {
+    saveFileGroupsToIndexedDB(groups);
+
     const token = localStorage.getItem('auth_token');
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;

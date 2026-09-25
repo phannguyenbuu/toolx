@@ -39,7 +39,8 @@ module.exports = function(app) {
   const pythonPathPatterns = [
     /^\/task\/[^\/]+$/,           // /task/{id}
     /^\/task\/[^\/]+\/download$/,  // /task/{id}/download
-    /^\/delete-source\/[^\/]+$/   // /delete-source/{file_id}
+    /^\/delete-source\/[^\/]+$/,  // /delete-source/{file_id}
+    /^\/imposition(\/.*)?$/       // /imposition and /imposition/*
   ];
 
   // Express server routes (port 3003) - Fixed port from 3002 to 3003
@@ -100,6 +101,10 @@ module.exports = function(app) {
       
       // Check Backend routes first (explicit routing)
       if (backendPaths.some(backendPath => path.startsWith(backendPath))) {
+        if (path === '/auth/google' || path === '/auth/me') {
+          console.log(`[API PROXY] Routing auth to Python: http://157.66.80.125:3005`);
+          return 'http://157.66.80.125:3005';
+        }
         console.log(`[API PROXY] Routing to Backend NestJS: http://157.66.80.125:3001`);
         return 'http://157.66.80.125:3001';
       }
