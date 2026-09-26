@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Scissors, Upload, Eye, EyeOff, X, Layers, Edit3, Plus, Check } from 'lucide-react';
 import { CropModalLayerTab, LAYER_COLOR_PRESETS } from './types';
 
@@ -16,6 +16,12 @@ export interface CropModalLayerBarProps {
   onUpdateTab: (tabId: string, updates: Partial<CropModalLayerTab>) => void;
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onClose: () => void;
+}
+
+interface ContextMenuState {
+  tabId: string;
+  x: number;
+  y: number;
 }
 
 export const CropModalLayerBar: React.FC<CropModalLayerBarProps> = ({
@@ -40,6 +46,48 @@ export const CropModalLayerBar: React.FC<CropModalLayerBarProps> = ({
   const [editLayerName, setEditLayerName] = useState('');
   const [editLayerColor, setEditLayerColor] = useState('#8b5cf6');
 
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close context menu on outside click
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setContextMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [contextMenu]);
+
+  const handleContextMenu = (tabId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onSwitchTab(tabId);
+    setContextMenu({ tabId, x: e.clientX, y: e.clientY });
+  };
+
+  const closeMenu = () => setContextMenu(null);
+
+  const handleOpenEditModal = useCallback((tab: CropModalLayerTab) => {
+    setEditingLayerTab(tab);
+    setEditLayerName(tab.name);
+    setEditLayerColor(tab.color || '#8b5cf6');
+    closeMenu();
+  }, []);
+
+  const handleToggleTab = useCallback((tabId: string) => {
+    onToggleTab(tabId);
+    closeMenu();
+  }, [onToggleTab]);
+
+  const handleDeleteTab = useCallback((tabId: string) => {
+    onDeleteTab(tabId);
+    closeMenu();
+  }, [onDeleteTab]);
+
   const handleSaveLayerEdit = () => {
     if (!editingLayerTab) return;
     const finalName = editLayerName.trim() || editingLayerTab.name;
@@ -49,6 +97,8 @@ export const CropModalLayerBar: React.FC<CropModalLayerBarProps> = ({
     });
     setEditingLayerTab(null);
   };
+
+  const contextTab = contextMenu ? tabs.find(t => t.id === contextMenu.tabId) : null;
 
   return (
     <>
@@ -133,7 +183,8 @@ export const CropModalLayerBar: React.FC<CropModalLayerBarProps> = ({
               <div
                 key={tab.id}
                 onClick={() => onSwitchTab(tab.id)}
-                className={`group/tab relative flex items-center gap-1.5 transition-all cursor-pointer select-none shrink-0 px-2.5 py-1 rounded-xl border ${
+                onContextMenu={(e) => handleContextMenu(tab.id, e)}
+                className={`relative flex items-center gap-1.5 transition-all cursor-pointer select-none shrink-0 px-2.5 py-1 rounded-xl border ${
                   isActive
                     ? 'bg-white text-slate-900 font-bold shadow-xs'
                     : tab.enabled
@@ -141,6 +192,7 @@ export const CropModalLayerBar: React.FC<CropModalLayerBarProps> = ({
                     : 'bg-slate-200/50 border-dashed border-slate-300 text-slate-400 opacity-60'
                 }`}
                 style={{ borderColor: isActive ? tabColor : undefined }}
+                title="Click để chọn · Chuột phải để sửa/xoá/ẩn layer"
               >
                 <span
                   className="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-black/10"
@@ -150,46 +202,8 @@ export const CropModalLayerBar: React.FC<CropModalLayerBarProps> = ({
                   {tab.name}
                 </span>
 
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setEditingLayerTab(tab);
-                    setEditLayerName(tab.name);
-                    setEditLayerColor(tab.color || '#8b5cf6');
-                  }}
-                  className="p-0.5 rounded hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition"
-                  title="Đổi tên & màu layer"
-                >
-                  <Edit3 size={11} />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleTab(tab.id);
-                  }}
-                  className={`p-0.5 rounded transition ${
-                    tab.enabled ? 'text-emerald-600 hover:bg-emerald-50' : 'text-slate-400 hover:bg-slate-100'
-                  }`}
-                  title={tab.enabled ? 'Đang hiện' : 'Đang ẩn'}
-                >
-                  {tab.enabled ? <Eye size={11} /> : <EyeOff size={11} />}
-                </button>
-
-                {tabs.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteTab(tab.id);
-                    }}
-                    className="p-0.5 rounded opacity-0 group-hover/tab:opacity-100 hover:bg-rose-100 text-rose-500 transition"
-                    title="Xóa layer này"
-                  >
-                    <X size={11} />
-                  </button>
+                {!tab.enabled && (
+                  <EyeOff size={10} className="text-slate-400 shrink-0" />
                 )}
               </div>
             );
@@ -205,6 +219,57 @@ export const CropModalLayerBar: React.FC<CropModalLayerBarProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Right-click Context Menu */}
+      {contextMenu && contextTab && (
+        <div
+          ref={menuRef}
+          className="fixed z-[9999] bg-white rounded-xl shadow-xl border border-slate-200 py-1 min-w-[160px] animate-in fade-in zoom-in-95 duration-150"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+        >
+          {/* Header */}
+          <div className="px-3 py-1.5 border-b border-slate-100 flex items-center gap-2">
+            <span
+              className="w-2.5 h-2.5 rounded-full ring-1 ring-black/10 shrink-0"
+              style={{ backgroundColor: contextTab.color || '#8b5cf6' }}
+            />
+            <span className="text-[11px] font-bold text-slate-700 truncate">{contextTab.name}</span>
+          </div>
+
+          {/* Menu Items */}
+          <button
+            type="button"
+            onClick={() => handleOpenEditModal(contextTab)}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-slate-700 hover:bg-violet-50 hover:text-violet-700 transition cursor-pointer"
+          >
+            <Edit3 size={13} />
+            Đổi tên &amp; màu
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleToggleTab(contextTab.id)}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer"
+          >
+            {contextTab.enabled ? <EyeOff size={13} /> : <Eye size={13} />}
+            {contextTab.enabled ? 'Ẩn layer khỏi trang in' : 'Bật hiển thị layer'}
+          </button>
+
+          {tabs.length > 1 && (
+            <>
+              <div className="border-t border-slate-100 my-1" />
+              <button
+                type="button"
+                onClick={() => handleDeleteTab(contextTab.id)}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+              >
+                <X size={13} />
+                Xoá layer này
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Edit Layer Modal Toast */}
       {editingLayerTab && (

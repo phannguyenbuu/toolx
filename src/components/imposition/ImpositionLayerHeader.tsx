@@ -74,24 +74,6 @@ export const ImpositionLayerHeader: React.FC<ImpositionLayerHeaderProps> = ({
                 alt="Nguồn"
                 className="w-full h-full object-cover"
               />
-              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/srcbtn:opacity-100 transition flex flex-col items-center justify-center gap-1 p-1">
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); handleOpenSourceEditor(); }}
-                  className="w-full py-0.5 px-1 bg-violet-600 hover:bg-violet-700 text-white rounded text-[9px] font-bold flex items-center justify-center gap-1 shadow-xs transition cursor-pointer"
-                >
-                  <ImagePlus size={11} />
-                  <span>Crop/Màu</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); sourceImageInputRef.current?.click(); }}
-                  className="w-full py-0.5 px-1 bg-slate-700 hover:bg-slate-600 text-white rounded text-[9px] font-bold flex items-center justify-center gap-1 shadow-xs transition cursor-pointer"
-                >
-                  <Upload size={11} />
-                  <span>Đổi PDF/Ảnh</span>
-                </button>
-              </div>
             </div>
           ) : (
             <>

@@ -75,15 +75,15 @@ export const CropModalSidebar: React.FC<CropModalSidebarProps> = ({
 }) => {
   return (
     <div className="w-[415px] shrink-0 bg-white flex flex-col overflow-hidden text-xs">
-      {/* Panel thông số đối tượng: Hình + Kích thước */}
-      <div className="border-b border-slate-200 bg-slate-50/90">
-        {/* Row 1: Shape selector */}
-        <div className="px-2 pt-2 pb-1.5 flex items-center gap-2">
+      {/* Panel thông số đối tượng: Hình + Kích thước nằm chung 1 hàng */}
+      <div className="p-2 border-b border-slate-200 bg-slate-50/90 flex items-center gap-2">
+        {/* Shape selector */}
+        <div className="flex items-center gap-1.5 shrink-0">
           <span className="text-[10px] text-slate-500 font-medium shrink-0">Hình:</span>
           <select
             value={localShape}
             onChange={(e) => handleShapeChange(e.target.value)}
-            className="text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-full px-2.5 py-0.5 shadow-2xs focus:outline-none focus:ring-2 focus:ring-violet-400 cursor-pointer"
+            className="text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-full px-2.5 py-1 shadow-2xs focus:outline-none focus:ring-2 focus:ring-violet-400 cursor-pointer"
           >
             <option value="rect">Chữ nhật</option>
             <option value="circle">Hình tròn</option>
@@ -94,8 +94,9 @@ export const CropModalSidebar: React.FC<CropModalSidebarProps> = ({
             <option value="custom-svg">Custom SVG</option>
           </select>
         </div>
-        {/* Row 2: Kích thước full width */}
-        <div className="px-2 pb-2">
+
+        {/* Kích thước full width còn lại */}
+        <div className="flex-1 min-w-0">
           <DimDropdownCombobox
             shape={localShape}
             w={localItemW}
@@ -269,7 +270,7 @@ export const CropModalSidebar: React.FC<CropModalSidebarProps> = ({
                     : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 font-medium'
                 }`}
               >
-                <div className="text-xs font-bold text-indigo-700">AI LaMa</div>
+                <div className="text-xs font-bold text-indigo-700">AI</div>
                 <div className="text-[9px] text-slate-400">Vẽ tràn lề AI</div>
               </button>
             </div>
