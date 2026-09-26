@@ -129,11 +129,34 @@ export function saveAutoSavedState(state: ImpositionAutoSavedState): void {
   }
 }
 
+export interface RemoveBgOptions {
+  whiteThreshold?: number; // 180 .. 255 (default 230)
+  shadowTolerance?: number; // 0 .. 60 (default 25)
+  shadowBrightness?: number; // 80 .. 240 (default 135)
+  featherRadius?: number; // 0 .. 5 (default 1.5)
+  protectSaturation?: number; // 5 .. 50 (default 18)
+  floodFillFromBorder?: boolean; // default true
+  useAiModel?: boolean; // default false
+}
+
 /**
- * Fallback khử nền trắng client-side bằng thuật toán BFS Flood Fill từ 4 cạnh viền.
- * Không ăn vào các chi tiết màu trắng bên trong đối tượng (huy hiệu, áo, chữ).
+ * Khử nền trắng client-side bằng thuật toán BFS Flood Fill thông minh:
+ * - Bảo vệ 100% các vùng có màu sắc (xanh, đỏ, vàng,...) không bao giờ bị xóa
+ * - Khử sạch bóng đổ xám trung tính (drop-shadow)
+ * - Làm mềm viền (feathering) xóa sạch hiện tượng lởm chởm / răng cưa
+ * - Mặc định ăn từ 4 cạnh viền ngoài vào, bảo vệ các chi tiết trắng bên trong
  */
-export async function removeWhiteBackgroundClientFallback(srcDataUrl: string): Promise<string> {
+export async function removeWhiteBackgroundClientFallback(
+  srcDataUrl: string,
+  options?: Partial<RemoveBgOptions>
+): Promise<string> {
+  const whiteThreshold = options?.whiteThreshold ?? 230;
+  const shadowTolerance = options?.shadowTolerance ?? 25;
+  const shadowBrightness = options?.shadowBrightness ?? 135;
+  const featherRadius = options?.featherRadius ?? 1.5;
+  const protectSaturation = options?.protectSaturation ?? 18;
+  const floodFillFromBorder = options?.floodFillFromBorder ?? true;
+
   const img = new Image();
   await new Promise<void>((res, rej) => {
     img.onload = () => res();
@@ -151,54 +174,117 @@ export async function removeWhiteBackgroundClientFallback(srcDataUrl: string): P
   const imgData = ctx.getImageData(0, 0, w, h);
   const data = imgData.data;
 
-  // Pixel gần trắng: R,G,B >= 220
-  const isWhite = (idx: number) => {
+  // Kiểm tra pixel có phải nền trắng hoặc bóng đổ xám trung tính trên nền trắng
+  const isBgPixel = (idx: number) => {
     const r = data[idx], g = data[idx + 1], b = data[idx + 2], a = data[idx + 3];
-    return a > 0 && r >= 220 && g >= 220 && b >= 220;
+    if (a === 0) return true; // Đã trong suốt
+    const maxVal = Math.max(r, g, b);
+    const minVal = Math.min(r, g, b);
+    const satDiff = maxVal - minVal;
+
+    // Nếu pixel có màu rõ rệt (độ bão hòa cao như màu xanh, đỏ, vàng), BẢO VỆ 100% không bao giờ xóa
+    if (satDiff > protectSaturation) return false;
+
+    // 1. Pixel màu trắng / gần trắng
+    if (r >= whiteThreshold && g >= whiteThreshold && b >= whiteThreshold) {
+      return true;
+    }
+
+    // 2. Bóng đổ xám trung tính (drop-shadow) trên nền trắng
+    const brightness = (r + g + b) / 3;
+    if (satDiff <= shadowTolerance && brightness >= shadowBrightness) {
+      return true;
+    }
+
+    return false;
   };
 
-  const visited = new Uint8Array(w * h);
-  const queue: number[] = [];
+  const totalPixels = w * h;
+  const isBg = new Uint8Array(totalPixels);
 
-  for (let x = 0; x < w; x++) {
-    const topIdx = x;
-    if (!visited[topIdx] && isWhite(topIdx * 4)) { visited[topIdx] = 1; queue.push(topIdx); }
-    const botIdx = (h - 1) * w + x;
-    if (!visited[botIdx] && isWhite(botIdx * 4)) { visited[botIdx] = 1; queue.push(botIdx); }
-  }
-  for (let y = 0; y < h; y++) {
-    const leftIdx = y * w;
-    if (!visited[leftIdx] && isWhite(leftIdx * 4)) { visited[leftIdx] = 1; queue.push(leftIdx); }
-    const rightIdx = y * w + (w - 1);
-    if (!visited[rightIdx] && isWhite(rightIdx * 4)) { visited[rightIdx] = 1; queue.push(rightIdx); }
-  }
+  if (floodFillFromBorder) {
+    const queue = new Int32Array(totalPixels);
+    let head = 0;
+    let tail = 0;
 
-  let head = 0;
-  while (head < queue.length) {
-    const curr = queue[head++];
-    const cx = curr % w;
-    const cy = Math.floor(curr / w);
+    for (let x = 0; x < w; x++) {
+      const topIdx = x;
+      if (!isBg[topIdx] && isBgPixel(topIdx * 4)) { isBg[topIdx] = 1; queue[tail++] = topIdx; }
+      const botIdx = (h - 1) * w + x;
+      if (!isBg[botIdx] && isBgPixel(botIdx * 4)) { isBg[botIdx] = 1; queue[tail++] = botIdx; }
+    }
+    for (let y = 0; y < h; y++) {
+      const leftIdx = y * w;
+      if (!isBg[leftIdx] && isBgPixel(leftIdx * 4)) { isBg[leftIdx] = 1; queue[tail++] = leftIdx; }
+      const rightIdx = y * w + (w - 1);
+      if (!isBg[rightIdx] && isBgPixel(rightIdx * 4)) { isBg[rightIdx] = 1; queue[tail++] = rightIdx; }
+    }
 
-    const neighbors = [
-      cy > 0 ? (cy - 1) * w + cx : -1,
-      cy < h - 1 ? (cy + 1) * w + cx : -1,
-      cx > 0 ? cy * w + (cx - 1) : -1,
-      cx < w - 1 ? cy * w + (cx + 1) : -1,
-    ];
+    while (head < tail) {
+      const curr = queue[head++];
+      const cx = curr % w;
+      const cy = (curr / w) | 0;
 
-    for (const nb of neighbors) {
-      if (nb >= 0 && !visited[nb]) {
-        if (isWhite(nb * 4)) {
-          visited[nb] = 1;
-          queue.push(nb);
-        }
+      if (cy > 0) {
+        const nb = curr - w;
+        if (!isBg[nb] && isBgPixel(nb * 4)) { isBg[nb] = 1; queue[tail++] = nb; }
+      }
+      if (cy < h - 1) {
+        const nb = curr + w;
+        if (!isBg[nb] && isBgPixel(nb * 4)) { isBg[nb] = 1; queue[tail++] = nb; }
+      }
+      if (cx > 0) {
+        const nb = curr - 1;
+        if (!isBg[nb] && isBgPixel(nb * 4)) { isBg[nb] = 1; queue[tail++] = nb; }
+      }
+      if (cx < w - 1) {
+        const nb = curr + 1;
+        if (!isBg[nb] && isBgPixel(nb * 4)) { isBg[nb] = 1; queue[tail++] = nb; }
+      }
+    }
+  } else {
+    for (let i = 0; i < totalPixels; i++) {
+      if (isBgPixel(i * 4)) {
+        isBg[i] = 1;
       }
     }
   }
 
-  for (let i = 0; i < visited.length; i++) {
-    if (visited[i]) {
-      data[i * 4 + 3] = 0;
+  // Alpha matting / Feathering để xóa triệt để răng cưa & lởm chởm dropshadow
+  if (featherRadius <= 0.5) {
+    for (let i = 0; i < totalPixels; i++) {
+      if (isBg[i]) data[i * 4 + 3] = 0;
+    }
+  } else {
+    const alphaMask = new Uint8Array(totalPixels);
+    for (let i = 0; i < totalPixels; i++) {
+      alphaMask[i] = isBg[i] ? 0 : 255;
+    }
+    const smoothMask = new Uint8Array(totalPixels);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = y * w + x;
+        if (alphaMask[idx] === 0) {
+          smoothMask[idx] = 0;
+          continue;
+        }
+        let sum = 0;
+        let count = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          const ny = y + dy;
+          if (ny < 0 || ny >= h) continue;
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = x + dx;
+            if (nx < 0 || nx >= w) continue;
+            sum += alphaMask[ny * w + nx];
+            count++;
+          }
+        }
+        smoothMask[idx] = Math.round(sum / count);
+      }
+    }
+    for (let i = 0; i < totalPixels; i++) {
+      data[i * 4 + 3] = Math.min(data[i * 4 + 3], smoothMask[i]);
     }
   }
 
@@ -207,34 +293,37 @@ export async function removeWhiteBackgroundClientFallback(srcDataUrl: string): P
 }
 
 /**
- * Gọi AI Rembg (u2net / isnet-general-use) từ server để tách nền chuyên nghiệp,
- * gọt sạch bóng đổ drop-shadow và giữ nguyên chi tiết bên trong.
+ * Tách / Khử nền trắng:
+ * - Nếu useAiModel = true: Gọi AI Rembg từ server
+ * - Mặc định: Chạy thuật toán khử trắng thông minh client-side bảo vệ màu sắc và gọt sạch bóng đổ
  */
 export async function removeWhiteBackgroundService(
   srcDataUrl: string,
-  model: 'u2net' | 'isnet-general-use' = 'u2net'
+  options?: Partial<RemoveBgOptions>
 ): Promise<string> {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
+  if (options?.useAiModel) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
 
-    const res = await fetch('/api/remove-bg', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: srcDataUrl, model }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
+      const res = await fetch('/api/remove-bg', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: srcDataUrl, model: 'u2net' }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
 
-    if (res.ok) {
-      const data = await res.json();
-      if (data?.image) {
-        return data.image;
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.image) {
+          return data.image;
+        }
       }
+    } catch (e) {
+      console.warn('[AI RemoveBG] Failed to call AI endpoint, using fallback:', e);
     }
-  } catch (e) {
-    console.warn('[AI RemoveBG] Failed to call AI endpoint, using fallback:', e);
   }
-  return removeWhiteBackgroundClientFallback(srcDataUrl);
+  return removeWhiteBackgroundClientFallback(srcDataUrl, options);
 }
 

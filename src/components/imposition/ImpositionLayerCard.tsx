@@ -1,10 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import {
-  Sparkles,
-  Scissors,
-  RotateCw,
-  Eraser,
-} from 'lucide-react';
+import { Sparkles, Scissors, RotateCw, RotateCcw, Eraser } from 'lucide-react';
 import { ImpositionConfig, ShapeTabItem, PageItem } from './types';
 import { DebouncedNumberInput } from './DebouncedNumberInput';
 import { VectorMaskResult } from '../VectorMaskEditorModal';
@@ -67,7 +62,7 @@ export const ImpositionLayerCard: React.FC<ImpositionLayerCardProps> = ({
 
   const [isRemovingWhite, setIsRemovingWhite] = useState(false);
 
-  // Khử nền trắng bằng AI (Rembg / u2net), tự động gọt sạch bóng đổ drop-shadow
+  // Khử nền trắng thông minh: bảo vệ màu sắc và gọt sạch bóng đổ
   const handleRemoveWhiteBackground = useCallback(async () => {
     const srcDataUrl = activeTab.sourceImage?.thumb || (allPages[0]?.thumb ?? '');
     if (!srcDataUrl) return;
@@ -75,16 +70,26 @@ export const ImpositionLayerCard: React.FC<ImpositionLayerCardProps> = ({
     try {
       const resultThumb = await removeWhiteBackgroundService(srcDataUrl);
       const baseItem = (activeTab.sourceImage || (allPages[0] ? { ...allPages[0] } : {})) as PageItem;
+      const originalThumb = baseItem.originalThumb || baseItem.thumb || srcDataUrl;
       updateActiveTabProp({
-        sourceImage: { ...baseItem, id: baseItem.id || 'source-image', thumb: resultThumb, originalThumb: resultThumb },
+        sourceImage: { ...baseItem, id: baseItem.id || 'source-image', thumb: resultThumb, originalThumb },
       });
-      safeToastSuccess('Đã khử nền trắng (AI) thành công!');
+      safeToastSuccess('Đã khử nền trắng thành công!');
     } catch (err) {
       console.error('Lỗi khử nền trắng:', err);
     } finally {
       setIsRemovingWhite(false);
     }
   }, [activeTab, allPages, updateActiveTabProp]);
+
+  const handleResetOriginalThumb = useCallback(() => {
+    const baseItem = activeTab.sourceImage;
+    if (!baseItem || !baseItem.originalThumb) return;
+    updateActiveTabProp({
+      sourceImage: { ...baseItem, thumb: baseItem.originalThumb },
+    });
+    safeToastSuccess('Đã khôi phục ảnh gốc!');
+  }, [activeTab.sourceImage, updateActiveTabProp]);
 
   return (
     <div
@@ -329,21 +334,34 @@ export const ImpositionLayerCard: React.FC<ImpositionLayerCardProps> = ({
           </div>
         )}
 
-        {/* Nút Khử nền trắng AI - Chiếm 1 ô ở hàng dưới */}
-        <button
-          type="button"
-          onClick={handleRemoveWhiteBackground}
-          disabled={isRemovingWhite || (!activeTab.sourceImage?.thumb && allPages.length === 0)}
-          className={`flex items-center justify-center gap-1.5 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-200/90 rounded-xl px-2.5 py-1.5 text-indigo-700 transition-all shadow-2xs cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed select-none ${
-            isRemovingWhite ? 'animate-pulse' : ''
-          }`}
-          title="Tách nền bằng AI Rembg (gọt sạch bóng đổ drop-shadow, giữ nguyên chi tiết bên trong)"
-        >
-          <Sparkles size={13} className={`shrink-0 text-indigo-600 ${isRemovingWhite ? 'animate-spin' : ''}`} />
-          <span className="text-[10px] font-bold truncate">
-            {isRemovingWhite ? 'AI đang khử...' : 'Khử trắng AI'}
-          </span>
-        </button>
+        {/* Nút Khử nền trắng & Nút Reset */}
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={handleRemoveWhiteBackground}
+            disabled={isRemovingWhite || (!activeTab.sourceImage?.thumb && allPages.length === 0)}
+            className={`flex-1 flex items-center justify-center gap-1.5 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-200/90 rounded-xl px-2 py-1.5 text-indigo-700 transition-all shadow-2xs cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed select-none ${
+              isRemovingWhite ? 'animate-pulse' : ''
+            }`}
+            title="Khử nền trắng & gọt sạch bóng đổ, bảo vệ màu sắc và chi tiết bên trong"
+          >
+            <Sparkles size={13} className={`shrink-0 text-indigo-600 ${isRemovingWhite ? 'animate-spin' : ''}`} />
+            <span className="text-[10px] font-bold truncate">
+              {isRemovingWhite ? 'Đang khử...' : 'Khử trắng'}
+            </span>
+          </button>
+
+          {activeTab.sourceImage?.originalThumb && activeTab.sourceImage.originalThumb !== activeTab.sourceImage.thumb && (
+            <button
+              type="button"
+              onClick={handleResetOriginalThumb}
+              className="p-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200/90 rounded-xl text-amber-700 transition-all shadow-2xs cursor-pointer select-none shrink-0"
+              title="Khôi phục lại ảnh ban đầu (Reset)"
+            >
+              <RotateCcw size={13} className="text-amber-600" />
+            </button>
+          )}
+        </div>
 
         {/* Nút Trang cuối nếu có dư trắng */}
         {hasLastSheetBlanks && totalSheets > 1 && (

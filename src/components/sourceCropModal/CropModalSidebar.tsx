@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, RefreshCw, Zap, Loader2, RotateCcw } from 'lucide-react';
+import { Sparkles, RefreshCw, Zap, Loader2, RotateCcw, Eraser } from 'lucide-react';
 import {
   ColorAdjustSettings,
   COLOR_PRESETS,
@@ -7,7 +7,8 @@ import {
 } from '../../utils/colorAdjustment';
 import { DimDropdownCombobox, ModalNumberInput } from './DimDropdownCombobox';
 import { CropModalColorAdjustPanels } from './CropModalColorAdjustPanels';
-import { BleedMode, BleedGapMode, ColorTabType } from './types';
+import { CropModalRemoveBgPanel } from './CropModalRemoveBgPanel';
+import { BleedMode, BleedGapMode, ColorTabType, RemoveBgSettings } from './types';
 
 export interface CropModalSidebarProps {
   localShape: string;
@@ -41,6 +42,14 @@ export interface CropModalSidebarProps {
   applyOffsetBleed: () => void | Promise<void>;
   applyAIBleed: () => void | Promise<void>;
   handleRestoreOriginal: () => void;
+
+  removeBgSettings: RemoveBgSettings;
+  updateRemoveBgSetting: <K extends keyof RemoveBgSettings>(key: K, value: RemoveBgSettings[K]) => void;
+  resetRemoveBgSettings: () => void;
+  isRemovingWhite: boolean;
+  hasOriginalBackup: boolean;
+  applyRemoveWhiteBg: () => void | Promise<void>;
+  removeBgStatusMsg?: string | null;
 }
 
 export const CropModalSidebar: React.FC<CropModalSidebarProps> = ({
@@ -72,6 +81,13 @@ export const CropModalSidebar: React.FC<CropModalSidebarProps> = ({
   applyOffsetBleed,
   applyAIBleed,
   handleRestoreOriginal,
+  removeBgSettings,
+  updateRemoveBgSetting,
+  resetRemoveBgSettings,
+  isRemovingWhite,
+  hasOriginalBackup,
+  applyRemoveWhiteBg,
+  removeBgStatusMsg,
 }) => {
   return (
     <div className="w-[415px] shrink-0 bg-white flex flex-col overflow-hidden text-xs">
@@ -129,19 +145,32 @@ export const CropModalSidebar: React.FC<CropModalSidebarProps> = ({
         </div>
       </div>
 
-      {/* Navtabs Row 1: Outpainting / Bù xén */}
-      <div className="border-b border-slate-200 bg-slate-50/70 text-[10px] font-bold text-center">
+      {/* Navtabs Row 1: Bù xén (Bleed Outpainting) & Khử nền trắng (Remove BG) */}
+      <div className="grid grid-cols-2 border-b border-slate-200 bg-slate-50/70 text-[10px] font-bold text-center">
         <button
           type="button"
           onClick={() => setColorTab('bleed')}
-          className={`w-full py-1.5 px-3 transition border-b-2 cursor-pointer flex items-center justify-center gap-1.5 ${
+          className={`py-2 px-2 transition border-b-2 cursor-pointer flex items-center justify-center gap-1.5 ${
             colorTab === 'bleed'
               ? 'border-violet-600 text-violet-700 bg-white font-bold shadow-2xs'
               : 'border-transparent text-slate-600 hover:text-violet-700 hover:bg-slate-50'
           }`}
         >
-          <Sparkles size={13} className={colorTab === 'bleed' ? 'text-violet-600' : 'text-violet-500'} />
-          <span className="text-[11px] font-bold">Bù xén (Bleed Outpainting)</span>
+          <Sparkles size={13} className={colorTab === 'bleed' ? 'text-violet-600' : 'text-slate-400'} />
+          <span className="text-[11px] font-bold truncate">Bù xén (Bleed)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setColorTab('removeBg')}
+          className={`py-2 px-2 transition border-b-2 cursor-pointer flex items-center justify-center gap-1.5 ${
+            colorTab === 'removeBg'
+              ? 'border-indigo-600 text-indigo-700 bg-white font-bold shadow-2xs'
+              : 'border-transparent text-slate-600 hover:text-indigo-700 hover:bg-slate-50'
+          }`}
+        >
+          <Eraser size={13} className={colorTab === 'removeBg' ? 'text-indigo-600' : 'text-slate-400'} />
+          <span className="text-[11px] font-bold truncate">Khử trắng (Tách nền)</span>
         </button>
       </div>
 
@@ -221,12 +250,26 @@ export const CropModalSidebar: React.FC<CropModalSidebarProps> = ({
 
       {/* Tab Contents */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* Render color panels when not in bleed tab */}
-        {colorTab !== 'bleed' && (
+        {/* Render color panels when not in bleed or removeBg tab */}
+        {colorTab !== 'bleed' && colorTab !== 'removeBg' && (
           <CropModalColorAdjustPanels
             colorTab={colorTab}
             colorSettings={colorSettings}
             updateSetting={updateSetting}
+          />
+        )}
+
+        {/* TAB: KHỬ TRẮNG (TÁCH NỀN) */}
+        {colorTab === 'removeBg' && (
+          <CropModalRemoveBgPanel
+            settings={removeBgSettings}
+            updateSetting={updateRemoveBgSetting}
+            resetSettings={resetRemoveBgSettings}
+            isProcessing={isRemovingWhite}
+            hasOriginalBackup={hasOriginalBackup}
+            onApplyRemoveBg={applyRemoveWhiteBg}
+            onRestoreOriginal={handleRestoreOriginal}
+            statusMsg={removeBgStatusMsg}
           />
         )}
 

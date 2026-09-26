@@ -4,5 +4,7 @@ export * from './useBleedStudio';
 export * from './DimDropdownCombobox';
 export * from './CropModalLayerBar';
 export * from './CropModalCanvasViewport';
+export * from './CropEdgeDimInput';
+export * from './CropModalRemoveBgPanel';
 export * from './CropModalColorAdjustPanels';
 export * from './CropModalSidebar';

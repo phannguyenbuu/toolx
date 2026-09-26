@@ -57,7 +57,27 @@ export interface BleedBounds {
 
 export type BleedMode = 'off' | 'offset' | 'ai';
 export type BleedGapMode = 'expand_gap' | 'shrink_item';
-export type ColorTabType = 'balance' | 'curves' | 'brightness' | 'hsl' | 'cmyk' | 'rgb' | 'bleed';
+export type ColorTabType = 'balance' | 'curves' | 'brightness' | 'hsl' | 'cmyk' | 'rgb' | 'bleed' | 'removeBg';
+
+export interface RemoveBgSettings {
+  whiteThreshold: number; // 180 .. 255 (default 230)
+  shadowTolerance: number; // 0 .. 60 (default 25)
+  shadowBrightness: number; // 80 .. 240 (default 135)
+  featherRadius: number; // 0 .. 5 (default 1.5)
+  protectSaturation: number; // 5 .. 50 (default 18)
+  floodFillFromBorder: boolean; // default true (từ 4 mép ngoài vào)
+  useAiModel: boolean; // default false
+}
+
+export const DEFAULT_REMOVE_BG_SETTINGS: RemoveBgSettings = {
+  whiteThreshold: 230,
+  shadowTolerance: 25,
+  shadowBrightness: 135,
+  featherRadius: 1.5,
+  protectSaturation: 18,
+  floodFillFromBorder: true,
+  useAiModel: false,
+};
 
 export interface CropBox {
   x: number;

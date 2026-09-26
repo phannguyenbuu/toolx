@@ -6,7 +6,7 @@ import { calculateStandardImageDimensionsMm } from '../utils/imageDimensions';
 import { safeToastSuccess, safeToastError, removeWhiteBackgroundService } from './imposition/impositionHelpers';
 import {
   CropTransform, DEFAULT_CROP_TRANSFORM, CropModalLayerTab, TAB_COLORS,
-  SourceImageCropColorModalProps, ColorTabType,
+  SourceImageCropColorModalProps, ColorTabType, RemoveBgSettings, DEFAULT_REMOVE_BG_SETTINGS,
   calculateCropBox, renderLiveCanvas, renderExportCanvas, renderThumbnailCanvas,
   useBleedStudio, saveCropSizeSuggestion,
   CropModalLayerBar, CropModalCanvasViewport, CropModalSidebar,
@@ -89,25 +89,56 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     initialBleedPercent: props.initialBleedPercent,
   });
 
+  const initialOriginalSrcRef = useRef<string | null>(null);
+  const [removeBgSettings, setRemoveBgSettings] = useState<RemoveBgSettings>(DEFAULT_REMOVE_BG_SETTINGS);
+  const [removeBgStatusMsg, setRemoveBgStatusMsg] = useState<string | null>(null);
   const [isRemovingWhite, setIsRemovingWhite] = useState(false);
 
-  const handleRemoveWhiteBackground = useCallback(async () => {
+  const updateRemoveBgSetting = useCallback(<K extends keyof RemoveBgSettings>(key: K, value: RemoveBgSettings[K]) => {
+    setRemoveBgSettings(prev => ({ ...prev, [key]: value }));
+  }, []);
+
+  const resetRemoveBgSettings = useCallback(() => {
+    setRemoveBgSettings(DEFAULT_REMOVE_BG_SETTINGS);
+  }, []);
+
+  const handleApplyRemoveBg = useCallback(async () => {
     if (!currentImageSrc) return;
     setIsRemovingWhite(true);
     try {
       if (!originalBackupSrc) {
         setOriginalBackupSrc(currentImageSrc);
       }
-      const resultDataUrl = await removeWhiteBackgroundService(currentImageSrc);
+      const resultDataUrl = await removeWhiteBackgroundService(currentImageSrc, removeBgSettings);
       setCurrentImageSrc(resultDataUrl);
-      safeToastSuccess('Đã khử nền trắng (AI) thành công!');
+      setRemoveBgStatusMsg('✓ Đã khử nền trắng theo thông số đã chỉnh');
+      safeToastSuccess('Đã khử nền trắng thành công!');
+      setTimeout(() => setRemoveBgStatusMsg(null), 3500);
     } catch (err) {
       console.error('Lỗi khử nền trắng trong modal:', err);
       safeToastError('Lỗi khử nền trắng');
     } finally {
       setIsRemovingWhite(false);
     }
-  }, [currentImageSrc, originalBackupSrc, setOriginalBackupSrc]);
+  }, [currentImageSrc, originalBackupSrc, removeBgSettings, setOriginalBackupSrc]);
+
+  const handleFullResetOriginal = useCallback(() => {
+    const orig = initialOriginalSrcRef.current || originalBackupSrc;
+    if (orig) {
+      setCurrentImageSrc(orig);
+      setOriginalBackupSrc(null);
+      setOriginalBleedBounds(null);
+      setOriginalDimensions(null);
+      setRemoveBgStatusMsg('✓ Đã khôi phục lại ảnh gốc ban đầu');
+      safeToastSuccess('Đã khôi phục lại ảnh gốc ban đầu!');
+      setTimeout(() => setRemoveBgStatusMsg(null), 3000);
+    }
+  }, [originalBackupSrc, setOriginalBackupSrc, setOriginalBleedBounds, setOriginalDimensions]);
+
+  const hasOriginalBackup = Boolean(
+    (originalBackupSrc && originalBackupSrc !== currentImageSrc) ||
+    (initialOriginalSrcRef.current && initialOriginalSrcRef.current !== currentImageSrc)
+  );
 
   useEffect(() => {
     if (!isOpen) return;
@@ -120,8 +151,10 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
       const nh = tab.shape === 'circle' ? nw : (tab.itemH || 100);
       setLocalItemW(nw); setLocalItemH(nh); setLocalShape(tab.shape || 'rect'); setLocalQuantity(tab.quantity || 10);
       const src = tab.sourceImage;
+      const initialImg = src?.originalThumb || src?.thumb || effectiveImgSrc;
+      initialOriginalSrcRef.current = initialImg;
       setImageStandardDim(src?.w && src?.h ? { w: src.w, h: src.h } : null);
-      setCurrentImageSrc(src?.originalThumb || src?.thumb || effectiveImgSrc);
+      setCurrentImageSrc(initialImg);
       setCurrentFileName(src?.name || effectiveFileName);
       setCrop(src?.cropSettings || initialCropSettings || { ...DEFAULT_CROP_TRANSFORM });
       setColorSettings(src?.colorSettings || initialColorSettings || { ...DEFAULT_COLOR_SETTINGS });
@@ -129,6 +162,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
       const nw = itemW || 100;
       const nh = shape === 'circle' ? nw : (itemH || 100);
       setLocalItemW(nw); setLocalItemH(nh); setLocalShape(shape || 'rect'); setLocalQuantity(quantity || 10);
+      initialOriginalSrcRef.current = effectiveImgSrc;
       setCurrentImageSrc(effectiveImgSrc); setCurrentFileName(effectiveFileName);
       setCrop(initialCropSettings || { ...DEFAULT_CROP_TRANSFORM });
       setColorSettings(initialColorSettings || { ...DEFAULT_COLOR_SETTINGS });
@@ -267,7 +301,10 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     setLocalItemW(tw); setLocalItemH(th); setLocalShape(tab.shape || 'rect'); setLocalQuantity(tab.quantity || 10);
     const src = tab.sourceImage;
     setImageStandardDim(src?.w && src?.h ? { w: src.w, h: src.h } : null);
-    setCurrentImageSrc(src?.originalThumb || src?.thumb || null);
+    const initialImg = src?.originalThumb || src?.thumb || null;
+    initialOriginalSrcRef.current = initialImg;
+    setOriginalBackupSrc(null);
+    setCurrentImageSrc(initialImg);
     setCrop(src?.cropSettings || { ...DEFAULT_CROP_TRANSFORM });
     setColorSettings(src?.colorSettings || { ...DEFAULT_COLOR_SETTINGS });
   };
@@ -356,7 +393,9 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
             handleFitImageAspect={handleFitImageAspect} handleResetCrop={() => setCrop({ ...DEFAULT_CROP_TRANSFORM })}
             handleWidthChange={w => handleDimChange(w, localItemH)} handleHeightChange={h => handleDimChange(localItemW, h)}
             handleDimChange={handleDimChange} onOpenUpload={() => fileInputRef.current?.click()}
-            onRemoveWhiteBackground={handleRemoveWhiteBackground} isRemovingWhite={isRemovingWhite}
+            onOpenRemoveBgTab={() => setColorTab('removeBg')}
+            onRestoreOriginal={handleFullResetOriginal}
+            hasOriginalBackup={hasOriginalBackup}
           />
 
           <CropModalSidebar
@@ -370,7 +409,14 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
             bleedMm={bleedMm} setBleedMm={setBleedMm} setBleedPercent={setBleedPercent} effectiveBleedMm={effectiveBleedMm}
             bleedGapMode={bleedGapMode} setBleedGapMode={setBleedGapMode} gap={gap} isProcessingBleed={isProcessingBleed}
             originalBackupSrc={originalBackupSrc} applyOffsetBleed={applyOffsetBleed} applyAIBleed={applyAIBleed}
-            handleRestoreOriginal={handleRestoreOriginal}
+            handleRestoreOriginal={handleFullResetOriginal}
+            removeBgSettings={removeBgSettings}
+            updateRemoveBgSetting={updateRemoveBgSetting}
+            resetRemoveBgSettings={resetRemoveBgSettings}
+            isRemovingWhite={isRemovingWhite}
+            hasOriginalBackup={hasOriginalBackup}
+            applyRemoveWhiteBg={handleApplyRemoveBg}
+            removeBgStatusMsg={removeBgStatusMsg}
           />
         </div>
 
