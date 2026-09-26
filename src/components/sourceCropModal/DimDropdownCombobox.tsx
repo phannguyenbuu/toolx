@@ -261,9 +261,9 @@ export const DimDropdownCombobox: React.FC<DimDropdownComboboxProps> = ({
   const currentFormatted = formatStr(w, h, isCircle);
 
   return (
-    <div ref={containerRef} className={`relative inline-block ${className}`}>
+    <div ref={containerRef} className={`relative ${className}`}>
       {/* Combobox container */}
-      <div className="flex items-center bg-white hover:bg-slate-50 border border-slate-200 rounded-full px-2 py-0.5 shadow-2xs gap-0.5 focus-within:ring-2 focus-within:ring-violet-400 focus-within:border-violet-300">
+      <div className="w-full flex items-center bg-white hover:bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 shadow-2xs gap-0.5 focus-within:ring-2 focus-within:ring-violet-400 focus-within:border-violet-300">
         <input
           type="text"
           value={inputVal}
@@ -295,7 +295,7 @@ export const DimDropdownCombobox: React.FC<DimDropdownComboboxProps> = ({
             }
           }}
           placeholder={isCircle ? '100' : '100x100'}
-          className="w-16 bg-transparent text-center font-bold text-xs text-slate-800 focus:outline-none"
+          className="flex-1 min-w-0 bg-transparent text-center font-bold text-xs text-slate-800 focus:outline-none"
         />
         <span className="text-[10px] text-slate-400 font-medium select-none">mm</span>
         <button

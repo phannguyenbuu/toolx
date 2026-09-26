@@ -35,6 +35,7 @@ export interface UseImpositionActionsParams {
   setRenderSuccessModal: (info: RenderSuccessInfo | null) => void;
   setIsAiModalOpen: (open: boolean) => void;
   setIsFilePickerOpen: (open: boolean) => void;
+  setIsSourceEditorOpen: (open: boolean) => void;
 }
 
 export function useImpositionActions(params: UseImpositionActionsParams) {
@@ -62,7 +63,8 @@ export function useImpositionActions(params: UseImpositionActionsParams) {
     setShowDownloadModal,
     setRenderSuccessModal,
     setIsAiModalOpen,
-    setIsFilePickerOpen
+    setIsFilePickerOpen,
+    setIsSourceEditorOpen
   } = params;
 
   const [isGenerating, setIsGenerating] = useState(false);
@@ -98,6 +100,7 @@ export function useImpositionActions(params: UseImpositionActionsParams) {
           updateActiveTabProp({ sourceImage: pageItem, itemW: finalW, itemH: finalH });
           setConfig(c => ({ ...c, itemW: finalW, itemH: finalH }));
           safeToastSuccess(`Đã nạp trang PDF: ${file.name}`);
+          setIsSourceEditorOpen(true);
         }
       } else {
         const url = URL.createObjectURL(file);
@@ -108,6 +111,7 @@ export function useImpositionActions(params: UseImpositionActionsParams) {
           updateActiveTabProp({ sourceImage: pageItem, itemW: dims.w, itemH: dims.h });
           setConfig(c => ({ ...c, itemW: dims.w, itemH: dims.h }));
           safeToastSuccess(`Đã tải ảnh: ${file.name} (${dims.w}x${dims.h}mm)`);
+          setIsSourceEditorOpen(true);
         };
         img.src = url;
       }

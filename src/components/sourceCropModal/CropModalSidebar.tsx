@@ -75,15 +75,15 @@ export const CropModalSidebar: React.FC<CropModalSidebarProps> = ({
 }) => {
   return (
     <div className="w-[415px] shrink-0 bg-white flex flex-col overflow-hidden text-xs">
-      {/* Panel thông số đối tượng: Hình, Số lượng, Kích thước */}
-      <div className="p-2 border-b border-slate-200 bg-slate-50/90 flex items-center gap-1.5 flex-wrap">
-        {/* Shape selector */}
-        <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-full px-2.5 py-1 shadow-2xs">
-          <span className="text-[10px] text-slate-500 font-medium">Hình:</span>
+      {/* Panel thông số đối tượng: Hình + Kích thước */}
+      <div className="border-b border-slate-200 bg-slate-50/90">
+        {/* Row 1: Shape selector */}
+        <div className="px-2 pt-2 pb-1.5 flex items-center gap-2">
+          <span className="text-[10px] text-slate-500 font-medium shrink-0">Hình:</span>
           <select
             value={localShape}
             onChange={(e) => handleShapeChange(e.target.value)}
-            className="text-xs font-bold text-slate-700 bg-transparent focus:outline-none cursor-pointer"
+            className="text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-full px-2.5 py-0.5 shadow-2xs focus:outline-none focus:ring-2 focus:ring-violet-400 cursor-pointer"
           >
             <option value="rect">Chữ nhật</option>
             <option value="circle">Hình tròn</option>
@@ -94,30 +94,17 @@ export const CropModalSidebar: React.FC<CropModalSidebarProps> = ({
             <option value="custom-svg">Custom SVG</option>
           </select>
         </div>
-
-        {/* Số lượng */}
-        <div
-          className="flex items-center bg-emerald-50/90 hover:bg-emerald-100/90 border border-emerald-300 rounded-full px-2 py-0.5 shadow-2xs"
-          title="Số lượng tem (1 - 99)"
-        >
-          <ModalNumberInput
-            value={localQuantity}
-            onChange={handleQuantityChange}
-            step={1}
-            min={1}
-            max={99}
-            className="w-6 bg-transparent text-center font-bold text-xs text-emerald-700 focus:outline-none"
+        {/* Row 2: Kích thước full width */}
+        <div className="px-2 pb-2">
+          <DimDropdownCombobox
+            shape={localShape}
+            w={localItemW}
+            h={localShape === 'circle' ? localItemW : localItemH}
+            onChange={handleDimChange}
+            imageStandardDim={imageStandardDim}
+            className="w-full"
           />
         </div>
-
-        {/* Combobox kích thước */}
-        <DimDropdownCombobox
-          shape={localShape}
-          w={localItemW}
-          h={localShape === 'circle' ? localItemW : localItemH}
-          onChange={handleDimChange}
-          imageStandardDim={imageStandardDim}
-        />
       </div>
 
       {/* Presets Bar */}
