@@ -96,12 +96,9 @@ export const ImpositionLayerCard: React.FC<ImpositionLayerCardProps> = ({
       }
       ctx.putImageData(imageData, 0, 0);
       const resultThumb = canvas.toDataURL('image/png', 0.85);
+      const baseItem = (activeTab.sourceImage || (allPages[0] ? { ...allPages[0] } : {})) as PageItem;
       updateActiveTabProp({
-        sourceImage: {
-          ...(activeTab.sourceImage as PageItem),
-          thumb: resultThumb,
-          originalThumb: activeTab.sourceImage?.originalThumb || activeTab.sourceImage?.thumb,
-        } as PageItem,
+        sourceImage: { ...baseItem, id: baseItem.id || 'source-image', thumb: resultThumb, originalThumb: resultThumb },
       });
       safeToastSuccess('Đã khử nền trắng thành công!');
     } catch (err) {

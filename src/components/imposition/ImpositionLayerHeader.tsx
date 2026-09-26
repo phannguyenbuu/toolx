@@ -62,17 +62,27 @@ export const ImpositionLayerHeader: React.FC<ImpositionLayerHeaderProps> = ({
           }}
           className={`w-28 h-full min-h-[62px] rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer border overflow-hidden relative select-none ${
             currentSourceThumb
-              ? 'bg-slate-900 border-emerald-500 shadow-sm ring-2 ring-emerald-200'
+              ? 'border-emerald-500 shadow-sm ring-2 ring-emerald-200 hover:ring-emerald-300'
               : 'bg-emerald-50/70 hover:bg-emerald-100/80 border-2 border-dashed border-emerald-400 text-emerald-700 hover:border-emerald-600 shadow-2xs'
           }`}
+          style={
+            currentSourceThumb
+              ? {
+                  backgroundColor: '#ffffff',
+                  backgroundImage: 'conic-gradient(#cbd5e1 25%, #ffffff 0 50%, #cbd5e1 0 75%, #ffffff 0)',
+                  backgroundSize: '12px 12px',
+                  backgroundPosition: '0 0',
+                }
+              : undefined
+          }
           title={currentSourceThumb ? 'Ảnh nguồn: Bấm để Sửa Crop/Màu hoặc Đổi file/PDF' : 'Chọn ảnh hoặc file PDF để nạp vào Layer'}
         >
           {currentSourceThumb ? (
-            <div className="relative w-full h-full min-h-[62px]">
+            <div className="relative w-full h-full min-h-[62px] flex items-center justify-center p-0.5">
               <img
                 src={currentSourceThumb}
                 alt="Nguồn"
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain"
               />
             </div>
           ) : (

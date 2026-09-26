@@ -23,7 +23,15 @@ export const ImpositionFileItem: React.FC<ImpositionFileItemProps> = ({
       }`}
     >
       <div className="flex items-center gap-2.5 min-w-0 flex-1">
-        <div className="relative w-11 h-11 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center flex-shrink-0 shadow-2xs">
+        <div
+          className="relative w-11 h-11 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center flex-shrink-0 shadow-2xs"
+          style={group.thumbUrl ? {
+            backgroundColor: '#ffffff',
+            backgroundImage: 'conic-gradient(#cbd5e1 25%, #ffffff 0 50%, #cbd5e1 0 75%, #ffffff 0)',
+            backgroundSize: '8px 8px',
+            backgroundPosition: '0 0',
+          } : undefined}
+        >
           {group.thumbUrl ? (
             <img src={group.thumbUrl} alt="" className="w-full h-full object-contain" />
           ) : group.fileType === 'pdf' ? (
