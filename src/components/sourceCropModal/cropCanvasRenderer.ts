@@ -43,6 +43,21 @@ export interface LiveRenderParams {
   bleedBgColor?: string;
 }
 
+export function createCheckerboardPattern(ctx: CanvasRenderingContext2D, size = 16): CanvasPattern | null {
+  const pCanvas = document.createElement('canvas');
+  pCanvas.width = size;
+  pCanvas.height = size;
+  const pCtx = pCanvas.getContext('2d');
+  if (!pCtx) return null;
+  pCtx.fillStyle = '#ffffff';
+  pCtx.fillRect(0, 0, size, size);
+  pCtx.fillStyle = '#cbd5e1'; // Photoshop slate-300 caro
+  const half = size / 2;
+  pCtx.fillRect(0, 0, half, half);
+  pCtx.fillRect(half, half, half, half);
+  return ctx.createPattern(pCanvas, 'repeat');
+}
+
 export function renderLiveCanvas({
   canvas,
   viewportSize,
@@ -63,9 +78,22 @@ export function renderLiveCanvas({
   canvas.height = vh;
 
   ctx.clearRect(0, 0, vw, vh);
-  // Fill crop box background with chosen bleedBgColor (clean white by default)
-  ctx.fillStyle = bleedBgColor || '#ffffff';
-  ctx.fillRect(cropBox.x, cropBox.y, cropBox.w, cropBox.h);
+
+  // Fill crop box background with Photoshop checkerboard (or custom bleedBgColor if set)
+  if (bleedBgColor && bleedBgColor !== 'transparent' && bleedBgColor !== '#ffffff') {
+    ctx.fillStyle = bleedBgColor;
+    ctx.fillRect(cropBox.x, cropBox.y, cropBox.w, cropBox.h);
+  } else {
+    const pattern = createCheckerboardPattern(ctx, 16);
+    if (pattern) {
+      ctx.fillStyle = pattern;
+      ctx.fillRect(cropBox.x, cropBox.y, cropBox.w, cropBox.h);
+    } else {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(cropBox.x, cropBox.y, cropBox.w, cropBox.h);
+    }
+  }
+
   ctx.save();
 
   // Center of crop box in the viewport
@@ -83,6 +111,15 @@ export function renderLiveCanvas({
 
   const drawW = baseW * crop.zoom;
   const drawH = baseH * crop.zoom;
+
+  // Draw checkerboard behind the image area so transparent cutouts show caro
+  if (!bleedBgColor || bleedBgColor === 'transparent' || bleedBgColor === '#ffffff') {
+    const pattern = createCheckerboardPattern(ctx, 16);
+    if (pattern) {
+      ctx.fillStyle = pattern;
+      ctx.fillRect(-drawW / 2, -drawH / 2, drawW, drawH);
+    }
+  }
 
   ctx.drawImage(imgElement, -drawW / 2, -drawH / 2, drawW, drawH);
   ctx.restore();
@@ -128,9 +165,13 @@ export function renderExportCanvas({
   const offCtx = offCanvas.getContext('2d');
   if (!offCtx) return currentImageSrc;
 
-  // Fill background color first (prevents letterbox transparent turning black!)
-  offCtx.fillStyle = bleedBgColor || '#ffffff';
-  offCtx.fillRect(0, 0, exportW, exportH);
+  // Fill background color only if an explicit custom bleed color is chosen; otherwise keep transparent!
+  if (bleedBgColor && bleedBgColor !== 'transparent' && bleedBgColor !== '#ffffff') {
+    offCtx.fillStyle = bleedBgColor;
+    offCtx.fillRect(0, 0, exportW, exportH);
+  } else {
+    offCtx.clearRect(0, 0, exportW, exportH);
+  }
 
   offCtx.save();
   offCtx.translate(exportW / 2 + crop.panX * exportScale, exportH / 2 + crop.panY * exportScale);
@@ -190,9 +231,13 @@ export function renderThumbnailCanvas({
   const offCtx = offCanvas.getContext('2d');
   if (!offCtx) return currentImageSrc;
 
-  // Fill background color first (prevents JPEG encoding transparent as black!)
-  offCtx.fillStyle = bleedBgColor || '#ffffff';
-  offCtx.fillRect(0, 0, exportW, exportH);
+  // Preserve transparency (avoid JPEG black background)
+  if (bleedBgColor && bleedBgColor !== 'transparent' && bleedBgColor !== '#ffffff') {
+    offCtx.fillStyle = bleedBgColor;
+    offCtx.fillRect(0, 0, exportW, exportH);
+  } else {
+    offCtx.clearRect(0, 0, exportW, exportH);
+  }
 
   offCtx.save();
   offCtx.translate(exportW / 2 + crop.panX * scale, exportH / 2 + crop.panY * scale);
@@ -215,5 +260,5 @@ export function renderThumbnailCanvas({
       console.error('Thumbnail color error:', e);
     }
   }
-  return offCanvas.toDataURL('image/jpeg', 0.8);
+  return offCanvas.toDataURL('image/png', 0.85);
 }

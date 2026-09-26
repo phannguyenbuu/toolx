@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   RotateCw, RotateCcw, FlipHorizontal, FlipVertical,
-  Grid, RefreshCw, Maximize2, Upload, Move
+  Grid, RefreshCw, Maximize2, Upload, Move, Sparkles
 } from 'lucide-react';
 import { CropBox, CropTransform, ViewportSize, BleedBounds, BleedMode } from './types';
 import { parseDimValue, saveCropSizeSuggestion } from './DimDropdownCombobox';
@@ -116,6 +116,8 @@ export interface CropModalCanvasViewportProps {
   handleHeightChange: (val: number) => void;
   handleDimChange: (w: number, h: number) => void;
   onOpenUpload: () => void;
+  onRemoveWhiteBackground?: () => Promise<void> | void;
+  isRemovingWhite?: boolean;
 }
 
 export const CropModalCanvasViewport: React.FC<CropModalCanvasViewportProps> = ({
@@ -148,6 +150,8 @@ export const CropModalCanvasViewport: React.FC<CropModalCanvasViewportProps> = (
   handleHeightChange,
   handleDimChange,
   onOpenUpload,
+  onRemoveWhiteBackground,
+  isRemovingWhite = false,
 }) => {
   return (
     <div className="flex-1 flex flex-col border-r border-slate-200 bg-slate-900/95 relative overflow-hidden">
@@ -182,8 +186,25 @@ export const CropModalCanvasViewport: React.FC<CropModalCanvasViewportProps> = (
           </button>
         </div>
 
-        {/* Transform controls: Rotate, Flip, Grid, Reset */}
+        {/* Transform controls: Khử trắng AI, Rotate, Flip, Grid, Reset */}
         <div className="flex items-center gap-1">
+          {onRemoveWhiteBackground && (
+            <button
+              type="button"
+              onClick={onRemoveWhiteBackground}
+              disabled={isRemovingWhite || !currentImageSrc}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition border cursor-pointer select-none ${
+                isRemovingWhite
+                  ? 'bg-indigo-600 text-white animate-pulse'
+                  : 'bg-indigo-950/90 hover:bg-indigo-900 border-indigo-700/80 text-indigo-300 hover:text-white shadow-xs'
+              }`}
+              title="Khử nền trắng bằng AI Rembg (gọt sạch bóng đổ drop-shadow, hiện nền caro Photoshop)"
+            >
+              <Sparkles size={12} className={isRemovingWhite ? 'animate-spin' : 'text-indigo-400'} />
+              <span>{isRemovingWhite ? 'AI đang khử...' : 'Khử trắng AI'}</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => setCrop(c => ({ ...c, rotation: (c.rotation - 90 + 360) % 360 }))}

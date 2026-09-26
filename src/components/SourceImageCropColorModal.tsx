@@ -3,6 +3,7 @@ import { Check } from 'lucide-react';
 import { ColorAdjustSettings, DEFAULT_COLOR_SETTINGS, COLOR_PRESETS } from '../utils/colorAdjustment';
 import { extractPdfPages, isPdfFile } from '../utils/pdfPageExtractor';
 import { calculateStandardImageDimensionsMm } from '../utils/imageDimensions';
+import { safeToastSuccess, safeToastError, removeWhiteBackgroundService } from './imposition/impositionHelpers';
 import {
   CropTransform, DEFAULT_CROP_TRANSFORM, CropModalLayerTab, TAB_COLORS,
   SourceImageCropColorModalProps, ColorTabType,
@@ -87,6 +88,26 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     initialBleedBounds: effectiveBleedBounds,
     initialBleedPercent: props.initialBleedPercent,
   });
+
+  const [isRemovingWhite, setIsRemovingWhite] = useState(false);
+
+  const handleRemoveWhiteBackground = useCallback(async () => {
+    if (!currentImageSrc) return;
+    setIsRemovingWhite(true);
+    try {
+      if (!originalBackupSrc) {
+        setOriginalBackupSrc(currentImageSrc);
+      }
+      const resultDataUrl = await removeWhiteBackgroundService(currentImageSrc);
+      setCurrentImageSrc(resultDataUrl);
+      safeToastSuccess('Đã khử nền trắng (AI) thành công!');
+    } catch (err) {
+      console.error('Lỗi khử nền trắng trong modal:', err);
+      safeToastError('Lỗi khử nền trắng');
+    } finally {
+      setIsRemovingWhite(false);
+    }
+  }, [currentImageSrc, originalBackupSrc, setOriginalBackupSrc]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -335,6 +356,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
             handleFitImageAspect={handleFitImageAspect} handleResetCrop={() => setCrop({ ...DEFAULT_CROP_TRANSFORM })}
             handleWidthChange={w => handleDimChange(w, localItemH)} handleHeightChange={h => handleDimChange(localItemW, h)}
             handleDimChange={handleDimChange} onOpenUpload={() => fileInputRef.current?.click()}
+            onRemoveWhiteBackground={handleRemoveWhiteBackground} isRemovingWhite={isRemovingWhite}
           />
 
           <CropModalSidebar
