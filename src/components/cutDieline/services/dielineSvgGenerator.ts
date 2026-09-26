@@ -88,12 +88,12 @@ export const calculateDielineSvg = ({
         : null;
 
       const itemShape = (item.shape || tab?.shape || defaultShape) as string;
-      const rawW = item.w ?? tab?.itemW ?? (item.rot ? defaultItemH : defaultItemW);
-      const rawH = item.h ?? tab?.itemH ?? (item.rot ? defaultItemW : defaultItemH);
+      const itW = item.w !== undefined ? item.w : (item.rot ? (tab?.itemH ?? defaultItemH) : (tab?.itemW ?? defaultItemW));
+      const itH = itemShape === 'circle' ? itW : (item.h !== undefined ? item.h : (item.rot ? (tab?.itemW ?? defaultItemW) : (tab?.itemH ?? defaultItemH)));
       const itemRad = item.cornerRadius ?? tab?.cornerRadius ?? cornerRadius;
 
-      const w = item.rot ? rawH : rawW;
-      const h = item.rot ? rawW : rawH;
+      const w = itW;
+      const h = itH;
 
       const adjW = Math.max(0.1, w - cutBleed * 2);
       const adjH = Math.max(0.1, h - cutBleed * 2);
