@@ -50,6 +50,7 @@ export async function generateImpositionPdfBlob(params: GeneratePdfBlobParams): 
     standardQty,
     totalSheets,
     shapeTabs,
+    activeTab,
     isMultiShape,
   } = params;
 
@@ -62,21 +63,36 @@ export async function generateImpositionPdfBlob(params: GeneratePdfBlobParams): 
     throw new Error('Chưa có layout — vui lòng tính toán layout trước khi xuất PDF.');
   }
 
-  if (allPages.length === 0) {
-    throw new Error('Chưa có tệp ảnh nào — vui lòng import tệp trước khi xuất PDF.');
+  // Thu thập tất cả ảnh nguồn từ allPages hoặc từ các layer tabs
+  const effectivePages: PageItem[] = [...allPages];
+  if (effectivePages.length === 0) {
+    if (activeTab?.sourceImage) {
+      effectivePages.push(activeTab.sourceImage);
+    }
+    if (shapeTabs && shapeTabs.length > 0) {
+      shapeTabs.forEach(tab => {
+        if (tab.sourceImage && !effectivePages.some(p => (p.id && p.id === tab.sourceImage?.id) || p.thumb === tab.sourceImage?.thumb)) {
+          effectivePages.push(tab.sourceImage);
+        }
+      });
+    }
+  }
+
+  if (effectivePages.length === 0) {
+    throw new Error('Chưa có tệp ảnh nào — vui lòng chọn ảnh cho layer hoặc import tệp trước khi xuất PDF.');
   }
 
   // Build FormData
   const fd = new FormData();
 
   // Đính kèm ảnh nguồn: ưu tiên fileIds (server đã lưu), fallback fetch blob
-  const fileIds = allPages.map(p => p.fileId).filter(Boolean);
-  if (fileIds.length > 0) {
+  const fileIds = effectivePages.map(p => p.fileId).filter(Boolean);
+  if (fileIds.length > 0 && fileIds.length === effectivePages.length) {
     fd.append('fileIds', JSON.stringify(fileIds));
   } else {
-    for (let i = 0; i < allPages.length; i++) {
-      const page = allPages[i];
-      const imageSource = page.originalThumb || page.thumb;
+    for (let i = 0; i < effectivePages.length; i++) {
+      const page = effectivePages[i];
+      const imageSource = page.originalThumb || page.thumb || page.url;
       if (!imageSource) continue;
       const response = await fetch(imageSource);
       const blob = await response.blob();
@@ -88,7 +104,7 @@ export async function generateImpositionPdfBlob(params: GeneratePdfBlobParams): 
     }
   }
 
-  const pagesDataRaw = allPages.map(p => ({
+  const pagesDataRaw = effectivePages.map(p => ({
     rotation: p.rotation || 0,
     w: p.w,
     h: p.h
@@ -98,7 +114,7 @@ export async function generateImpositionPdfBlob(params: GeneratePdfBlobParams): 
   const rawPlanItems = (impositionStyleEnabled && styledPlan ? styledPlan.items : (currentPlan?.items || []));
   const enrichedPlanItems = enrichPlanItemsWithRotation(
     rawPlanItems,
-    allPages,
+    effectivePages,
     config,
     isMultiShape,
     shapeTabs,

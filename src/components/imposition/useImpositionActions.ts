@@ -99,6 +99,7 @@ export function useImpositionActions(params: UseImpositionActionsParams) {
           const finalH = first.heightMm || config.itemH;
           updateActiveTabProp({ sourceImage: pageItem, itemW: finalW, itemH: finalH });
           setConfig(c => ({ ...c, itemW: finalW, itemH: finalH }));
+          setAllPages(prev => (prev.length === 0 ? [pageItem] : prev));
           safeToastSuccess(`Đã nạp trang PDF: ${file.name}`);
           setIsSourceEditorOpen(true);
         }
@@ -121,6 +122,7 @@ export function useImpositionActions(params: UseImpositionActionsParams) {
           };
           updateActiveTabProp({ sourceImage: pageItem, itemW: dims.w, itemH: dims.h });
           setConfig(c => ({ ...c, itemW: dims.w, itemH: dims.h }));
+          setAllPages(prev => (prev.length === 0 ? [pageItem] : prev));
           safeToastSuccess(`Đã tải ảnh: ${file.name} (${dims.w}x${dims.h}mm)`);
           setIsSourceEditorOpen(true);
         };
