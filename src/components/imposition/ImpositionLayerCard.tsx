@@ -217,13 +217,13 @@ export const ImpositionLayerCard: React.FC<ImpositionLayerCardProps> = ({
           </div>
         </div>
 
-        {/* Cột 3: Cao + nút Khử nền trắng */}
+        {/* Cột 3: Cao */}
         {config.shape !== 'circle' ? (
           <div
             onClick={() => caoInputRef.current?.focus()}
-            className="flex items-center justify-between bg-slate-50 hover:bg-slate-100/80 border border-slate-200/90 rounded-xl px-2 py-1.5 transition-all focus-within:ring-2 focus-within:ring-violet-300 focus-within:border-violet-500 focus-within:bg-white shadow-2xs cursor-text gap-1"
+            className="flex items-center justify-between bg-slate-50 hover:bg-slate-100/80 border border-slate-200/90 rounded-xl px-2 py-1.5 transition-all focus-within:ring-2 focus-within:ring-violet-300 focus-within:border-violet-500 focus-within:bg-white shadow-2xs cursor-text"
           >
-            <span className="text-[10px] font-semibold text-slate-600 truncate pr-0.5 select-none shrink-0">
+            <span className="text-[10px] font-semibold text-slate-600 truncate pr-0.5 select-none">
               Cao (H)
             </span>
             <div className="flex items-center gap-0.5 shrink-0">
@@ -240,17 +240,6 @@ export const ImpositionLayerCard: React.FC<ImpositionLayerCardProps> = ({
               />
               <span className="text-[9px] text-slate-400 font-medium select-none">mm</span>
             </div>
-            {/* Nút Khử nền trắng */}
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); handleRemoveWhiteBackground(); }}
-              disabled={isRemovingWhite || (!activeTab.sourceImage?.thumb && allPages.length === 0)}
-              className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[9px] font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-200/80 transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-              title="Xoá nền trắng khỏi ảnh nguồn (pixel R,G,B ≥ 230)"
-            >
-              <Eraser size={10} className={isRemovingWhite ? 'animate-spin' : ''} />
-              {isRemovingWhite ? '...' : 'Khử trắng'}
-            </button>
           </div>
         ) : (
           <div className="flex items-center justify-between bg-slate-100/60 border border-dashed border-slate-200 rounded-xl px-2 py-1.5 text-slate-400">
@@ -288,12 +277,12 @@ export const ImpositionLayerCard: React.FC<ImpositionLayerCardProps> = ({
         ) : null
       )}
 
-      {/* Input Row 2: Khoảng cách (Gap), Bù cắt (Bleed), Bo góc (Radius), và nút Trang cuối nếu có dư */}
+      {/* Input Row 2: Khoảng cách (Gap), Bù cắt (Bleed), Bo góc (Radius), Khử trắng, và nút Trang cuối nếu có dư */}
       <div
         className={`grid ${
           ['rect', 'trapezoid', 'triangle', 'hexagon'].includes(config.shape)
-            ? hasLastSheetBlanks && totalSheets > 1 ? 'grid-cols-4' : 'grid-cols-3'
-            : hasLastSheetBlanks && totalSheets > 1 ? 'grid-cols-3' : 'grid-cols-2'
+            ? hasLastSheetBlanks && totalSheets > 1 ? 'grid-cols-5' : 'grid-cols-4'
+            : hasLastSheetBlanks && totalSheets > 1 ? 'grid-cols-4' : 'grid-cols-3'
         } gap-1.5 mb-2`}
       >
         {/* Khoảng cách (Gap) */}
@@ -364,6 +353,22 @@ export const ImpositionLayerCard: React.FC<ImpositionLayerCardProps> = ({
             </div>
           </div>
         )}
+
+        {/* Nút Khử nền trắng - Chiếm 1 ô ở hàng dưới */}
+        <button
+          type="button"
+          onClick={handleRemoveWhiteBackground}
+          disabled={isRemovingWhite || (!activeTab.sourceImage?.thumb && allPages.length === 0)}
+          className={`flex items-center justify-center gap-1.5 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-200/90 rounded-xl px-2.5 py-1.5 text-indigo-700 transition-all shadow-2xs cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed select-none ${
+            isRemovingWhite ? 'animate-pulse' : ''
+          }`}
+          title="Xoá nền trắng khỏi ảnh nguồn (pixel R,G,B ≥ 230)"
+        >
+          <Eraser size={13} className={`shrink-0 text-indigo-600 ${isRemovingWhite ? 'animate-spin' : ''}`} />
+          <span className="text-[10px] font-bold truncate">
+            {isRemovingWhite ? 'Đang khử...' : 'Khử trắng'}
+          </span>
+        </button>
 
         {/* Nút Trang cuối nếu có dư trắng */}
         {hasLastSheetBlanks && totalSheets > 1 && (
