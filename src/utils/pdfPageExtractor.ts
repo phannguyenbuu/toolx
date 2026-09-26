@@ -1,9 +1,20 @@
-import * as pdfjsLib from 'pdfjs-dist';
+// Quick win #2: lazy load pdfjs-dist — chỉ tải khi user thực sự mở file PDF
+// Trước kia: import * as pdfjsLib from 'pdfjs-dist' → pull 1820KB vào initial bundle
+// Sau: động dynamic import, chunk chỉ tải khi cần
 import { createClientThumbnail } from './imageThumbnail';
 
-// Initialize pdf.js worker if not already configured
-if (typeof window !== 'undefined' && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+const PDF_WORKER_SRC = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+
+let pdfjsLib: typeof import('pdfjs-dist') | null = null;
+
+async function getPdfjs() {
+  if (pdfjsLib) return pdfjsLib;
+  const mod = await import(/* webpackChunkName: "pdfjs" */ 'pdfjs-dist');
+  if (typeof window !== 'undefined' && !mod.GlobalWorkerOptions.workerSrc) {
+    mod.GlobalWorkerOptions.workerSrc = PDF_WORKER_SRC;
+  }
+  pdfjsLib = mod;
+  return mod;
 }
 
 export interface ExtractedPdfPage {
@@ -35,11 +46,12 @@ export async function inspectPdfMetadata(
   fileOrBuffer: File | Blob | ArrayBuffer
 ): Promise<{ numPages: number; sizeBytes: number }> {
   try {
+    const lib = await getPdfjs();
     const arrayBuffer = fileOrBuffer instanceof ArrayBuffer
       ? fileOrBuffer
       : await fileOrBuffer.arrayBuffer();
 
-    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    const loadingTask = lib.getDocument({ data: arrayBuffer });
     const pdf = await loadingTask.promise;
     const sizeBytes = fileOrBuffer instanceof File || fileOrBuffer instanceof Blob
       ? fileOrBuffer.size
@@ -64,6 +76,7 @@ export async function extractPdfPages(
   optionsOrName?: string | ExtractPdfOptions
 ): Promise<ExtractedPdfPage[]> {
   try {
+    const lib = await getPdfjs();
     const options: ExtractPdfOptions = typeof optionsOrName === 'string'
       ? { fileName: optionsOrName }
       : (optionsOrName || {});
@@ -76,7 +89,7 @@ export async function extractPdfPages(
       ? options.fileName.replace(/\.pdf$/i, '')
       : (fileOrBuffer instanceof File ? fileOrBuffer.name.replace(/\.pdf$/i, '') : 'Tài liệu PDF');
 
-    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    const loadingTask = lib.getDocument({ data: arrayBuffer });
     const pdf = await loadingTask.promise;
     const numPages = pdf.numPages;
 

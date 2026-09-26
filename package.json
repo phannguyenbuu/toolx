@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "homepage": "/",
   "private": true,
+  "sideEffects": ["*.css", "*.scss"],
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",
     "@react-three/drei": "^10.7.8",
@@ -110,6 +111,7 @@
   "devDependencies": {
     "@craco/craco": "^7.1.0",
     "@playwright/test": "^1.57.0",
+    "@swc/core": "^1.16.2",
     "@tailwindcss/postcss": "^4.1.17",
     "@types/opentype.js": "^1.3.8",
     "@types/react": "^19.2.7",
@@ -118,6 +120,7 @@
     "canvas": "^3.2.1",
     "concurrently": "^9.2.1",
     "postcss": "^8.5.6",
+    "swc-loader": "^0.2.7",
     "tailwindcss": "^3.4.1"
   }
 }

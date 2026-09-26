@@ -1,5 +1,4 @@
 process.env.NODE_ENV = 'production';
-process.env.BABEL_ENV = 'production';
 
 const path = require('path');
 const fs = require('fs');
@@ -110,20 +109,26 @@ const webpackConfig = {
       {
         test: /\.(js|mjs|jsx|ts|tsx)$/,
         include: path.resolve(__dirname, '../src'),
-        loader: require.resolve('babel-loader'),
+        loader: require.resolve('swc-loader'),
         options: {
-          customize: require.resolve('babel-preset-react-app/webpack-overrides'),
-          presets: [
-            [
-              require.resolve('babel-preset-react-app'),
-              {
+          jsc: {
+            parser: {
+              syntax: 'typescript',
+              tsx: true,
+              decorators: true,
+            },
+            transform: {
+              react: {
                 runtime: 'automatic',
+                refresh: false,
               },
-            ],
-          ],
-          cacheDirectory: true,
-          cacheCompression: false,
-          compact: true,
+            },
+            target: 'es2017',
+          },
+          module: {
+            type: 'es6',
+          },
+          minify: false, // để Terser xử lý minify riêng
         },
       },
       {
