@@ -435,9 +435,19 @@ def api_inpaint_status():
         ]
     })
 
+_REMBG_SESSIONS = {}
+
+def get_rembg_session(model_name='u2net'):
+    global _REMBG_SESSIONS
+    if model_name not in _REMBG_SESSIONS:
+        from rembg import new_session
+        print(f"[AI] Initializing rembg session for {model_name}...")
+        _REMBG_SESSIONS[model_name] = new_session(model_name)
+    return _REMBG_SESSIONS[model_name]
+
 @app.route('/api/remove-bg', methods=['POST'])
 def api_remove_bg():
-    """Remove background from image using rembg"""
+    """Remove background from image using rembg (u2net / isnet-general-use)"""
     if not AI_AVAILABLE:
         return jsonify({
             'error': 'AI not available',
@@ -445,27 +455,56 @@ def api_remove_bg():
         }), 501
     
     try:
-        # Get uploaded file
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file uploaded'}), 400
+        model_name = request.args.get('model')
+        want_json = request.args.get('format') == 'json' or request.is_json
         
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
+        # Read input image from files or JSON
+        input_image = None
+        if 'file' in request.files:
+            file = request.files['file']
+            if file.filename != '':
+                input_image = Image.open(file.stream)
+        elif 'image' in request.files:
+            file = request.files['image']
+            if file.filename != '':
+                input_image = Image.open(file.stream)
+        elif request.is_json and 'image' in request.json:
+            img_data = request.json['image']
+            if not model_name and 'model' in request.json:
+                model_name = request.json['model']
+            if ',' in img_data:
+                img_data = img_data.split(',', 1)[1]
+            input_image = Image.open(io.BytesIO(base64.b64decode(img_data)))
+        elif 'image' in request.form:
+            img_data = request.form['image']
+            if ',' in img_data:
+                img_data = img_data.split(',', 1)[1]
+            input_image = Image.open(io.BytesIO(base64.b64decode(img_data)))
+            
+        if input_image is None:
+            return jsonify({'error': 'No image provided (send file, image in form, or image in json)'}), 400
+            
+        # Default to u2net (fast ~0.36s on CPU)
+        if not model_name:
+            model_name = 'u2net'
+            
+        session = get_rembg_session(model_name)
+        output_image = remove(input_image, session=session)
         
-        # Read image
-        input_image = Image.open(file.stream)
-        
-        # Remove background
-        output_image = remove(input_image)
-        
-        # Convert to bytes
         img_io = io.BytesIO()
         output_image.save(img_io, 'PNG')
-        img_io.seek(0)
+        img_bytes = img_io.getvalue()
         
+        if want_json:
+            b64_res = base64.b64encode(img_bytes).decode('ascii')
+            return jsonify({
+                'success': True,
+                'image': f"data:image/png;base64,{b64_res}",
+                'model': model_name
+            })
+            
         return Response(
-            img_io.getvalue(),
+            img_bytes,
             mimetype='image/png',
             headers={
                 'Content-Disposition': 'attachment; filename=no_bg.png'

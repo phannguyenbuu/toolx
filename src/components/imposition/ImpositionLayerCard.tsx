@@ -8,7 +8,7 @@ import {
 import { ImpositionConfig, ShapeTabItem, PageItem } from './types';
 import { DebouncedNumberInput } from './DebouncedNumberInput';
 import { VectorMaskResult } from '../VectorMaskEditorModal';
-import { safeToastSuccess } from './impositionHelpers';
+import { safeToastSuccess, removeWhiteBackgroundService } from './impositionHelpers';
 import { ImpositionLayerHeader } from './ImpositionLayerHeader';
 
 export interface ImpositionLayerCardProps {
@@ -67,40 +67,18 @@ export const ImpositionLayerCard: React.FC<ImpositionLayerCardProps> = ({
 
   const [isRemovingWhite, setIsRemovingWhite] = useState(false);
 
-  // Khử nền trắng: xoá pixel gần trắng (threshold) trên canvas, giữ nguyên pixel có màu
+  // Khử nền trắng bằng AI (Rembg / u2net), tự động gọt sạch bóng đổ drop-shadow
   const handleRemoveWhiteBackground = useCallback(async () => {
     const srcDataUrl = activeTab.sourceImage?.thumb || (allPages[0]?.thumb ?? '');
     if (!srcDataUrl) return;
     setIsRemovingWhite(true);
     try {
-      const img = new Image();
-      await new Promise<void>((res, rej) => {
-        img.onload = () => res();
-        img.onerror = rej;
-        img.src = srcDataUrl;
-      });
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.drawImage(img, 0, 0);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const d = imageData.data;
-      const threshold = 230; // pixel R,G,B đều >= threshold → coi là trắng
-      for (let i = 0; i < d.length; i += 4) {
-        const r = d[i], g = d[i + 1], b = d[i + 2];
-        if (r >= threshold && g >= threshold && b >= threshold) {
-          d[i + 3] = 0; // set alpha = 0 (transparent)
-        }
-      }
-      ctx.putImageData(imageData, 0, 0);
-      const resultThumb = canvas.toDataURL('image/png', 0.85);
+      const resultThumb = await removeWhiteBackgroundService(srcDataUrl);
       const baseItem = (activeTab.sourceImage || (allPages[0] ? { ...allPages[0] } : {})) as PageItem;
       updateActiveTabProp({
         sourceImage: { ...baseItem, id: baseItem.id || 'source-image', thumb: resultThumb, originalThumb: resultThumb },
       });
-      safeToastSuccess('Đã khử nền trắng thành công!');
+      safeToastSuccess('Đã khử nền trắng (AI) thành công!');
     } catch (err) {
       console.error('Lỗi khử nền trắng:', err);
     } finally {
@@ -351,7 +329,7 @@ export const ImpositionLayerCard: React.FC<ImpositionLayerCardProps> = ({
           </div>
         )}
 
-        {/* Nút Khử nền trắng - Chiếm 1 ô ở hàng dưới */}
+        {/* Nút Khử nền trắng AI - Chiếm 1 ô ở hàng dưới */}
         <button
           type="button"
           onClick={handleRemoveWhiteBackground}
@@ -359,11 +337,11 @@ export const ImpositionLayerCard: React.FC<ImpositionLayerCardProps> = ({
           className={`flex items-center justify-center gap-1.5 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-200/90 rounded-xl px-2.5 py-1.5 text-indigo-700 transition-all shadow-2xs cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed select-none ${
             isRemovingWhite ? 'animate-pulse' : ''
           }`}
-          title="Xoá nền trắng khỏi ảnh nguồn (pixel R,G,B ≥ 230)"
+          title="Tách nền bằng AI Rembg (gọt sạch bóng đổ drop-shadow, giữ nguyên chi tiết bên trong)"
         >
-          <Eraser size={13} className={`shrink-0 text-indigo-600 ${isRemovingWhite ? 'animate-spin' : ''}`} />
+          <Sparkles size={13} className={`shrink-0 text-indigo-600 ${isRemovingWhite ? 'animate-spin' : ''}`} />
           <span className="text-[10px] font-bold truncate">
-            {isRemovingWhite ? 'Đang khử...' : 'Khử trắng'}
+            {isRemovingWhite ? 'AI đang khử...' : 'Khử trắng AI'}
           </span>
         </button>
 
