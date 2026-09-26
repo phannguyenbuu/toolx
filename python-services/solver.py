@@ -26,9 +26,11 @@ class LayoutSolver:
         page_h: float,
         shape: str = 'rect'
     ):
-        self.iW = item_w + padding
-        self.iH = item_h + padding
+        self.item_w = item_w
+        self.item_h = item_w if shape == 'circle' else item_h
         self.padding = padding
+        self.step_w = self.item_w + padding
+        self.step_h = self.item_h + padding
         self.print_w = print_w
         self.print_h = print_h
         self.page_w = page_w
@@ -37,23 +39,25 @@ class LayoutSolver:
 
     def _fill(self, x: float, y: float, w: float, h: float, rot: bool) -> List[Dict]:
         """Fill a rectangular area with items"""
-        iW = self.iH if rot else self.iW
-        iH = self.iW if rot else self.iH
+        slot_w = self.item_h if rot else self.item_w
+        slot_h = self.item_w if rot else self.item_h
         
-        if iW > w or iH > h:
+        if slot_w > w or slot_h > h:
             return []
         
-        cols = int(w // iW)
-        rows = int(h // iH)
+        step_x = slot_w + self.padding
+        step_y = slot_h + self.padding
+        cols = int((w + self.padding) // step_x)
+        rows = int((h + self.padding) // step_y)
         items = []
         
         for r in range(rows):
             for c in range(cols):
                 items.append({
-                    'x': x + (c * iW),
-                    'y': y + (r * iH),
-                    'w': iW,
-                    'h': iH,
+                    'x': x + (c * step_x),
+                    'y': y + (r * step_y),
+                    'w': slot_w,
+                    'h': slot_h,
                     'rot': rot
                 })
         
@@ -61,14 +65,15 @@ class LayoutSolver:
 
     def _fill_staggered(self) -> List[Dict]:
         """Fill with staggered (honeycomb) pattern for circles"""
-        D = self.iW
-        row_h = D * 0.866025  # sqrt(3)/2
+        D = self.item_w
+        step_x = D + self.padding
+        row_h = step_x * 0.866025  # sqrt(3)/2
         items = []
         y = 0
         r = 0
         
         while (y + D) <= self.print_h:
-            off_x = 0 if (r % 2 == 0) else (D / 2)
+            off_x = 0 if (r % 2 == 0) else (step_x / 2)
             x = off_x
             
             while (x + D) <= self.print_w:
@@ -79,7 +84,7 @@ class LayoutSolver:
                     'h': D,
                     'rot': False
                 })
-                x += D
+                x += step_x
             
             y += row_h
             r += 1
@@ -108,26 +113,26 @@ class LayoutSolver:
     def _fill_hexagon_honeycomb(self) -> List[Dict]:
         """Fill with honeycomb pattern for hexagons (Pointy Top)"""
         items = []
-        # Vertical distance between row centers = H * 0.75 (Pointy Top)
-        # Using iH * 0.75 distributes padding proportionally
-        row_h = self.iH * 0.75
+        step_x = self.item_w + self.padding
+        step_h = self.item_h + self.padding
+        row_h = step_h * 0.75
         
         y = 0
         r = 0
         
-        while y + self.iH <= self.print_h:
-            off_x = 0 if r % 2 == 0 else self.iW * 0.5
+        while y + self.item_h <= self.print_h:
+            off_x = 0 if r % 2 == 0 else step_x * 0.5
             x = off_x
             
-            while x + self.iW <= self.print_w:
+            while x + self.item_w <= self.print_w:
                 items.append({
                     'x': x,
                     'y': y,
-                    'w': self.iW,
-                    'h': self.iH,
+                    'w': self.item_w,
+                    'h': self.item_h,
                     'rot': False
                 })
-                x += self.iW
+                x += step_x
             
             y += row_h
             r += 1
@@ -137,71 +142,57 @@ class LayoutSolver:
     def _fill_triangle_alternating(self) -> List[Dict]:
         """Fill with alternating pattern for triangles"""
         items = []
-        # Safe Mode: No overlap bounding box
-        step_x = self.iW
+        step_x = (self.item_w + self.padding) * 0.5
+        step_y = self.item_h + self.padding
         
         y = 0
-        while y + self.iH <= self.print_h:
+        while y + self.item_h <= self.print_h:
             x = 0
             c = 0
-            while x + self.iW <= self.print_w:
+            while x + self.item_w <= self.print_w:
                 is_flipped = (c % 2 != 0)
                 items.append({
                     'x': x,
                     'y': y,
-                    'w': self.iW,
-                    'h': self.iH,
+                    'w': self.item_w,
+                    'h': self.item_h,
                     'rot': is_flipped # Rotated means Point Down
                 })
                 x += step_x
                 c += 1
-            y += self.iH
+            y += step_y
             
         return items
 
     def _fill_trapezoid_alternating(self) -> List[Dict]:
         """Fill with alternating pattern for trapezoids"""
         items = []
-        top_ratio = 0.7
-        # Calculate dimensions based on item (excluding padding for geometry)
-        # But iW includes padding. 
-        # JS: const narrowW = (iW - padding) * topRatio + padding? No.
-        # JS: const narrowW = config.itemW * topRatio.
-        # JS: const offset = (config.itemW - narrowW) / 2.
-        # JS: const stepX = narrowW + offset + config.padding.
-        
-        item_w_real = self.iW - self.padding
-        narrow_w = item_w_real * top_ratio
-        offset = (item_w_real - narrow_w) / 2
-        step_x = narrow_w + offset + self.padding
+        step_x = self.item_w + self.padding
+        step_y = self.item_h + self.padding
         
         y = 0
-        while y + self.iH <= self.print_h:
+        while y + self.item_h <= self.print_h:
             x = 0
             c = 0
-            while x + self.iW <= self.print_w:
+            while x + self.item_w <= self.print_w:
                 is_flipped = (c % 2 != 0)
-                
-                # Flipped item needs adjustment in X to align slope?
-                # JS logic: simple stepX.
-                
                 items.append({
                     'x': x,
                     'y': y,
-                    'w': self.iW,
-                    'h': self.iH,
+                    'w': self.item_w,
+                    'h': self.item_h,
                     'rot': is_flipped
                 })
                 x += step_x
                 c += 1
-            y += self.iH
+            y += step_y
             
         return items
 
     def solve(self) -> List[Dict[str, Any]]:
         """Calculate all layout plans"""
         plans = []
-        is_square = (self.iW == self.iH)
+        is_square = (self.item_w == self.item_h)
         
         # Special shapes logic
         if self.shape == 'hexagon':
@@ -274,14 +265,15 @@ class LayoutSolver:
             # Mixed plans (only for non-circle, non-square)
             if self.shape != 'circle' and not is_square:
                 # Vertical cuts
-                max_cols = int(self.print_w // self.iW)
+                step_x = self.item_w + self.padding
+                max_cols = int((self.print_w + self.padding) // step_x)
                 for i in range(1, max_cols + 1):
-                    w1 = i * self.iW
+                    w1 = i * step_x
                     w2 = self.print_w - w1
-                    if w2 < self.iH:
+                    if w2 < self.item_h:
                         continue
                     
-                    items = self._fill(0, 0, w1, self.print_h, False)
+                    items = self._fill(0, 0, w1 - self.padding, self.print_h, False)
                     items.extend(self._fill(w1, 0, w2, self.print_h, True))
                     
                     plans.append({
@@ -291,14 +283,15 @@ class LayoutSolver:
                     })
                 
                 # Horizontal cuts
-                max_rows = int(self.print_h // self.iH)
+                step_y = self.item_h + self.padding
+                max_rows = int((self.print_h + self.padding) // step_y)
                 for i in range(1, max_rows + 1):
-                    h1 = i * self.iH
+                    h1 = i * step_y
                     h2 = self.print_h - h1
-                    if h2 < self.iW:
+                    if h2 < self.item_w:
                         continue
                     
-                    items = self._fill(0, 0, self.print_w, h1, False)
+                    items = self._fill(0, 0, self.print_w, h1 - self.padding, False)
                     items.extend(self._fill(0, h1, self.print_w, h2, True))
                     
                     plans.append({

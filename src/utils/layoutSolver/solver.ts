@@ -58,8 +58,8 @@ export function hashPlan(items: PlanItem[]): string {
 }
 
 export class LayoutSolver {
-  private iW: number;
-  private iH: number;
+  private itemW: number;
+  private itemH: number;
   private padding: number;
   private printW: number;
   private printH: number;
@@ -69,8 +69,8 @@ export class LayoutSolver {
   private autoRotate: boolean;
 
   constructor(config: SolverConfig) {
-    this.iW = config.itemW + config.padding;
-    this.iH = config.itemH + config.padding;
+    this.itemW = config.itemW;
+    this.itemH = config.itemH;
     this.padding = config.padding;
     this.printW = config.printW;
     this.printH = config.printH;
@@ -82,14 +82,14 @@ export class LayoutSolver {
 
   solve(): LayoutPlan[] {
     let plans: LayoutPlan[] = [];
-    const isSquare = Math.abs(this.iW - this.iH) < 0.01;
+    const isSquare = Math.abs(this.itemW - this.itemH) < 0.01;
 
     // Plan 1: Straight grid
     plans.push({
       name: 'Thẳng (Grid)',
       priority: P_STRAIGHT,
       qty: 0,
-      items: fillGrid(0, 0, this.printW, this.printH, false, this.iW, this.iH),
+      items: fillGrid(0, 0, this.printW, this.printH, false, this.itemW, this.itemH, this.padding),
     });
 
     // Plan 2: Rotated
@@ -99,22 +99,23 @@ export class LayoutSolver {
         name: 'Xoay Ngang',
         priority: P_ROTATED,
         qty: 0,
-        items: fillGrid(0, 0, this.printW, this.printH, true, this.iW, this.iH),
+        items: fillGrid(0, 0, this.printW, this.printH, true, this.itemW, this.itemH, this.padding),
       });
     }
 
     // Mixed plans
     if (!isSpecialShape && !isSquare) {
       // Vertical cuts
-      const maxCols = Math.floor(this.printW / this.iW);
+      const stepXStraight = this.itemW + this.padding;
+      const maxCols = Math.floor((this.printW + this.padding) / stepXStraight);
       for (let i = 1; i <= maxCols; i++) {
-        const w1 = i * this.iW;
+        const w1 = i * stepXStraight;
         const w2 = this.printW - w1;
-        if (w2 < this.iH) continue;
+        if (w2 < this.itemH) continue;
 
         const items = [
-          ...fillGrid(0, 0, w1, this.printH, false, this.iW, this.iH),
-          ...fillGrid(w1, 0, w2, this.printH, true, this.iW, this.iH),
+          ...fillGrid(0, 0, w1 - this.padding, this.printH, false, this.itemW, this.itemH, this.padding),
+          ...fillGrid(w1, 0, w2, this.printH, true, this.itemW, this.itemH, this.padding),
         ];
 
         plans.push({
@@ -126,15 +127,16 @@ export class LayoutSolver {
       }
 
       // Horizontal cuts
-      const maxRows = Math.floor(this.printH / this.iH);
+      const stepYStraight = this.itemH + this.padding;
+      const maxRows = Math.floor((this.printH + this.padding) / stepYStraight);
       for (let i = 1; i <= maxRows; i++) {
-        const h1 = i * this.iH;
+        const h1 = i * stepYStraight;
         const h2 = this.printH - h1;
-        if (h2 < this.iW) continue;
+        if (h2 < this.itemW) continue;
 
         const items = [
-          ...fillGrid(0, 0, this.printW, h1, false, this.iW, this.iH),
-          ...fillGrid(0, h1, this.printW, h2, true, this.iW, this.iH),
+          ...fillGrid(0, 0, this.printW, h1 - this.padding, false, this.itemW, this.itemH, this.padding),
+          ...fillGrid(0, h1, this.printW, h2, true, this.itemW, this.itemH, this.padding),
         ];
 
         plans.push({
@@ -152,7 +154,7 @@ export class LayoutSolver {
         name: 'Tổ ong (So le)',
         priority: P_STAGGERED,
         qty: 0,
-        items: fillStaggered(this.printW, this.printH, this.iW),
+        items: fillStaggered(this.printW, this.printH, this.itemW, this.padding),
       });
     }
 
@@ -161,7 +163,7 @@ export class LayoutSolver {
         name: 'Tổ ong (Lục giác)',
         priority: P_STAGGERED,
         qty: 0,
-        items: fillHexagonHoneycomb(this.printW, this.printH, this.iW, this.iH),
+        items: fillHexagonHoneycomb(this.printW, this.printH, this.itemW, this.itemH, this.padding),
       });
     }
 
@@ -170,7 +172,7 @@ export class LayoutSolver {
         name: 'Xen kẽ (Đảo chiều)',
         priority: P_STAGGERED,
         qty: 0,
-        items: fillTriangleAlternating(this.printW, this.printH, this.iW, this.iH, this.padding),
+        items: fillTriangleAlternating(this.printW, this.printH, this.itemW, this.itemH, this.padding),
       });
     }
 
@@ -179,20 +181,20 @@ export class LayoutSolver {
         name: 'Xen kẽ (Đảo chiều)',
         priority: P_STAGGERED,
         qty: 0,
-        items: fillTrapezoidAlternating(this.printW, this.printH, this.iW, this.iH),
+        items: fillTrapezoidAlternating(this.printW, this.printH, this.itemW, this.itemH, this.padding),
       });
     }
 
     // Generic plans for other shapes
     if (!isSpecialShape && this.shape !== 'circle') {
-      const items = fillGenericFlipped(this.printW, this.printH, this.iW, this.iH);
+      const items = fillGenericFlipped(this.printW, this.printH, this.itemW, this.itemH, this.padding);
       if (items.length > 0) {
         plans.push({ name: 'Xen kẽ đảo chiều', priority: P_FLIPPED, qty: 0, items });
       }
     }
 
     if (!isSpecialShape && this.shape !== 'circle') {
-      const items = fillGenericStaggered(this.printW, this.printH, this.iW, this.iH);
+      const items = fillGenericStaggered(this.printW, this.printH, this.itemW, this.itemH, this.padding);
       if (items.length > 0) {
         plans.push({ name: 'So le (Staggered)', priority: P_STAGGERED, qty: 0, items });
       }
@@ -200,9 +202,7 @@ export class LayoutSolver {
 
     // Rotated 45°
     {
-      const origW = this.iW - this.padding;
-      const origH = this.iH - this.padding;
-      const items = fillRotated45(this.printW, this.printH, origW, origH, this.padding);
+      const items = fillRotated45(this.printW, this.printH, this.itemW, this.itemH, this.padding);
       if (items.length > 0) {
         plans.push({ name: 'Xoay 45°', priority: P_ROT45, qty: 0, items });
       }

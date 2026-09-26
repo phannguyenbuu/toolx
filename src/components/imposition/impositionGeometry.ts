@@ -351,23 +351,33 @@ export function calculatePlans(
     const contentW = maxX - minX;
     const contentH = maxY - minY;
 
+    let startX = 0;
+    let startY = 0;
+    if (config.usePrintArea) {
+      startX = (config.pageW - config.printAreaW) / 2;
+      startY = (config.pageH - config.printAreaH) / 2;
+    } else if (config.useMargin) {
+      startX = config.marginLeft;
+      startY = config.marginTop;
+    }
+
     let alignOffsetX = 0;
     let alignOffsetY = 0;
 
     if (config.alignX === 'center') {
-      alignOffsetX = (config.pageW - contentW) / 2 - minX;
+      alignOffsetX = startX + (effectivePrintW - contentW) / 2 - minX;
     } else if (config.alignX === 'right') {
-      alignOffsetX = config.pageW - contentW - minX;
+      alignOffsetX = startX + effectivePrintW - contentW - minX;
     } else {
-      alignOffsetX = -minX;
+      alignOffsetX = startX - minX;
     }
 
     if (config.alignY === 'middle') {
-      alignOffsetY = (config.pageH - contentH) / 2 - minY;
+      alignOffsetY = startY + (effectivePrintH - contentH) / 2 - minY;
     } else if (config.alignY === 'bottom') {
-      alignOffsetY = config.pageH - contentH - minY;
+      alignOffsetY = startY + effectivePrintH - contentH - minY;
     } else {
-      alignOffsetY = -minY;
+      alignOffsetY = startY - minY;
     }
 
     const finalMinX = minX + alignOffsetX;

@@ -9,27 +9,30 @@ export function fillGrid(
   w: number,
   h: number,
   rot: boolean,
-  iW: number,
-  iH: number
+  itemW: number,
+  itemH: number,
+  padding: number = 0
 ): PlanItem[] {
-  const itemW = rot ? iH : iW;
-  const itemH = rot ? iW : iH;
+  const slotW = rot ? itemH : itemW;
+  const slotH = rot ? itemW : itemH;
 
-  if (itemW > w || itemH > h) {
+  if (slotW > w || slotH > h) {
     return [];
   }
 
-  const cols = Math.floor(w / itemW);
-  const rows = Math.floor(h / itemH);
+  const stepX = slotW + padding;
+  const stepY = slotH + padding;
+  const cols = Math.floor((w + padding) / stepX);
+  const rows = Math.floor((h + padding) / stepY);
   const items: PlanItem[] = [];
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       items.push({
-        x: x + c * itemW,
-        y: y + r * itemH,
-        w: itemW,
-        h: itemH,
+        x: x + c * stepX,
+        y: y + r * stepY,
+        w: slotW,
+        h: slotH,
         rot: rot,
       });
     }
@@ -41,14 +44,20 @@ export function fillGrid(
 /**
  * Fill with staggered (honeycomb) pattern for circles
  */
-export function fillStaggered(printW: number, printH: number, D: number): PlanItem[] {
-  const rowH = D * 0.866025; // sqrt(3)/2
+export function fillStaggered(
+  printW: number,
+  printH: number,
+  D: number,
+  padding: number = 0
+): PlanItem[] {
+  const stepX = D + padding;
+  const rowH = stepX * 0.866025; // sqrt(3)/2
   const items: PlanItem[] = [];
   let y = 0;
   let r = 0;
 
   while (y + D <= printH) {
-    const offX = r % 2 === 0 ? 0 : D / 2;
+    const offX = r % 2 === 0 ? 0 : stepX / 2;
     let x = offX;
 
     while (x + D <= printW) {
@@ -59,7 +68,7 @@ export function fillStaggered(printW: number, printH: number, D: number): PlanIt
         h: D,
         rot: false,
       });
-      x += D;
+      x += stepX;
     }
 
     y += rowH;
@@ -72,25 +81,33 @@ export function fillStaggered(printW: number, printH: number, D: number): PlanIt
 /**
  * Fill with honeycomb pattern for hexagons
  */
-export function fillHexagonHoneycomb(printW: number, printH: number, iW: number, iH: number): PlanItem[] {
+export function fillHexagonHoneycomb(
+  printW: number,
+  printH: number,
+  itemW: number,
+  itemH: number,
+  padding: number = 0
+): PlanItem[] {
   const items: PlanItem[] = [];
-  const rowH = iH * 0.75; 
+  const stepX = itemW + padding;
+  const stepH = itemH + padding;
+  const rowH = stepH * 0.75; 
   let y = 0;
   let r = 0;
 
-  while (y + iH <= printH) {
-    const offX = r % 2 === 0 ? 0 : iW * 0.5;
+  while (y + itemH <= printH) {
+    const offX = r % 2 === 0 ? 0 : stepX * 0.5;
     let x = offX;
 
-    while (x + iW <= printW) {
+    while (x + itemW <= printW) {
       items.push({
         x: x,
         y: y,
-        w: iW,
-        h: iH,
+        w: itemW,
+        h: itemH,
         rot: false,
       });
-      x += iW;
+      x += stepX;
     }
 
     y += rowH;
@@ -106,31 +123,32 @@ export function fillHexagonHoneycomb(printW: number, printH: number, iW: number,
 export function fillTriangleAlternating(
   printW: number,
   printH: number,
-  iW: number,
-  iH: number,
-  padding: number
+  itemW: number,
+  itemH: number,
+  padding: number = 0
 ): PlanItem[] {
   const items: PlanItem[] = [];
-  const effectiveW = (iW - padding) * 0.5 + padding;
+  const stepX = (itemW + padding) * 0.5;
+  const stepY = itemH + padding;
   let y = 0;
 
-  while (y + iH <= printH) {
+  while (y + itemH <= printH) {
     let x = 0;
     let col = 0;
 
-    while (x + iW <= printW) {
+    while (x + itemW <= printW) {
       items.push({
         x: x,
         y: y,
-        w: iW,
-        h: iH,
+        w: itemW,
+        h: itemH,
         rot: col % 2 === 1,
       });
-      x += effectiveW;
+      x += stepX;
       col++;
     }
 
-    y += iH;
+    y += stepY;
   }
 
   return items;
@@ -139,24 +157,32 @@ export function fillTriangleAlternating(
 /**
  * Fill with alternating trapezoids (wide/narrow)
  */
-export function fillTrapezoidAlternating(printW: number, printH: number, iW: number, iH: number): PlanItem[] {
+export function fillTrapezoidAlternating(
+  printW: number,
+  printH: number,
+  itemW: number,
+  itemH: number,
+  padding: number = 0
+): PlanItem[] {
   const items: PlanItem[] = [];
+  const stepX = itemW + padding;
+  const stepY = itemH + padding;
   let y = 0;
-  while (y + iH <= printH) {
+  while (y + itemH <= printH) {
     let x = 0;
     let col = 0;
-    while (x + iW <= printW) {
+    while (x + itemW <= printW) {
       items.push({
         x: x,
         y: y,
-        w: iW,
-        h: iH,
+        w: itemW,
+        h: itemH,
         rot: col % 2 === 1,
       });
-      x += iW;
+      x += stepX;
       col++;
     }
-    y += iH;
+    y += stepY;
   }
   return items;
 }
@@ -164,17 +190,25 @@ export function fillTrapezoidAlternating(printW: number, printH: number, iW: num
 /**
  * Flip alternating (180°) - generic pattern
  */
-export function fillGenericFlipped(printW: number, printH: number, iW: number, iH: number): PlanItem[] {
+export function fillGenericFlipped(
+  printW: number,
+  printH: number,
+  itemW: number,
+  itemH: number,
+  padding: number = 0
+): PlanItem[] {
   const items: PlanItem[] = [];
-  const cols = Math.floor(printW / iW);
-  const rows = Math.floor(printH / iH);
+  const stepX = itemW + padding;
+  const stepY = itemH + padding;
+  const cols = Math.floor((printW + padding) / stepX);
+  const rows = Math.floor((printH + padding) / stepY);
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       items.push({
-        x: c * iW,
-        y: r * iH,
-        w: iW,
-        h: iH,
+        x: c * stepX,
+        y: r * stepY,
+        w: itemW,
+        h: itemH,
         rot: false,
         flipped: r % 2 === 1,
       });
@@ -186,16 +220,24 @@ export function fillGenericFlipped(printW: number, printH: number, iW: number, i
 /**
  * Generic staggered pattern
  */
-export function fillGenericStaggered(printW: number, printH: number, iW: number, iH: number): PlanItem[] {
+export function fillGenericStaggered(
+  printW: number,
+  printH: number,
+  itemW: number,
+  itemH: number,
+  padding: number = 0
+): PlanItem[] {
   const items: PlanItem[] = [];
-  const cols = Math.floor(printW / iW);
-  const rows = Math.floor(printH / iH);
+  const stepX = itemW + padding;
+  const stepY = itemH + padding;
+  const cols = Math.floor((printW + padding) / stepX);
+  const rows = Math.floor((printH + padding) / stepY);
   for (let r = 0; r < rows; r++) {
-    const offX = r % 2 === 1 ? iW / 2 : 0;
+    const offX = r % 2 === 1 ? stepX / 2 : 0;
     for (let c = 0; c < cols; c++) {
-      const x = offX + c * iW;
-      if (x + iW <= printW) {
-        items.push({ x, y: r * iH, w: iW, h: iH, rot: false });
+      const x = offX + c * stepX;
+      if (x + itemW <= printW) {
+        items.push({ x, y: r * stepY, w: itemW, h: itemH, rot: false });
       }
     }
   }
@@ -208,25 +250,26 @@ export function fillGenericStaggered(printW: number, printH: number, iW: number,
 export function fillRotated45(
   printW: number,
   printH: number,
-  origW: number,
-  origH: number,
-  padding: number
+  itemW: number,
+  itemH: number,
+  padding: number = 0
 ): PlanItem[] {
-  const diag = Math.sqrt(origW * origW + origH * origH);
-  const bbW = diag + padding;
-  const bbH = diag + padding;
-  const cols = Math.floor(printW / bbW);
-  const rows = Math.floor(printH / bbH);
+  const diag = Math.sqrt(itemW * itemW + itemH * itemH);
+  const step = diag + padding;
+  const cols = Math.floor((printW + padding) / step);
+  const rows = Math.floor((printH + padding) / step);
   if (cols <= 0 || rows <= 0) return [];
 
   const items: PlanItem[] = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
+      const cx = c * step + diag / 2;
+      const cy = r * step + diag / 2;
       items.push({
-        x: c * bbW,
-        y: r * bbH,
-        w: bbW,
-        h: bbH,
+        x: cx - itemW / 2,
+        y: cy - itemH / 2,
+        w: itemW,
+        h: itemH,
         rot: false,
         rot45: true,
       });
