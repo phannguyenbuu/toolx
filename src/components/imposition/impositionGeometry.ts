@@ -119,15 +119,22 @@ export function calculateSlotTotalRotation(
   const actualW = it.w !== undefined ? it.w : (it.rot ? config.itemH : config.itemW);
   const originalItemH = itemShape === 'circle' ? actualW : (it.h !== undefined ? it.h : (it.rot ? config.itemW : config.itemH));
 
+  // So sánh tỉ lệ hướng của ảnh gốc (srcRatio) với khung tem gốc (baseRatio)
   if (isTabAutoRotate && page && page.w && page.h) {
     const srcRatio = page.w / page.h;
-    const dstRatio = actualW / originalItemH;
+    const baseW = correspondingTab ? correspondingTab.itemW : config.itemW;
+    const baseH = correspondingTab
+      ? (correspondingTab.shape === 'circle' ? baseW : correspondingTab.itemH)
+      : (itemShape === 'circle' ? baseW : config.itemH);
+    const baseRatio = (baseW && baseH) ? baseW / baseH : 1;
 
-    if ((srcRatio > 1 && dstRatio < 1) || (srcRatio < 1 && dstRatio > 1)) {
-      pageRotation += isRotatedItem ? -90 : 90;
+    // Nếu ảnh gốc và dáng tem gốc ngược hướng nhau (1 ngang, 1 đứng), tự xoay 90° để khớp dáng tem
+    if ((srcRatio > 1 && baseRatio < 1) || (srcRatio < 1 && baseRatio > 1)) {
+      pageRotation += 90;
     }
   }
 
+  // Nếu ô này trong layout được solver xoay 90° để vừa khổ in:
   if (isRotatedItem && !isSpecialShape) {
     pageRotation += 90;
   }
