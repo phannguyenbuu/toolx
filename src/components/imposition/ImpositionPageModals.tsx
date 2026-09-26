@@ -14,6 +14,7 @@ import { ImpositionAiModal } from './modals/ImpositionAiModal';
 import { ImpositionExportModal } from './modals/ImpositionExportModal';
 import { ImpositionRenderModal } from './modals/ImpositionRenderModal';
 import { ImpositionRenderSuccessModal, RenderSuccessInfo } from './modals/ImpositionRenderSuccessModal';
+import { ImpositionRenderProgressBar } from './ImpositionRenderProgressBar';
 import { ImpositionSortJobModal, SortJobModalData } from './modals/ImpositionSortJobModal';
 import { GoAgentInfo } from '../../services/goAgentService';
 
@@ -96,6 +97,9 @@ export interface ImpositionPageModalsProps {
   setSelectedPresetId: (id: string) => void;
   currentPlan: LayoutPlan | null;
   renderProgressText: string;
+  isGenerating?: boolean;
+  progress?: number;
+  renderStatusText?: string;
 
   // Render Result & SortJob Modals
   renderSuccessModal: RenderSuccessInfo | null;
@@ -202,6 +206,9 @@ export const ImpositionPageModals: React.FC<ImpositionPageModalsProps> = ({
   setSelectedPresetId,
   currentPlan,
   renderProgressText,
+  isGenerating,
+  progress,
+  renderStatusText,
   renderSuccessModal,
   setRenderSuccessModal,
   sortJobModalData,
@@ -346,6 +353,12 @@ export const ImpositionPageModals: React.FC<ImpositionPageModalsProps> = ({
       <ImpositionRenderSuccessModal
         renderSuccessModal={renderSuccessModal}
         setRenderSuccessModal={setRenderSuccessModal}
+      />
+
+      <ImpositionRenderProgressBar
+        isGenerating={isGenerating ?? false}
+        progress={progress ?? 0}
+        statusText={renderStatusText}
       />
 
       <ImpositionSortJobModal

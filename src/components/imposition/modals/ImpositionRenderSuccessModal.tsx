@@ -197,9 +197,23 @@ export const ImpositionRenderSuccessModal: React.FC<ImpositionRenderSuccessModal
               </button>
             )}
 
-            <a
-              href={renderSuccessModal.downloadUrl}
-              download={renderSuccessModal.filename || 'BinhTrang_Render.pdf'}
+            <button
+              type="button"
+              onClick={() => {
+                if (!renderSuccessModal.downloadUrl) return;
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = renderSuccessModal.downloadUrl;
+                a.download = renderSuccessModal.filename || 'BinhTrang_Render.pdf';
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => {
+                  try {
+                    if (document.body.contains(a)) document.body.removeChild(a);
+                  } catch {}
+                }, 1000);
+                safeToastSuccess(`Đang tải xuống: ${renderSuccessModal.filename}`);
+              }}
               className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 text-white rounded-xl font-bold text-xs shadow-lg shadow-emerald-500/25 active:scale-95 transition cursor-pointer"
             >
               <Download size={16} />
@@ -208,7 +222,7 @@ export const ImpositionRenderSuccessModal: React.FC<ImpositionRenderSuccessModal
                   ? `Tải lại File Gộp (${renderSuccessModal.totalPages || renderSuccessModal.sheetFiles.length} trang)`
                   : 'Tải lại File PDF'}
               </span>
-            </a>
+            </button>
           </div>
         </div>
       </div>

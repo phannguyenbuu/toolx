@@ -222,8 +222,13 @@ export async function exportLocalPdf(params: ExportLocalPdfParams): Promise<void
   onProgress?.(100);
 
   const downloadUrl = URL.createObjectURL(blob);
-  setTimeout(() => URL.revokeObjectURL(downloadUrl), 60_000);
-  const previewUrl = allPages[0]?.thumb || '';
+  setTimeout(() => URL.revokeObjectURL(downloadUrl), 600_000);
+  const previewUrl =
+    allPages[0]?.thumb ||
+    allPages[0]?.url ||
+    shapeTabs.find(t => t.sourceImage)?.sourceImage?.thumb ||
+    shapeTabs.find(t => t.sourceImage)?.sourceImage?.url ||
+    '';
 
   const renderInfo: RenderSuccessInfo = {
     downloadUrl,

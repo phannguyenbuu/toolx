@@ -24,6 +24,7 @@ export * from './ImpositionHistorySidebar';
 export * from './ImpositionAiOutpaintPanel';
 export * from './ImpositionPaperSidebar';
 export * from './ImpositionPageModals';
+export * from './ImpositionRenderProgressBar';
 export * from './impositionStorageIndexedDB';
 
 // Modals

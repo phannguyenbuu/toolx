@@ -112,11 +112,21 @@ export async function generatePdfAsync(
   }
 }
 
-export async function downloadPdfBlob(blob: Blob, filename: string = 'print.pdf') {
+export function downloadPdfBlob(blob: Blob, filename: string = 'print.pdf') {
+  if (typeof window === 'undefined') return;
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
+  a.style.display = 'none';
   a.href = url;
   a.download = filename;
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => {
+    try {
+      if (document.body.contains(a)) {
+        document.body.removeChild(a);
+      }
+      URL.revokeObjectURL(url);
+    } catch {}
+  }, 120000);
 }

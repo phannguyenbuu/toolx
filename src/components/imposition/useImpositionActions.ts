@@ -3,7 +3,7 @@ import { ImpositionConfig, ShapeTabItem, PageItem, DataMode } from './types';
 import { LayoutPlan } from '../../utils/layoutSolver';
 import { VectorMaskResult } from '../VectorMaskEditorModal';
 import { RenderSuccessInfo } from './modals/ImpositionRenderSuccessModal';
-import { safeToastSuccess, safeToastError, safeToastLoading, safeToastDismiss } from './impositionHelpers';
+import { safeToastSuccess, safeToastError } from './impositionHelpers';
 import { exportLocalPdf, exportGoAgentPdf } from './pdfExportEngine';
 import { extractPdfPages, isPdfFile } from '../../utils/pdfPageExtractor';
 import { createClientThumbnail } from '../../utils/imageThumbnail';
@@ -71,6 +71,7 @@ export function useImpositionActions(params: UseImpositionActionsParams) {
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [renderStatusText, setRenderStatusText] = useState('Đang render PDF...');
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiPreviewPages, setAiPreviewPages] = useState<PageItem[]>([]);
@@ -194,7 +195,7 @@ export function useImpositionActions(params: UseImpositionActionsParams) {
     setIsRenderModalOpen?.(false);
     setIsGenerating(true);
     setProgress(10);
-    const toastId = safeToastLoading('Đang render PDF... (10%)');
+    setRenderStatusText('Đang khởi tạo kết xuất...');
     try {
       if (selectedRenderEngine === 'goagent' && goAgentInfo?.detected) {
         await exportGoAgentPdf({
@@ -203,10 +204,11 @@ export function useImpositionActions(params: UseImpositionActionsParams) {
           selectedPresetId, apiStatus, goAgentPort: GOAGENT_DEFAULT_PORT,
           onProgress: (p) => {
             setProgress(p);
-            safeToastLoading(`Đang render PDF... (${p}%)`, toastId);
+            if (p < 40) setRenderStatusText('Đang chuẩn bị layout GoAgent...');
+            else if (p < 90) setRenderStatusText('Đang kết xuất PDF RIP Prepress...');
+            else setRenderStatusText('Đang tải file về máy...');
           },
           onSuccess: (info) => {
-            safeToastDismiss(toastId);
             setRenderSuccessModal(info);
           }
         });
@@ -217,16 +219,16 @@ export function useImpositionActions(params: UseImpositionActionsParams) {
           customSvgData, vectorMaskResult, backgroundColor, apiStatus,
           onProgress: (p) => {
             setProgress(p);
-            safeToastLoading(`Đang render PDF... (${p}%)`, toastId);
+            if (p < 40) setRenderStatusText('Đang xử lý layout & vector...');
+            else if (p < 90) setRenderStatusText('Đang kết xuất PDF...');
+            else setRenderStatusText('Đang tải file về máy...');
           },
           onSuccess: (info) => {
-            safeToastDismiss(toastId);
             setRenderSuccessModal(info);
           }
         });
       }
     } catch (err: any) {
-      safeToastDismiss(toastId);
       safeToastError(`Lỗi xuất PDF: ${err.message}`);
     } finally {
       setIsGenerating(false);
@@ -266,6 +268,7 @@ export function useImpositionActions(params: UseImpositionActionsParams) {
   return {
     isGenerating,
     progress,
+    renderStatusText,
     aiPrompt,
     setAiPrompt,
     aiLoading,
