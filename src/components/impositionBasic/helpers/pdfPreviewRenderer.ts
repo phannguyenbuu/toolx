@@ -39,7 +39,7 @@ export async function fetchRenderPreview(
     fd.append('iccOutput', config.iccOutput);
   }
 
-  const res = await fetch(API_BASE + '/api/render-preview', {
+  const res = await fetch(API_BASE + '/render-preview', {
     method: 'POST',
     body: fd
   });

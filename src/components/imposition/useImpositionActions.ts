@@ -107,7 +107,18 @@ export function useImpositionActions(params: UseImpositionActionsParams) {
         const img = new Image();
         img.onload = async () => {
           const dims = await calculateStandardImageDimensionsMm(img.naturalWidth, img.naturalHeight, file);
-          const pageItem: PageItem = { id: `img-${Date.now()}`, name: file.name, url, thumb: url, w: dims.w, h: dims.h, rotation: 0 };
+          const thumb = await createClientThumbnail(file, 320);
+          const pageItem: PageItem = {
+            id: `img-${Date.now()}`,
+            name: file.name,
+            url,
+            thumb: thumb || url,
+            originalThumb: thumb || url,
+            baseThumb: thumb || url,
+            w: dims.w,
+            h: dims.h,
+            rotation: 0
+          };
           updateActiveTabProp({ sourceImage: pageItem, itemW: dims.w, itemH: dims.h });
           setConfig(c => ({ ...c, itemW: dims.w, itemH: dims.h }));
           safeToastSuccess(`Đã tải ảnh: ${file.name} (${dims.w}x${dims.h}mm)`);
