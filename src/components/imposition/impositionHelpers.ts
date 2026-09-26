@@ -51,6 +51,25 @@ export const safeToastInfo = (msg: string) => {
   }
 };
 
+export const safeToastLoading = (msg: string, toastId?: string): string => {
+  try {
+    if (typeof (toast as any)?.loading === 'function') {
+      return (toast as any).loading(msg, toastId ? { id: toastId } : undefined);
+    }
+  } catch (e) {
+    console.log('[Toast Loading]', msg);
+  }
+  return toastId || `toast-${Date.now()}`;
+};
+
+export const safeToastDismiss = (toastId?: string) => {
+  try {
+    if (typeof (toast as any)?.dismiss === 'function') {
+      (toast as any).dismiss(toastId);
+    }
+  } catch (e) {}
+};
+
 /**
  * Áp dụng kiểu trở lên layout items.
  * - Sheetwise: giữ nguyên (in AB riêng biệt)

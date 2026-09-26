@@ -4,6 +4,7 @@ import { savePendingRenderBlob } from '../../services/pendingRenderService';
 import { PlanItem, LayoutPlan } from '../../utils/layoutSolver';
 import { ImpositionConfig, ShapeTabItem, PageItem, DataMode, ImpositionStyle } from './types';
 import { enrichPlanItemsWithRotation } from './impositionGeometry';
+import { RenderSuccessInfo } from './modals/ImpositionRenderSuccessModal';
 
 export { probeGoAgent, renderPdfViaGoAgent, downloadPdfBlob, savePendingRenderBlob, GOAGENT_DEFAULT_PORT };
 export type { GoAgentInfo };
@@ -27,6 +28,7 @@ export interface GeneratePdfBlobParams {
   activeTab?: ShapeTabItem;
   isMultiShape: boolean;
   previewSide: 'front' | 'back';
+  onProgress?: (progress: number, message: string) => void;
 }
 
 /**
@@ -163,7 +165,9 @@ export async function generateImpositionPdfBlob(params: GeneratePdfBlobParams): 
     fd.append('targetSheetIndex', String(targetSheetIndex));
   }
 
-  return generatePdfAsync(fd);
+  return generatePdfAsync(fd, {
+    onProgress: params.onProgress
+  });
 }
 
 export interface ExportLocalPdfParams {
@@ -181,7 +185,7 @@ export interface ExportLocalPdfParams {
   backgroundColor?: string;
   apiStatus: 'checking' | 'online' | 'offline';
   onProgress?: (progress: number) => void;
-  onSuccess?: (filename: string) => void;
+  onSuccess?: (info: RenderSuccessInfo) => void;
 }
 
 export async function exportLocalPdf(params: ExportLocalPdfParams): Promise<void> {
@@ -191,7 +195,8 @@ export async function exportLocalPdf(params: ExportLocalPdfParams): Promise<void
     backgroundColor = '#ffffff', apiStatus, onProgress, onSuccess
   } = params;
 
-  onProgress?.(20);
+  const startTime = Date.now();
+  onProgress?.(10);
   const blob = await generateImpositionPdfBlob({
     allPages,
     apiStatus,
@@ -207,14 +212,31 @@ export async function exportLocalPdf(params: ExportLocalPdfParams): Promise<void
     totalSheets,
     shapeTabs,
     isMultiShape,
-    previewSide: 'front'
+    previewSide: 'front',
+    onProgress: (p) => onProgress?.(p)
   });
-  onProgress?.(80);
+  onProgress?.(95);
 
   const filename = `binh-ban-${config.pageW}x${config.pageH}mm-${Date.now()}.pdf`;
   downloadPdfBlob(blob, filename);
   onProgress?.(100);
-  onSuccess?.(filename);
+
+  const downloadUrl = URL.createObjectURL(blob);
+  setTimeout(() => URL.revokeObjectURL(downloadUrl), 60_000);
+  const previewUrl = allPages[0]?.thumb || '';
+
+  const renderInfo: RenderSuccessInfo = {
+    downloadUrl,
+    filename,
+    previewUrl,
+    dpi: config.dpi || 300,
+    colorspace: (config.colorMode || 'cmyk').toUpperCase(),
+    engineName: 'Python Backend',
+    totalPages: totalSheets || 1,
+    duration: `${((Date.now() - startTime) / 1000).toFixed(1)}s`
+  };
+
+  onSuccess?.(renderInfo);
 }
 
 export interface ExportGoAgentPdfParams {
@@ -313,6 +335,18 @@ export async function exportGoAgentPdf(params: ExportGoAgentPdfParams): Promise<
     engineName: 'GoAgent PC (128GB RAM)',
     presetName: selectedPresetId || 'Prepress Chuẩn'
   };
+
+  // Tự động tải file xuống máy
+  try {
+    const a = document.createElement('a');
+    a.href = finalDownloadUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } catch (e) {
+    console.error('[GoAgent] Lỗi trigger tải file:', e);
+  }
 
   onProgress?.(100);
   onSuccess?.(renderInfo);

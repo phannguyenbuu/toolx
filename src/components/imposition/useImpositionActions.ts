@@ -3,7 +3,7 @@ import { ImpositionConfig, ShapeTabItem, PageItem, DataMode } from './types';
 import { LayoutPlan } from '../../utils/layoutSolver';
 import { VectorMaskResult } from '../VectorMaskEditorModal';
 import { RenderSuccessInfo } from './modals/ImpositionRenderSuccessModal';
-import { safeToastSuccess, safeToastError } from './impositionHelpers';
+import { safeToastSuccess, safeToastError, safeToastLoading, safeToastDismiss } from './impositionHelpers';
 import { exportLocalPdf, exportGoAgentPdf } from './pdfExportEngine';
 import { extractPdfPages, isPdfFile } from '../../utils/pdfPageExtractor';
 import { createClientThumbnail } from '../../utils/imageThumbnail';
@@ -36,6 +36,7 @@ export interface UseImpositionActionsParams {
   setIsAiModalOpen: (open: boolean) => void;
   setIsFilePickerOpen: (open: boolean) => void;
   setIsSourceEditorOpen: (open: boolean) => void;
+  setIsRenderModalOpen?: (open: boolean) => void;
 }
 
 export function useImpositionActions(params: UseImpositionActionsParams) {
@@ -64,7 +65,8 @@ export function useImpositionActions(params: UseImpositionActionsParams) {
     setRenderSuccessModal,
     setIsAiModalOpen,
     setIsFilePickerOpen,
-    setIsSourceEditorOpen
+    setIsSourceEditorOpen,
+    setIsRenderModalOpen
   } = params;
 
   const [isGenerating, setIsGenerating] = useState(false);
@@ -188,17 +190,23 @@ export function useImpositionActions(params: UseImpositionActionsParams) {
 
   const confirmDownloadPDF = async () => {
     if (!currentPlan) return;
+    setShowDownloadModal(false);
+    setIsRenderModalOpen?.(false);
     setIsGenerating(true);
     setProgress(10);
+    const toastId = safeToastLoading('Đang render PDF... (10%)');
     try {
       if (selectedRenderEngine === 'goagent' && goAgentInfo?.detected) {
         await exportGoAgentPdf({
           config, currentPlan, allPages, shapeTabs, isMultiShape,
           totalSheets, effectiveDataMode: dataMode, standardQty, xUpQty,
           selectedPresetId, apiStatus, goAgentPort: GOAGENT_DEFAULT_PORT,
-          onProgress: setProgress,
+          onProgress: (p) => {
+            setProgress(p);
+            safeToastLoading(`Đang render PDF... (${p}%)`, toastId);
+          },
           onSuccess: (info) => {
-            setShowDownloadModal(false);
+            safeToastDismiss(toastId);
             setRenderSuccessModal(info);
           }
         });
@@ -207,14 +215,18 @@ export function useImpositionActions(params: UseImpositionActionsParams) {
           config, currentPlan, allPages, shapeTabs, isMultiShape,
           totalSheets, effectiveDataMode: dataMode, standardQty, xUpQty,
           customSvgData, vectorMaskResult, backgroundColor, apiStatus,
-          onProgress: setProgress,
-          onSuccess: (filename) => {
-            setShowDownloadModal(false);
-            safeToastSuccess(`Đã xuất PDF thành công: ${filename}`);
+          onProgress: (p) => {
+            setProgress(p);
+            safeToastLoading(`Đang render PDF... (${p}%)`, toastId);
+          },
+          onSuccess: (info) => {
+            safeToastDismiss(toastId);
+            setRenderSuccessModal(info);
           }
         });
       }
     } catch (err: any) {
+      safeToastDismiss(toastId);
       safeToastError(`Lỗi xuất PDF: ${err.message}`);
     } finally {
       setIsGenerating(false);

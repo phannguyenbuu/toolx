@@ -47,13 +47,16 @@ export const ImpositionRenderSuccessModal: React.FC<ImpositionRenderSuccessModal
             </div>
             <div>
               <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                Kết xuất Render Prepress Hoạt Tất!
-                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  {renderSuccessModal.duration}
-                </span>
+                Đã download {renderSuccessModal.filename} xong
+                {renderSuccessModal.duration && (
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    {renderSuccessModal.duration}
+                  </span>
+                )}
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5 truncate max-w-md">
-                {renderSuccessModal.filename}
+              <p className="text-xs text-emerald-700 font-medium mt-0.5 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
+                Tệp PDF đã được lưu vào thư mục Downloads của bạn.
               </p>
             </div>
           </div>
@@ -202,8 +205,8 @@ export const ImpositionRenderSuccessModal: React.FC<ImpositionRenderSuccessModal
               <Download size={16} />
               <span>
                 {renderSuccessModal.sheetFiles && renderSuccessModal.sheetFiles.length > 1
-                  ? `Tải File Gộp (${renderSuccessModal.totalPages || renderSuccessModal.sheetFiles.length} trang)`
-                  : 'Tải File Render PDF'}
+                  ? `Tải lại File Gộp (${renderSuccessModal.totalPages || renderSuccessModal.sheetFiles.length} trang)`
+                  : 'Tải lại File PDF'}
               </span>
             </a>
           </div>

@@ -62,15 +62,9 @@ export const ImpositionRenderModal: React.FC<ImpositionRenderModalProps> = ({
               <Play size={20} className="fill-current ml-0.5" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                Khởi chạy Render Prepress
-                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                  Bình Trang &rarr; Render
-                </span>
+              <h3 className="text-lg font-bold text-slate-900">
+                Render
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Đóng gói bình trang hiện tại và chuyển sang phân hệ /render để xuất RIP / Prepress chất lượng cao
-              </p>
             </div>
           </div>
           <button
@@ -253,20 +247,14 @@ export const ImpositionRenderModal: React.FC<ImpositionRenderModalProps> = ({
           <button
             type="button"
             disabled={isSubmittingRender}
-            onClick={handleStartRender}
+            onClick={() => {
+              onClose();
+              handleStartRender();
+            }}
             className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 hover:from-violet-700 hover:to-blue-700 text-white rounded-xl font-bold text-xs shadow-lg shadow-indigo-500/25 active:scale-95 transition disabled:opacity-60 cursor-pointer"
           >
-            {isSubmittingRender ? (
-              <>
-                <Loader2 size={16} className="animate-spin" />
-                <span>{renderProgressText || 'Đang đóng gói PDF...'}</span>
-              </>
-            ) : (
-              <>
-                <Play size={16} className="fill-current" />
-                <span>Chuyển sang Render & Bắt đầu</span>
-              </>
-            )}
+            <Play size={16} className="fill-current" />
+            <span>Render</span>
           </button>
         </div>
       </div>
