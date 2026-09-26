@@ -30,6 +30,7 @@ export interface UseImpositionActionsParams {
   selectedRenderEngine: 'auto' | 'goagent' | 'server';
   selectedPresetId: string;
   goAgentInfo: GoAgentInfo | null;
+  apiStatus: 'checking' | 'online' | 'offline';
   setShowDownloadModal: (open: boolean) => void;
   setRenderSuccessModal: (info: RenderSuccessInfo | null) => void;
   setIsAiModalOpen: (open: boolean) => void;
@@ -57,6 +58,7 @@ export function useImpositionActions(params: UseImpositionActionsParams) {
     selectedRenderEngine,
     selectedPresetId,
     goAgentInfo,
+    apiStatus,
     setShowDownloadModal,
     setRenderSuccessModal,
     setIsAiModalOpen,
@@ -176,7 +178,7 @@ export function useImpositionActions(params: UseImpositionActionsParams) {
         await exportGoAgentPdf({
           config, currentPlan, allPages, shapeTabs, isMultiShape,
           totalSheets, effectiveDataMode: dataMode, standardQty, xUpQty,
-          selectedPresetId, goAgentPort: GOAGENT_DEFAULT_PORT,
+          selectedPresetId, apiStatus, goAgentPort: GOAGENT_DEFAULT_PORT,
           onProgress: setProgress,
           onSuccess: (info) => {
             setShowDownloadModal(false);
@@ -187,7 +189,7 @@ export function useImpositionActions(params: UseImpositionActionsParams) {
         await exportLocalPdf({
           config, currentPlan, allPages, shapeTabs, isMultiShape,
           totalSheets, effectiveDataMode: dataMode, standardQty, xUpQty,
-          customSvgData, vectorMaskResult, backgroundColor,
+          customSvgData, vectorMaskResult, backgroundColor, apiStatus,
           onProgress: setProgress,
           onSuccess: (filename) => {
             setShowDownloadModal(false);

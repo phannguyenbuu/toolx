@@ -310,6 +310,8 @@ def generate_pdf_multipage_from_request(files, form_data):
         x_up_qty = int(form_data.get('xUpQty', 1))
         standard_qty = int(form_data.get('standardQty', 1))
         total_sheets = int(form_data.get('totalSheets', 1))
+        target_sheet_index_raw = form_data.get('targetSheetIndex')
+        target_sheet_index = int(target_sheet_index_raw) if target_sheet_index_raw is not None else None
         
         print(f"[DEBUG] Multipage PDF: {len(temp_paths)} files, {len(plan_items)} items, mode={data_mode}")
         
@@ -346,7 +348,8 @@ def generate_pdf_multipage_from_request(files, form_data):
             data_mode=data_mode,
             x_up_qty=x_up_qty,
             standard_qty=standard_qty,
-            total_sheets=total_sheets
+            total_sheets=total_sheets,
+            target_sheet_index=target_sheet_index
         )
         
         return pdf_bytes

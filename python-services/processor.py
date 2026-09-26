@@ -1831,7 +1831,8 @@ def generate_pdf_multipage(
     data_mode: int = 1,
     x_up_qty: int = 1,
     standard_qty: int = 1,
-    total_sheets: int = 1
+    total_sheets: int = 1,
+    target_sheet_index: int = None
 ) -> bytes:
     """
     Generate multi-page PDF from multiple source images with layout.
@@ -2053,7 +2054,8 @@ def generate_pdf_multipage(
         pr, pg, pb = 0, 0, 0
     
     # Generate each output sheet
-    for sheet_idx in range(total_sheets):
+    sheets_to_process = [target_sheet_index] if target_sheet_index is not None else range(total_sheets)
+    for sheet_idx in sheets_to_process:
         # Draw each item on this sheet
         for slot_idx, item in enumerate(plan_items):
             # Check sheetIndex: if item belongs to another sheet, skip it

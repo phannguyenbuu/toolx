@@ -3,7 +3,6 @@ export * from './impositionHelpers';
 export * from './DebouncedNumberInput';
 export * from './marksRenderer';
 export * from './impositionGeometry';
-export * from './pdfCanvasRenderer';
 export * from './pdfExportEngine';
 export * from './useImpositionAutoSave';
 export * from './useImpositionWorkspace';

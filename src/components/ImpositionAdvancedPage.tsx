@@ -194,7 +194,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionAdvancedPageProps> = ({ 
     config, setConfig, activeTab, updateActiveTabProp, allPages, setAllPages,
     currentPlan, shapeTabs, isMultiShape, totalSheets, dataMode, standardQty,
     xUpQty, customSvgData, vectorMaskResult, backgroundColor, selectedRenderEngine,
-    selectedPresetId, goAgentInfo, setShowDownloadModal, setRenderSuccessModal,
+    selectedPresetId, goAgentInfo, apiStatus, setShowDownloadModal, setRenderSuccessModal,
     setIsAiModalOpen, setIsFilePickerOpen
   });
 

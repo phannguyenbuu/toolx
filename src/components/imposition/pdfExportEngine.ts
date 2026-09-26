@@ -1,11 +1,9 @@
-import { jsPDF } from 'jspdf';
 import { generatePdfAsync, downloadPdfBlob } from '../../utils/pdfAsync';
 import { probeGoAgent, renderPdfViaGoAgent, GoAgentInfo, GOAGENT_DEFAULT_PORT } from '../../services/goAgentService';
 import { savePendingRenderBlob } from '../../services/pendingRenderService';
 import { PlanItem, LayoutPlan } from '../../utils/layoutSolver';
 import { ImpositionConfig, ShapeTabItem, PageItem, DataMode, ImpositionStyle } from './types';
 import { enrichPlanItemsWithRotation } from './impositionGeometry';
-import { drawSheetOnDoc } from './pdfCanvasRenderer';
 
 export { probeGoAgent, renderPdfViaGoAgent, downloadPdfBlob, savePendingRenderBlob, GOAGENT_DEFAULT_PORT };
 export type { GoAgentInfo };
@@ -32,7 +30,8 @@ export interface GeneratePdfBlobParams {
 }
 
 /**
- * Tạo PDF Blob từ Canvas / Layout hiện tại để gửi sang máy trạm Render Prepress hoặc tải về
+ * Tạo PDF Blob từ layout hiện tại — luôn gọi Python backend.
+ * Throw lỗi nếu backend offline hoặc không có ảnh nguồn.
  */
 export async function generateImpositionPdfBlob(params: GeneratePdfBlobParams): Promise<Blob> {
   const {
@@ -51,205 +50,109 @@ export async function generateImpositionPdfBlob(params: GeneratePdfBlobParams): 
     standardQty,
     totalSheets,
     shapeTabs,
-    activeTab,
     isMultiShape,
-    previewSide
   } = params;
 
-  // Trường hợp 1: Có ảnh nguồn và Python backend online -> Dùng generatePdfAsync chất lượng gốc (chỉ khi xuất gộp toàn bộ)
-  if (
-    targetSheetIndex === undefined &&
-    allPages.length > 0 &&
-    allPages.some(p => p.thumb || p.originalThumb || p.fileId) &&
-    apiStatus === 'online' &&
-    currentPlan &&
-    currentPlan.items?.length > 0
-  ) {
-    try {
-      const fd = new FormData();
-      const fileIds = allPages.map(p => p.fileId).filter(Boolean);
-      if (fileIds.length > 0) {
-        fd.append('fileIds', JSON.stringify(fileIds));
-      } else {
-        for (let i = 0; i < allPages.length; i++) {
-          const page = allPages[i];
-          const imageSource = page.originalThumb || page.thumb;
-          if (!imageSource) continue;
-          const response = await fetch(imageSource);
-          const blob = await response.blob();
-          const isPng = imageSource.startsWith('data:image/png') || blob.type === 'image/png';
-          const ext = isPng ? 'png' : 'jpg';
-          const mimeType = isPng ? 'image/png' : 'image/jpeg';
-          const file = new File([blob], `page_${i}.${ext}`, { type: mimeType });
-          fd.append('files', file);
-        }
-      }
-
-      const pagesDataRaw = allPages.map(p => ({
-        rotation: p.rotation || 0,
-        w: p.w,
-        h: p.h
-      }));
-      fd.append('pagesData', JSON.stringify(pagesDataRaw));
-
-      const rawPlanItems = (impositionStyleEnabled && styledPlan ? styledPlan.items : (currentPlan?.items || []));
-      const enrichedPlanItems = enrichPlanItemsWithRotation(
-        rawPlanItems,
-        allPages,
-        config,
-        isMultiShape,
-        shapeTabs,
-        dataMode,
-        standardQty,
-        xUpQty
-      );
-      fd.append('planData', JSON.stringify(enrichedPlanItems));
-      fd.append('pageW', String(config.pageW)); fd.append('pageH', String(config.pageH));
-      fd.append('itemW', String(config.itemW)); fd.append('itemH', String(config.itemH));
-      const effectiveFitMode = (customScale !== 100) ? 'actual' : config.fitMode;
-      fd.append('dpi', String(config.dpi)); fd.append('fitMode', effectiveFitMode);
-      fd.append('customScale', String(customScale)); fd.append('backgroundColor', backgroundColor);
-      fd.append('colorMode', config.colorMode); fd.append('useCrop', config.useCrop ? '1' : '0');
-      fd.append('cropLen', String(config.cropLen)); fd.append('cropDist', String(config.cropDist));
-      fd.append('cropThick', String(config.cropThick)); fd.append('cropColor', config.cropColor);
-      fd.append('totalOrder', String(config.totalOrder));
-      fd.append('processMode', config.processMode); fd.append('autoRotate', config.autoRotate ? '1' : '0');
-      fd.append('shape', config.shape);
-      fd.append('cutBleed', String(config.cutBleed || 0));
-      fd.append('cornerRadius', String(config.cornerRadius || 0));
-      fd.append('twoSideMode', config.twoSideMode || 'same');
-      fd.append('marginTop', String(config.marginTop || 0));
-      fd.append('marginBot', String(config.marginBot || 0));
-      fd.append('marginLeft', String(config.marginLeft || 0));
-      fd.append('marginRight', String(config.marginRight || 0));
-      fd.append('impositionStyle', impositionStyleEnabled ? impositionStyle : 'sheetwise');
-      fd.append('usePageCrop', config.usePageCrop ? '1' : '0');
-      fd.append('pageCropLen', String(config.pageCropLen));
-      fd.append('pageCropDist', String(config.pageCropDist));
-      fd.append('pageCropThick', String(config.pageCropThick));
-      fd.append('pageCropColor', config.pageCropColor);
-      fd.append('useColorBar', config.useColorBar ? '1' : '0');
-      fd.append('colorBarPosition', config.colorBarPosition);
-      fd.append('colorBarPadding', String(config.colorBarPadding));
-      fd.append('is2Sided', config.is2Sided ? '1' : '0');
-      fd.append('rot180Front', config.rot180Front ? '1' : '0');
-      fd.append('rot180Back', config.rot180Back ? '1' : '0');
-      fd.append('dataMode', String(dataMode));
-      fd.append('xUpQty', String(xUpQty));
-      fd.append('standardQty', String(standardQty));
-      fd.append('totalSheets', String(totalSheets));
-
-      const blob = await generatePdfAsync(fd);
-      return blob;
-    } catch (err) {
-      console.warn('Backend PDF generation failed, falling back to client jsPDF:', err);
-    }
+  // Kiểm tra backend online
+  if (apiStatus !== 'online') {
+    throw new Error('Backend Python offline — không thể xuất PDF. Vui lòng kiểm tra kết nối máy chủ.');
   }
 
-  // Trường hợp 2: Client-side vector render PDF qua jsPDF
-  const pageW = Number(config.pageW) || 330;
-  const pageH = Number(config.pageH) || 480;
-  const orientation = pageW > pageH ? 'landscape' : 'portrait';
-  const doc = new jsPDF({
-    orientation: orientation,
-    unit: 'mm',
-    format: [pageW, pageH],
-    compress: true
-  });
+  if (!currentPlan || !currentPlan.items?.length) {
+    throw new Error('Chưa có layout — vui lòng tính toán layout trước khi xuất PDF.');
+  }
 
-  const allPlanItems = (impositionStyleEnabled && styledPlan ? styledPlan.items : (currentPlan?.items || []));
+  if (allPages.length === 0) {
+    throw new Error('Chưa có tệp ảnh nào — vui lòng import tệp trước khi xuất PDF.');
+  }
 
-  if (targetSheetIndex !== undefined) {
-    // Kết xuất 1 tờ đơn lẻ
-    const sheetItems = isMultiShape
-      ? allPlanItems.filter(it => (it.sheetIndex ?? 0) === targetSheetIndex)
-      : allPlanItems;
-    if (config.is2Sided) {
-      await drawSheetOnDoc({
-        doc,
-        sIdx: targetSheetIndex * 2,
-        itemsForSheet: sheetItems,
-        forceSide: 'front',
-        config,
-        allPages,
-        shapeTabs,
-        activeTab,
-        isMultiShape,
-        effectiveDataMode: dataMode,
-        standardQty,
-        xUpQty,
-        customScale
-      });
-      doc.addPage([pageW, pageH], orientation);
-      await drawSheetOnDoc({
-        doc,
-        sIdx: targetSheetIndex * 2 + 1,
-        itemsForSheet: sheetItems,
-        forceSide: 'back',
-        config,
-        allPages,
-        shapeTabs,
-        activeTab,
-        isMultiShape,
-        effectiveDataMode: dataMode,
-        standardQty,
-        xUpQty,
-        customScale
-      });
-    } else {
-      await drawSheetOnDoc({
-        doc,
-        sIdx: targetSheetIndex,
-        itemsForSheet: sheetItems,
-        forceSide: 'front',
-        config,
-        allPages,
-        shapeTabs,
-        activeTab,
-        isMultiShape,
-        effectiveDataMode: dataMode,
-        standardQty,
-        xUpQty,
-        customScale
-      });
-    }
+  // Build FormData
+  const fd = new FormData();
+
+  // Đính kèm ảnh nguồn: ưu tiên fileIds (server đã lưu), fallback fetch blob
+  const fileIds = allPages.map(p => p.fileId).filter(Boolean);
+  if (fileIds.length > 0) {
+    fd.append('fileIds', JSON.stringify(fileIds));
   } else {
-    // Kết xuất toàn bộ các tờ thành PDF đa trang
-    const sheetsCount = Math.max(1, totalSheets);
-    const totalPdfPages = config.is2Sided ? sheetsCount * 2 : sheetsCount;
-    for (let pIdx = 0; pIdx < totalPdfPages; pIdx++) {
-      if (pIdx > 0) {
-        doc.addPage([pageW, pageH], orientation);
-      }
-      const sIdx = config.is2Sided ? Math.floor(pIdx / 2) : pIdx;
-      const sideToDraw: 'front' | 'back' = config.is2Sided ? (pIdx % 2 === 1 ? 'back' : 'front') : previewSide;
-      const sheetItems = isMultiShape
-        ? allPlanItems.filter(it => (it.sheetIndex ?? 0) === sIdx)
-        : allPlanItems;
-      await drawSheetOnDoc({
-        doc,
-        sIdx,
-        itemsForSheet: sheetItems,
-        forceSide: sideToDraw,
-        config,
-        allPages,
-        shapeTabs,
-        activeTab,
-        isMultiShape,
-        effectiveDataMode: dataMode,
-        standardQty,
-        xUpQty,
-        customScale
-      });
+    for (let i = 0; i < allPages.length; i++) {
+      const page = allPages[i];
+      const imageSource = page.originalThumb || page.thumb;
+      if (!imageSource) continue;
+      const response = await fetch(imageSource);
+      const blob = await response.blob();
+      const isPng = imageSource.startsWith('data:image/png') || blob.type === 'image/png';
+      const ext = isPng ? 'png' : 'jpg';
+      const mimeType = isPng ? 'image/png' : 'image/jpeg';
+      const file = new File([blob], `page_${i}.${ext}`, { type: mimeType });
+      fd.append('files', file);
     }
   }
 
-  return doc.output('blob');
+  const pagesDataRaw = allPages.map(p => ({
+    rotation: p.rotation || 0,
+    w: p.w,
+    h: p.h
+  }));
+  fd.append('pagesData', JSON.stringify(pagesDataRaw));
+
+  const rawPlanItems = (impositionStyleEnabled && styledPlan ? styledPlan.items : (currentPlan?.items || []));
+  const enrichedPlanItems = enrichPlanItemsWithRotation(
+    rawPlanItems,
+    allPages,
+    config,
+    isMultiShape,
+    shapeTabs,
+    dataMode,
+    standardQty,
+    xUpQty
+  );
+  fd.append('planData', JSON.stringify(enrichedPlanItems));
+  fd.append('pageW', String(config.pageW)); fd.append('pageH', String(config.pageH));
+  fd.append('itemW', String(config.itemW)); fd.append('itemH', String(config.itemH));
+  const effectiveFitMode = (customScale !== 100) ? 'actual' : config.fitMode;
+  fd.append('dpi', String(config.dpi)); fd.append('fitMode', effectiveFitMode);
+  fd.append('customScale', String(customScale)); fd.append('backgroundColor', backgroundColor);
+  fd.append('colorMode', config.colorMode); fd.append('useCrop', config.useCrop ? '1' : '0');
+  fd.append('cropLen', String(config.cropLen)); fd.append('cropDist', String(config.cropDist));
+  fd.append('cropThick', String(config.cropThick)); fd.append('cropColor', config.cropColor);
+  fd.append('totalOrder', String(config.totalOrder));
+  fd.append('processMode', config.processMode); fd.append('autoRotate', config.autoRotate ? '1' : '0');
+  fd.append('shape', config.shape);
+  fd.append('cutBleed', String(config.cutBleed || 0));
+  fd.append('cornerRadius', String(config.cornerRadius || 0));
+  fd.append('twoSideMode', config.twoSideMode || 'same');
+  fd.append('marginTop', String(config.marginTop || 0));
+  fd.append('marginBot', String(config.marginBot || 0));
+  fd.append('marginLeft', String(config.marginLeft || 0));
+  fd.append('marginRight', String(config.marginRight || 0));
+  fd.append('impositionStyle', impositionStyleEnabled ? impositionStyle : 'sheetwise');
+  fd.append('usePageCrop', config.usePageCrop ? '1' : '0');
+  fd.append('pageCropLen', String(config.pageCropLen));
+  fd.append('pageCropDist', String(config.pageCropDist));
+  fd.append('pageCropThick', String(config.pageCropThick));
+  fd.append('pageCropColor', config.pageCropColor);
+  fd.append('useColorBar', config.useColorBar ? '1' : '0');
+  fd.append('colorBarPosition', config.colorBarPosition);
+  fd.append('colorBarPadding', String(config.colorBarPadding));
+  fd.append('is2Sided', config.is2Sided ? '1' : '0');
+  fd.append('rot180Front', config.rot180Front ? '1' : '0');
+  fd.append('rot180Back', config.rot180Back ? '1' : '0');
+  fd.append('dataMode', String(dataMode));
+  fd.append('xUpQty', String(xUpQty));
+  fd.append('standardQty', String(standardQty));
+  fd.append('totalSheets', String(totalSheets));
+
+  // Nếu xuất 1 tờ đơn lẻ — truyền targetSheetIndex
+  if (targetSheetIndex !== undefined) {
+    fd.append('targetSheetIndex', String(targetSheetIndex));
+  }
+
+  return generatePdfAsync(fd);
 }
 
 export interface ExportLocalPdfParams {
   config: ImpositionConfig;
-  currentPlan: LayoutPlan;
+  currentPlan: LayoutPlan | null;
   allPages: PageItem[];
   shapeTabs: ShapeTabItem[];
   isMultiShape: boolean;
@@ -260,6 +163,7 @@ export interface ExportLocalPdfParams {
   customSvgData?: string;
   vectorMaskResult?: any;
   backgroundColor?: string;
+  apiStatus: 'checking' | 'online' | 'offline';
   onProgress?: (progress: number) => void;
   onSuccess?: (filename: string) => void;
 }
@@ -268,13 +172,13 @@ export async function exportLocalPdf(params: ExportLocalPdfParams): Promise<void
   const {
     config, currentPlan, allPages, shapeTabs, isMultiShape,
     totalSheets, effectiveDataMode, standardQty, xUpQty,
-    backgroundColor = '#ffffff', onProgress, onSuccess
+    backgroundColor = '#ffffff', apiStatus, onProgress, onSuccess
   } = params;
 
   onProgress?.(20);
   const blob = await generateImpositionPdfBlob({
     allPages,
-    apiStatus: 'offline',
+    apiStatus,
     currentPlan,
     config,
     customScale: 100,
@@ -299,7 +203,7 @@ export async function exportLocalPdf(params: ExportLocalPdfParams): Promise<void
 
 export interface ExportGoAgentPdfParams {
   config: ImpositionConfig;
-  currentPlan: LayoutPlan;
+  currentPlan: LayoutPlan | null;
   allPages: PageItem[];
   shapeTabs: ShapeTabItem[];
   isMultiShape: boolean;
@@ -308,6 +212,7 @@ export interface ExportGoAgentPdfParams {
   standardQty: number;
   xUpQty: number;
   selectedPresetId: string;
+  apiStatus: 'checking' | 'online' | 'offline';
   goAgentPort?: number;
   onProgress?: (progress: number) => void;
   onSuccess?: (info: any) => void;
@@ -317,14 +222,15 @@ export async function exportGoAgentPdf(params: ExportGoAgentPdfParams): Promise<
   const {
     config, currentPlan, allPages, shapeTabs, isMultiShape,
     totalSheets, effectiveDataMode, standardQty, xUpQty,
-    selectedPresetId, goAgentPort = GOAGENT_DEFAULT_PORT,
+    selectedPresetId, apiStatus, goAgentPort = GOAGENT_DEFAULT_PORT,
     onProgress, onSuccess
   } = params;
 
+  // Lấy blob PDF từ backend (không dùng jsPDF)
   onProgress?.(20);
   const blob = await generateImpositionPdfBlob({
     allPages,
-    apiStatus: 'offline',
+    apiStatus,
     currentPlan,
     config,
     customScale: 100,
@@ -353,7 +259,9 @@ export async function exportGoAgentPdf(params: ExportGoAgentPdfParams): Promise<
   });
   onProgress?.(90);
 
+  // Tạo download URL từ backend blob — cleanup sau 60s
   let finalDownloadUrl = URL.createObjectURL(blob);
+  setTimeout(() => URL.revokeObjectURL(finalDownloadUrl), 60_000);
   let previewUrl = allPages[0]?.thumb || '';
 
   if (res && res.ok && res.pages && res.pages.length > 0) {
@@ -367,7 +275,9 @@ export async function exportGoAgentPdf(params: ExportGoAgentPdfParams): Promise<
           byteNumbers[i] = byteChars.charCodeAt(i);
         }
         const renderedBlob = new Blob([byteNumbers], { type: 'application/pdf' });
-        finalDownloadUrl = URL.createObjectURL(renderedBlob);
+        const renderedUrl = URL.createObjectURL(renderedBlob);
+        setTimeout(() => URL.revokeObjectURL(renderedUrl), 60_000);
+        finalDownloadUrl = renderedUrl;
       } catch {
         finalDownloadUrl = res.pdf_b64;
       }
