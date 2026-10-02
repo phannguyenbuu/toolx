@@ -5,6 +5,7 @@ import { PlanItem, LayoutPlan } from '../../utils/layoutSolver';
 import { ImpositionConfig, ShapeTabItem, PageItem, DataMode, ImpositionStyle } from './types';
 import { enrichPlanItemsWithRotation } from './impositionGeometry';
 import { RenderSuccessInfo } from './modals/ImpositionRenderSuccessModal';
+import { safeToastError } from './impositionHelpers';
 
 export { probeGoAgent, renderPdfViaGoAgent, downloadPdfBlob, savePendingRenderBlob, GOAGENT_DEFAULT_PORT };
 export type { GoAgentInfo };
@@ -65,44 +66,106 @@ export async function generateImpositionPdfBlob(params: GeneratePdfBlobParams): 
     throw new Error('Chưa có layout — vui lòng tính toán layout trước khi xuất PDF.');
   }
 
-  // Thu thập tất cả ảnh nguồn từ allPages hoặc từ các layer tabs
-  const effectivePages: PageItem[] = [...allPages];
-  if (effectivePages.length === 0) {
-    if (activeTab?.sourceImage) {
-      effectivePages.push(activeTab.sourceImage);
+  // Thu thập tất cả ảnh nguồn từ allPages hoặc từ các job tabs
+  let effectivePages: PageItem[] = [];
+  if (isMultiShape) {
+    const enabledTabs = (shapeTabs && shapeTabs.length > 0) ? shapeTabs.filter(t => t.enabled !== false) : [];
+    for (const tab of enabledTabs) {
+      if (tab.sourceImage) {
+        effectivePages.push(tab.sourceImage);
+      }
     }
-    if (shapeTabs && shapeTabs.length > 0) {
-      shapeTabs.forEach(tab => {
-        if (tab.sourceImage && !effectivePages.some(p => (p.id && p.id === tab.sourceImage?.id) || p.thumb === tab.sourceImage?.thumb)) {
-          effectivePages.push(tab.sourceImage);
-        }
-      });
+    if (effectivePages.length === 0 && allPages.length > 0) {
+      effectivePages = [...allPages];
+    }
+  } else {
+    // Chế độ 1 hình (single shape / job A): ưu tiên ảnh của activeTab hoặc shapeTabs[0]
+    const primaryImg = activeTab?.sourceImage || (shapeTabs && shapeTabs[0]?.sourceImage);
+    if (primaryImg) {
+      effectivePages = (allPages.length > 1) ? [primaryImg, ...allPages.slice(1)] : [primaryImg];
+    } else if (allPages.length > 0) {
+      effectivePages = [...allPages];
     }
   }
 
   if (effectivePages.length === 0) {
-    throw new Error('Chưa có tệp ảnh nào — vui lòng chọn ảnh cho layer hoặc import tệp trước khi xuất PDF.');
+    throw new Error('Chưa có tệp ảnh nào — vui lòng chọn ảnh cho job hoặc import tệp trước khi xuất PDF.');
   }
 
   // Build FormData
   const fd = new FormData();
 
-  // Đính kèm ảnh nguồn: ưu tiên fileIds (server đã lưu), fallback fetch blob
+  // Kiểm tra xem ảnh có chỉnh sửa ở trình duyệt không (crop, color, base64 dataUrl)
+  const hasBrowserEdits = effectivePages.some(
+    p => p.cropSettings || p.colorSettings ||
+         (p.thumb && p.thumb.startsWith('data:image/')) ||
+         (p.id && (p.id.startsWith('crop-') || p.id.startsWith('img-')))
+  );
+
+  // Đính kèm ảnh nguồn: ưu tiên fileIds (nếu server đã lưu và không có chỉnh sửa browser), fallback gửi file gốc trực tiếp
   const fileIds = effectivePages.map(p => p.fileId).filter(Boolean);
-  if (fileIds.length > 0 && fileIds.length === effectivePages.length) {
+  if (!hasBrowserEdits && fileIds.length > 0 && fileIds.length === effectivePages.length) {
     fd.append('fileIds', JSON.stringify(fileIds));
   } else {
     for (let i = 0; i < effectivePages.length; i++) {
       const page = effectivePages[i];
-      const imageSource = page.originalThumb || page.thumb || page.url;
-      if (!imageSource) continue;
-      const response = await fetch(imageSource);
-      const blob = await response.blob();
-      const isPng = imageSource.startsWith('data:image/png') || blob.type === 'image/png';
-      const ext = isPng ? 'png' : 'jpg';
-      const mimeType = isPng ? 'image/png' : 'image/jpeg';
-      const file = new File([blob], `page_${i}.${ext}`, { type: mimeType });
-      fd.append('files', file);
+      const pageName = page.name || `Trang ${i + 1}`;
+
+      let fileToSend: File | null = null;
+
+      // 1. Ưu tiên đối tượng File / Blob gốc trong bộ nhớ
+      if (page.file instanceof Blob) {
+        const isPng = page.file.type === 'image/png';
+        const isPdf = page.file.type === 'application/pdf';
+        const ext = isPng ? 'png' : (isPdf ? 'pdf' : 'jpg');
+        const mimeType = isPng ? 'image/png' : (isPdf ? 'application/pdf' : 'image/jpeg');
+        fileToSend = page.file instanceof File
+          ? page.file
+          : new File([page.file], `page_${i}.${ext}`, { type: mimeType });
+      } else {
+        // 2. Nếu không có page.file, kiểm tra nguồn ảnh gốc sắc nét (originalThumb hoặc url)
+        // TUYỆT ĐỐI KHÔNG FALLBACK VỀ page.thumb (ảnh thu nhỏ 320px)
+        const isThumbOnly = !page.originalThumb && !page.url && Boolean(page.thumb);
+        const isOriginalSameAsThumb =
+          page.originalThumb === page.thumb &&
+          typeof page.thumb === 'string' &&
+          page.thumb.length < 50_000; // thumbnail 320px thường chỉ ~15KB-25KB
+
+        const highResSource = (page.originalThumb && !isOriginalSameAsThumb)
+          ? page.originalThumb
+          : page.url;
+
+        if (!highResSource || isThumbOnly) {
+          const errMsg = `Không tìm thấy tệp gốc chất lượng cao cho "${pageName}" (chỉ còn ảnh thu nhỏ thumbnail). Vui lòng nạp lại tệp ảnh/PDF gốc để xuất in chuẩn xưởng in.`;
+          safeToastError(errMsg);
+          throw new Error(errMsg);
+        }
+
+        try {
+          const response = await fetch(highResSource);
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status} ${response.statusText}`);
+          }
+          const blob = await response.blob();
+          const isPng = highResSource.startsWith('data:image/png') || blob.type === 'image/png';
+          const isPdf = highResSource.startsWith('data:application/pdf') || blob.type === 'application/pdf';
+          const ext = isPng ? 'png' : (isPdf ? 'pdf' : 'jpg');
+          const mimeType = isPng ? 'image/png' : (isPdf ? 'application/pdf' : 'image/jpeg');
+          fileToSend = new File([blob], `page_${i}.${ext}`, { type: mimeType });
+        } catch (fetchErr: any) {
+          const errMsg = `Không thể nạp tệp ảnh gốc của "${pageName}" (${fetchErr?.message || 'Lỗi đọc dữ liệu'}). Vui lòng nạp lại tệp gốc để xuất in.`;
+          safeToastError(errMsg);
+          throw new Error(errMsg);
+        }
+      }
+
+      if (!fileToSend) {
+        const errMsg = `Lỗi xử lý tệp ảnh gốc cho "${pageName}". Vui lòng chọn lại tệp gốc.`;
+        safeToastError(errMsg);
+        throw new Error(errMsg);
+      }
+
+      fd.append('files', fileToSend);
     }
   }
 
@@ -124,7 +187,18 @@ export async function generateImpositionPdfBlob(params: GeneratePdfBlobParams): 
     standardQty,
     xUpQty
   );
-  fd.append('planData', JSON.stringify(enrichedPlanItems));
+  const sanitizedPlanItems = enrichedPlanItems.map(it => ({
+    x: it.x,
+    y: it.y,
+    w: it.w,
+    h: it.h,
+    rot: it.rot,
+    sheetIndex: it.sheetIndex,
+    pageIndex: it.pageIndex,
+    shape: it.shape,
+    totalRotation: it.totalRotation,
+  }));
+  fd.append('planData', JSON.stringify(sanitizedPlanItems));
   fd.append('pageW', String(config.pageW)); fd.append('pageH', String(config.pageH));
   fd.append('itemW', String(config.itemW)); fd.append('itemH', String(config.itemH));
   const effectiveFitMode = (customScale !== 100) ? 'actual' : config.fitMode;
@@ -175,6 +249,7 @@ export interface ExportLocalPdfParams {
   currentPlan: LayoutPlan | null;
   allPages: PageItem[];
   shapeTabs: ShapeTabItem[];
+  activeTab?: ShapeTabItem;
   isMultiShape: boolean;
   totalSheets: number;
   effectiveDataMode: DataMode;
@@ -190,7 +265,7 @@ export interface ExportLocalPdfParams {
 
 export async function exportLocalPdf(params: ExportLocalPdfParams): Promise<void> {
   const {
-    config, currentPlan, allPages, shapeTabs, isMultiShape,
+    config, currentPlan, allPages, shapeTabs, activeTab, isMultiShape,
     totalSheets, effectiveDataMode, standardQty, xUpQty,
     backgroundColor = '#ffffff', apiStatus, onProgress, onSuccess
   } = params;
@@ -211,6 +286,7 @@ export async function exportLocalPdf(params: ExportLocalPdfParams): Promise<void
     standardQty,
     totalSheets,
     shapeTabs,
+    activeTab,
     isMultiShape,
     previewSide: 'front',
     onProgress: (p) => onProgress?.(p)
@@ -224,10 +300,11 @@ export async function exportLocalPdf(params: ExportLocalPdfParams): Promise<void
   const downloadUrl = URL.createObjectURL(blob);
   setTimeout(() => URL.revokeObjectURL(downloadUrl), 600_000);
   const previewUrl =
+    activeTab?.sourceImage?.thumb ||
+    shapeTabs[0]?.sourceImage?.thumb ||
     allPages[0]?.thumb ||
     allPages[0]?.url ||
     shapeTabs.find(t => t.sourceImage)?.sourceImage?.thumb ||
-    shapeTabs.find(t => t.sourceImage)?.sourceImage?.url ||
     '';
 
   const renderInfo: RenderSuccessInfo = {
@@ -249,6 +326,7 @@ export interface ExportGoAgentPdfParams {
   currentPlan: LayoutPlan | null;
   allPages: PageItem[];
   shapeTabs: ShapeTabItem[];
+  activeTab?: ShapeTabItem;
   isMultiShape: boolean;
   totalSheets: number;
   effectiveDataMode: DataMode;
@@ -263,7 +341,7 @@ export interface ExportGoAgentPdfParams {
 
 export async function exportGoAgentPdf(params: ExportGoAgentPdfParams): Promise<void> {
   const {
-    config, currentPlan, allPages, shapeTabs, isMultiShape,
+    config, currentPlan, allPages, shapeTabs, activeTab, isMultiShape,
     totalSheets, effectiveDataMode, standardQty, xUpQty,
     selectedPresetId, apiStatus, goAgentPort = GOAGENT_DEFAULT_PORT,
     onProgress, onSuccess
@@ -285,6 +363,7 @@ export async function exportGoAgentPdf(params: ExportGoAgentPdfParams): Promise<
     standardQty,
     totalSheets,
     shapeTabs,
+    activeTab,
     isMultiShape,
     previewSide: 'front'
   });
@@ -305,7 +384,11 @@ export async function exportGoAgentPdf(params: ExportGoAgentPdfParams): Promise<
   // Tạo download URL từ backend blob — cleanup sau 60s
   let finalDownloadUrl = URL.createObjectURL(blob);
   setTimeout(() => URL.revokeObjectURL(finalDownloadUrl), 60_000);
-  let previewUrl = allPages[0]?.thumb || '';
+  let previewUrl =
+    activeTab?.sourceImage?.thumb ||
+    shapeTabs[0]?.sourceImage?.thumb ||
+    allPages[0]?.thumb ||
+    '';
 
   if (res && res.ok && res.pages && res.pages.length > 0) {
     previewUrl = res.pages[0].preview_b64 || previewUrl;

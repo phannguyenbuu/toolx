@@ -29,11 +29,12 @@ export { useImpositionConfig } from './hooks/useImpositionConfig';
 export { useImpositionHistory } from './hooks/useImpositionHistory';
 export { useImpositionGenerator } from './hooks/useImpositionGenerator';
 
-export { DebouncedNumberInput } from './components/DebouncedNumberInput';
+export { DebouncedNumberInput } from '../common/DebouncedNumberInput';
+export type { DebouncedNumberInputProps } from '../common/DebouncedNumberInput';
 export { ImpositionTopBar } from './components/ImpositionTopBar';
 export { ImpositionConfigSidebar } from './components/ImpositionConfigSidebar';
 export { ImpositionPreviewArea } from './components/ImpositionPreviewArea';
 export { ImpositionPrintSettings } from './components/ImpositionPrintSettings';
-export { ImpositionHistoryList } from './components/ImpositionHistoryList';
+export { ImpositionHistoryList } from '../imposition/ImpositionHistoryList';
 export { ImpositionHistoryPanel } from './components/ImpositionHistoryPanel';
 export { ImpositionPlanModal } from './components/ImpositionPlanModal';

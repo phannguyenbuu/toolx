@@ -1,16 +1,27 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Layers, Edit3, Eye, EyeOff, X, Plus } from 'lucide-react';
-import { ShapeTabItem, TAB_COLORS } from './types';
+import { Briefcase, Edit3, Eye, EyeOff, X, Plus } from 'lucide-react';
+import { ShapeTabItem, TAB_COLORS, ImpositionConfig, PageItem } from './types';
 
-export interface ImpositionLayerBarProps {
+export interface ImpositionJobBarProps {
   shapeTabs: ShapeTabItem[];
   activeTabId: string;
   setActiveTabId: (id: string) => void;
   setShapeTabs: React.Dispatch<React.SetStateAction<ShapeTabItem[]>>;
-  setEditingLayerModalTab: (tab: ShapeTabItem | null) => void;
-  setLayerModalName: (name: string) => void;
-  setLayerModalColor: (color: string) => void;
+  setEditingJobModalTab?: (tab: ShapeTabItem | null) => void;
+  setJobModalName?: (name: string) => void;
+  setJobModalColor?: (color: string) => void;
+  // File dropdown integration
+  config?: ImpositionConfig;
+  setConfig?: React.Dispatch<React.SetStateAction<ImpositionConfig>>;
+  allPages?: PageItem[];
+  setAllPages?: React.Dispatch<React.SetStateAction<PageItem[]>>;
+  // Legacy aliases
+  setEditingLayerModalTab?: (tab: ShapeTabItem | null) => void;
+  setLayerModalName?: (name: string) => void;
+  setLayerModalColor?: (color: string) => void;
 }
+
+export type ImpositionLayerBarProps = ImpositionJobBarProps;
 
 interface ContextMenuState {
   tabId: string;
@@ -18,11 +29,18 @@ interface ContextMenuState {
   y: number;
 }
 
-export const ImpositionLayerBar: React.FC<ImpositionLayerBarProps> = ({
+export const ImpositionJobBar: React.FC<ImpositionJobBarProps> = ({
   shapeTabs,
   activeTabId,
   setActiveTabId,
   setShapeTabs,
+  setEditingJobModalTab,
+  setJobModalName,
+  setJobModalColor,
+  config,
+  setConfig,
+  allPages,
+  setAllPages,
   setEditingLayerModalTab,
   setLayerModalName,
   setLayerModalColor,
@@ -53,12 +71,15 @@ export const ImpositionLayerBar: React.FC<ImpositionLayerBarProps> = ({
 
   const closeMenu = () => setContextMenu(null);
 
-  const handleOpenLayerModal = useCallback((tab: ShapeTabItem) => {
-    setEditingLayerModalTab(tab);
-    setLayerModalName(tab.name);
-    setLayerModalColor(tab.color || '#8b5cf6');
+  const handleOpenJobModal = useCallback((tab: ShapeTabItem) => {
+    const setModalTab = setEditingJobModalTab || setEditingLayerModalTab;
+    const setName = setJobModalName || setLayerModalName;
+    const setColor = setJobModalColor || setLayerModalColor;
+    if (setModalTab) setModalTab(tab);
+    if (setName) setName(tab.name);
+    if (setColor) setColor(tab.color || '#8b5cf6');
     closeMenu();
-  }, [setEditingLayerModalTab, setLayerModalName, setLayerModalColor]);
+  }, [setEditingJobModalTab, setEditingLayerModalTab, setJobModalName, setLayerModalName, setJobModalColor, setLayerModalColor]);
 
   const handleToggleTabEnabled = useCallback((tabId: string) => {
     setShapeTabs(prev => prev.map(t => t.id === tabId ? { ...t, enabled: !t.enabled } : t));
@@ -80,7 +101,7 @@ export const ImpositionLayerBar: React.FC<ImpositionLayerBarProps> = ({
     const newId = `shape_${Date.now()}`;
     const newTab: ShapeTabItem = {
       id: newId,
-      name: `Hình ${nextChar}`,
+      name: `Job ${nextChar}`,
       enabled: true,
       shape: 'rect',
       itemW: 50,
@@ -93,7 +114,7 @@ export const ImpositionLayerBar: React.FC<ImpositionLayerBarProps> = ({
       customSvgData: '',
       color: nextColor,
       canRotate: true,
-      autoRotateImage: false,
+      autoRotateImage: true,
     };
     setShapeTabs(prev => [...prev, newTab]);
     setActiveTabId(newId);
@@ -103,18 +124,19 @@ export const ImpositionLayerBar: React.FC<ImpositionLayerBarProps> = ({
 
   return (
     <>
-      <div className="flex flex-wrap items-end gap-2 mb-0 select-none pt-1 pb-0 relative z-10">
-        {/* Layer Title */}
-        <div className="flex items-center gap-1.5 shrink-0 pr-0.5 pb-1.5">
+      {/* Tiêu đề JOB (1) và Hàng Tabs A, B... cùng nằm trên 1 hàng tinh gọn */}
+      <div className="flex items-end gap-1.5 px-3 pt-2 pb-0 select-none overflow-x-auto no-scrollbar relative z-10 border-b border-slate-100">
+        {/* Job Title */}
+        <div className="flex items-center gap-1.5 shrink-0 pr-1 pb-1.5">
           <div className="w-5 h-5 rounded-md bg-violet-100 text-violet-700 flex items-center justify-center font-bold text-xs shadow-2xs">
-            <Layers size={13} />
+            <Briefcase size={13} />
           </div>
           <span className="text-xs font-bold text-slate-800 tracking-wide uppercase">
-            LAYER ({shapeTabs.length})
+            JOB ({shapeTabs.length})
           </span>
         </div>
 
-        {/* Vertical Separator */}
+        {/* Dấu phân cách dọc */}
         <div className="w-px h-4 bg-slate-200 shrink-0 mx-0.5 mb-1.5" />
 
         {/* Tabs List (A, B, C...) */}
@@ -135,14 +157,14 @@ export const ImpositionLayerBar: React.FC<ImpositionLayerBarProps> = ({
                   : 'px-2.5 py-1 rounded-xl border border-dashed border-slate-200 bg-slate-50/40 text-slate-400 opacity-60 mb-1'
               }`}
               style={isActive ? { borderColor: tabColor } : undefined}
-              title="Click để chọn · Chuột phải để sửa/xoá/ẩn layer"
+              title="Click để chọn · Chuột phải để sửa/xoá/ẩn Job"
             >
               {/* Active Tab Inverted Fillet Corners */}
               {isActive && (
                 <>
                   <div className="absolute -bottom-[1px] -left-[1px] -right-[1px] h-[2px] bg-white z-20 pointer-events-none" />
                   <div className="absolute -left-[6px] -bottom-[1px] w-[6px] h-[6px] pointer-events-none z-20 overflow-visible">
-                    <svg width="6" height="6" viewBox="0 0 6 6" className="block" fill="none">
+                    <svg width="6" height="6" viewBox="0 6 6" className="block" fill="none">
                       <path d="M 0 6 Q 6 6 6 0 L 6 6 Z" fill="#ffffff" />
                       <path d="M 0 6 Q 6 6 6 0" fill="none" stroke={tabColor} strokeWidth="1" strokeLinecap="round" />
                     </svg>
@@ -167,6 +189,21 @@ export const ImpositionLayerBar: React.FC<ImpositionLayerBarProps> = ({
                 {tab.name}
               </span>
 
+              {/* Edit button next to Job name */}
+              {isActive && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenJobModal(tab);
+                  }}
+                  className="p-0.5 rounded hover:bg-slate-200 text-slate-400 hover:text-violet-600 transition shrink-0 ml-0.5"
+                  title="Sửa tên & màu Job"
+                >
+                  <Edit3 size={11} />
+                </button>
+              )}
+
               {/* Eye indicator (small dot) if disabled */}
               {!tab.enabled && (
                 <EyeOff size={10} className="text-slate-400 shrink-0" />
@@ -180,7 +217,7 @@ export const ImpositionLayerBar: React.FC<ImpositionLayerBarProps> = ({
           type="button"
           onClick={handleAddTab}
           className="flex items-center justify-center w-6 h-6 rounded-lg border border-dashed border-slate-300 hover:border-violet-400 text-slate-400 hover:text-violet-600 bg-slate-50/60 hover:bg-violet-50 transition cursor-pointer shrink-0 mb-1"
-          title="Thêm layer mới"
+          title="Thêm Job mới"
         >
           <Plus size={13} />
         </button>
@@ -205,7 +242,7 @@ export const ImpositionLayerBar: React.FC<ImpositionLayerBarProps> = ({
           {/* Menu Items */}
           <button
             type="button"
-            onClick={() => handleOpenLayerModal(contextTab)}
+            onClick={() => handleOpenJobModal(contextTab)}
             className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-slate-700 hover:bg-violet-50 hover:text-violet-700 transition cursor-pointer"
           >
             <Edit3 size={13} />
@@ -218,7 +255,7 @@ export const ImpositionLayerBar: React.FC<ImpositionLayerBarProps> = ({
             className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer"
           >
             {contextTab.enabled ? <EyeOff size={13} /> : <Eye size={13} />}
-            {contextTab.enabled ? 'Ẩn layer khỏi trang in' : 'Bật hiển thị layer'}
+            {contextTab.enabled ? 'Ẩn Job khỏi trang in' : 'Bật hiển thị Job'}
           </button>
 
           {shapeTabs.length > 1 && (
@@ -230,7 +267,7 @@ export const ImpositionLayerBar: React.FC<ImpositionLayerBarProps> = ({
                 className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-rose-600 hover:bg-rose-50 transition cursor-pointer"
               >
                 <X size={13} />
-                Xoá layer này
+                Xoá Job này
               </button>
             </>
           )}
@@ -239,3 +276,5 @@ export const ImpositionLayerBar: React.FC<ImpositionLayerBarProps> = ({
     </>
   );
 };
+
+export const ImpositionLayerBar = ImpositionJobBar;

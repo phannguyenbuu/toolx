@@ -43,10 +43,12 @@ export const TAB_COLORS = [
   '#06b6d4', '#3b82f6', '#84cc16', '#6366f1'
 ];
 
-export const LAYER_COLOR_PRESETS = [
+export const JOB_COLOR_PRESETS = [
   '#8b5cf6', '#3b82f6', '#06b6d4', '#10b981', '#84cc16', '#f59e0b',
   '#f97316', '#ef4444', '#ec4899', '#6366f1', '#14b8a6', '#64748b'
 ];
+export const LAYER_COLOR_PRESETS = JOB_COLOR_PRESETS;
+export type CropModalJobTab = CropModalLayerTab;
 
 export interface BleedBounds {
   leftRatio: number;
@@ -107,6 +109,7 @@ export interface SourceImageCropColorModalProps {
   initialBleedBounds?: BleedBounds | null;
   initialBleedPercent?: number;
   shapeTabs?: CropModalLayerTab[];
+  jobTabs?: CropModalJobTab[];
   activeTabId?: string;
   // Aliases for compatibility
   imageSrc?: string | null;
@@ -128,5 +131,11 @@ export interface SourceImageCropColorModalProps {
     bleedPercent?: number;
     bleedMm?: number;
     addedGapMm?: number;
+    /** Khi import PDF nhiều trang: tất cả trang để đưa vào allPages (không tạo N job) */
+    allPages?: Array<{
+      fileIndex: number; pageIndex: number;
+      thumb: string; originalThumb: string;
+      name: string; w: number; h: number; rotation: number;
+    }>;
   }) => void;
 }

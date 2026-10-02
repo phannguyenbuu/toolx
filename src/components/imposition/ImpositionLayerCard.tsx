@@ -1,10 +1,12 @@
 import React, { useState, useCallback } from 'react';
 import { Sparkles, Scissors, RotateCw, RotateCcw, Eraser } from 'lucide-react';
 import { ImpositionConfig, ShapeTabItem, PageItem } from './types';
-import { DebouncedNumberInput } from './DebouncedNumberInput';
+import { DebouncedNumberInput } from '../common/DebouncedNumberInput';
 import { VectorMaskResult } from '../VectorMaskEditorModal';
 import { safeToastSuccess, removeWhiteBackgroundService } from './impositionHelpers';
+import { createClientThumbnail } from '../../utils/imageThumbnail';
 import { ImpositionLayerHeader } from './ImpositionLayerHeader';
+import { ImpositionLayerDimensions } from './ImpositionLayerDimensions';
 
 export interface ImpositionLayerCardProps {
   activeTab: ShapeTabItem;
@@ -12,6 +14,7 @@ export interface ImpositionLayerCardProps {
   setConfig: React.Dispatch<React.SetStateAction<ImpositionConfig>>;
   updateActiveTabProp: (props: Partial<ShapeTabItem>) => void;
   allPages: PageItem[];
+  setAllPages: React.Dispatch<React.SetStateAction<PageItem[]>>;
   isMultiShape: boolean;
   vectorMaskResult: VectorMaskResult | null;
   customScale: number;
@@ -28,6 +31,7 @@ export interface ImpositionLayerCardProps {
   caoInputRef: React.RefObject<HTMLInputElement | null>;
   setIsVectorMaskEditorOpen: (open: boolean) => void;
   setIsScaleModalOpen: (open: boolean) => void;
+  onAddNewJob?: () => void;
 }
 
 export const ImpositionLayerCard: React.FC<ImpositionLayerCardProps> = ({
@@ -36,6 +40,7 @@ export const ImpositionLayerCard: React.FC<ImpositionLayerCardProps> = ({
   setConfig,
   updateActiveTabProp,
   allPages,
+  setAllPages,
   isMultiShape,
   vectorMaskResult,
   customScale,
@@ -51,28 +56,46 @@ export const ImpositionLayerCard: React.FC<ImpositionLayerCardProps> = ({
   rongInputRef,
   caoInputRef,
   setIsVectorMaskEditorOpen,
-  setIsScaleModalOpen
+  setIsScaleModalOpen,
+  onAddNewJob,
 }) => {
   const currentSourceThumb = activeTab.sourceImage?.thumb || (allPages.length > 0 && allPages[0]?.thumb);
   const activeVectorMask = activeTab.vectorMaskResult || vectorMaskResult;
 
-  const isTabAutoRotateImage = isMultiShape
-    ? (activeTab.autoRotateImage !== undefined ? activeTab.autoRotateImage : (activeTab.autoRotate !== undefined ? activeTab.autoRotate : (config.autoRotateImage ?? true)))
-    : (config.autoRotateImage ?? true);
+  const isTabAutoRotateImage = activeTab.autoRotateImage !== undefined
+    ? activeTab.autoRotateImage
+    : (activeTab.autoRotate !== undefined
+        ? activeTab.autoRotate
+        : (config.autoRotateImage ?? true));
 
   const [isRemovingWhite, setIsRemovingWhite] = useState(false);
 
-  // Khử nền trắng thông minh: bảo vệ màu sắc và gọt sạch bóng đổ
+  // Khử nền trắng thông minh: bảo vệ màu sắc và gọt sạch bóng đổ trên ảnh gốc chất lượng cao
   const handleRemoveWhiteBackground = useCallback(async () => {
-    const srcDataUrl = activeTab.sourceImage?.thumb || (allPages[0]?.thumb ?? '');
-    if (!srcDataUrl) return;
+    const highResSrc =
+      activeTab.sourceImage?.originalThumb ||
+      activeTab.sourceImage?.url ||
+      activeTab.sourceImage?.thumb ||
+      allPages[0]?.originalThumb ||
+      allPages[0]?.url ||
+      allPages[0]?.thumb ||
+      '';
+    if (!highResSrc) return;
     setIsRemovingWhite(true);
     try {
-      const resultThumb = await removeWhiteBackgroundService(srcDataUrl);
+      const resultHighRes = await removeWhiteBackgroundService(highResSrc);
       const baseItem = (activeTab.sourceImage || (allPages[0] ? { ...allPages[0] } : {})) as PageItem;
-      const originalThumb = baseItem.originalThumb || baseItem.thumb || srcDataUrl;
+      const originalBackup = baseItem.originalThumb || baseItem.url || highResSrc;
+      const previewThumb = (await createClientThumbnail(resultHighRes, 320, 0.8)) || resultHighRes;
       updateActiveTabProp({
-        sourceImage: { ...baseItem, id: baseItem.id || 'source-image', thumb: resultThumb, originalThumb },
+        sourceImage: {
+          ...baseItem,
+          id: baseItem.id || 'source-image',
+          thumb: previewThumb,
+          originalThumb: resultHighRes,
+          url: resultHighRes,
+          baseThumb: originalBackup,
+        },
       });
       safeToastSuccess('Đã khử nền trắng thành công!');
     } catch (err) {
@@ -91,179 +114,175 @@ export const ImpositionLayerCard: React.FC<ImpositionLayerCardProps> = ({
     safeToastSuccess('Đã khôi phục ảnh gốc!');
   }, [activeTab.sourceImage, updateActiveTabProp]);
 
+  const canResetThumb = Boolean(
+    activeTab.sourceImage?.originalThumb &&
+    activeTab.sourceImage.originalThumb !== activeTab.sourceImage.thumb
+  );
+
   return (
     <div
-      className="rounded-2xl border p-3 bg-white shadow-2xs relative z-0 transition-colors"
+      className="rounded-2xl border p-2.5 bg-white shadow-2xs relative z-0 transition-colors"
       style={{ borderColor: activeTab.color || '#8b5cf6' }}
     >
-      {/* Top Area: Source Image (Left) + 6 Shapes in 2x3 Grid (Center) + Vector Mask Editor (Right) */}
+      {/* Top Area: Source Image (Left) + 6 Shapes in 2x3 Grid (Center) + Stacked Controls (Right) */}
       <ImpositionLayerHeader
         activeTab={activeTab}
         config={config}
         setConfig={setConfig}
         updateActiveTabProp={updateActiveTabProp}
         allPages={allPages}
+        setAllPages={setAllPages}
         vectorMaskResult={vectorMaskResult}
         handleOpenSourceEditor={handleOpenSourceEditor}
         handleSourceImageSelect={handleSourceImageSelect}
         sourceImageInputRef={sourceImageInputRef}
         setIsVectorMaskEditorOpen={setIsVectorMaskEditorOpen}
+        onAddNewJob={onAddNewJob}
       />
 
-      {/* Input Row 1: Số lượng (Quantity) / Rộng (W) / Cao (H) */}
-      <div className="grid grid-cols-3 gap-1.5 mb-2">
-        {/* Cột 1: Số lượng */}
-        <div
-          onClick={() => soLuongInputRef.current?.focus()}
-          className="flex items-center justify-between bg-emerald-50/80 hover:bg-emerald-100/90 border border-emerald-300/90 rounded-xl px-2 py-1.5 transition-all focus-within:ring-2 focus-within:ring-emerald-400 focus-within:border-emerald-600 focus-within:bg-white shadow-2xs min-w-0 cursor-text"
+      {/* Hàng 2: [Khử trắng] [Tự xoay ảnh] [Reset ảnh] — 3 nút bằng nhau */}
+      <div className="flex gap-1.5 mb-2.5">
+        <button
+          type="button"
+          onClick={handleRemoveWhiteBackground}
+          disabled={isRemovingWhite || (!activeTab.sourceImage?.thumb && allPages.length === 0)}
+          className={`flex-1 flex items-center justify-center gap-1.5 bg-white hover:bg-violet-50 border border-slate-200 hover:border-violet-300 rounded-xl px-2 py-1.5 text-violet-700 transition-all shadow-2xs cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed select-none ${
+            isRemovingWhite ? 'animate-pulse' : ''
+          }`}
+          title="Khử nền trắng & gọt sạch bóng đổ"
         >
-          <div className="flex items-center gap-1 shrink-0 pr-0.5" onClick={e => e.stopPropagation()}>
-            <input
-              type="checkbox"
-              id="useTotalLimit"
-              checked={isMultiShape ? true : !!config.useTotalLimit}
-              onChange={e => {
-                const checked = e.target.checked;
-                const safeOrder = Math.min(99, config.totalOrder || 1);
-                const safeTabQty = Math.min(99, activeTab.quantity || 1);
-                setConfig(c => ({ ...c, useTotalLimit: checked, totalOrder: safeOrder }));
-                updateActiveTabProp({ useTotalLimit: checked, quantity: safeTabQty });
-              }}
-              className="w-3.5 h-3.5 rounded text-emerald-600 focus:ring-emerald-400 border-emerald-400 cursor-pointer shrink-0"
-            />
-            <span
-              className="text-[10px] font-bold text-emerald-800 shrink-0 cursor-pointer select-none"
-              onClick={() => {
-                const checked = !config.useTotalLimit;
-                const safeOrder = Math.min(99, config.totalOrder || 1);
-                const safeTabQty = Math.min(99, activeTab.quantity || 1);
-                setConfig(c => ({ ...c, useTotalLimit: checked, totalOrder: safeOrder }));
-                updateActiveTabProp({ useTotalLimit: checked, quantity: safeTabQty });
-              }}
-              title="Giới hạn số lượng tem đặt in (Tối đa 99 tem/layer)"
-            >
-              Số lượng
-            </span>
-          </div>
-
-          <div className="flex items-center gap-0.5 min-w-0 justify-end flex-1">
-            <DebouncedNumberInput
-              inputRef={soLuongInputRef as any}
-              min={1}
-              max={99}
-              step={1}
-              value={Math.min(99, isMultiShape ? (activeTab.quantity || 1) : (config.totalOrder || 1))}
-              onChange={v => {
-                const q = Math.min(99, Math.max(1, Math.round(v)));
-                if (!isMultiShape) {
-                  setConfig(c => ({ ...c, totalOrder: q, useTotalLimit: true }));
-                }
-                updateActiveTabProp({ quantity: q, useTotalLimit: true });
-              }}
-              className="w-full min-w-[38px] max-w-[62px] bg-transparent text-right font-bold text-xs text-emerald-700 focus:outline-none"
-            />
-            <span className="text-[9px] text-slate-400 font-medium shrink-0 select-none">tem</span>
-          </div>
-        </div>
-
-        {/* Cột 2: Rộng / Đường kính */}
-        <div
-          onClick={() => rongInputRef.current?.focus()}
-          className="flex items-center justify-between bg-slate-50 hover:bg-slate-100/80 border border-slate-200/90 rounded-xl px-2 py-1.5 transition-all focus-within:ring-2 focus-within:ring-violet-300 focus-within:border-violet-500 focus-within:bg-white shadow-2xs cursor-text"
-        >
-          <span className="text-[10px] font-semibold text-slate-600 truncate pr-0.5 select-none">
-            {config.shape === 'circle' ? 'Đ.kính (Dia)' : 'Rộng (W)'}
+          <Sparkles size={13} className={`shrink-0 text-violet-600 ${isRemovingWhite ? 'animate-spin' : ''}`} />
+          <span className="text-[10px] font-bold truncate">
+            {isRemovingWhite ? 'Đang khử...' : 'Khử trắng'}
           </span>
-          <div className="flex items-center gap-0.5 shrink-0">
-            <DebouncedNumberInput
-              inputRef={rongInputRef as any}
-              step={0.1}
-              min={1}
-              value={config.itemW}
-              onChange={v => {
-                setConfig(c => ({
-                  ...c,
-                  itemW: v,
-                  ...(c.shape === 'circle' ? { itemH: v } : {}),
-                }));
-                updateActiveTabProp({
-                  itemW: v,
-                  ...(activeTab.shape === 'circle' ? { itemH: v } : {}),
-                });
-              }}
-              className="w-14 sm:w-16 min-w-[44px] bg-transparent text-right font-bold text-xs text-slate-800 focus:outline-none"
-            />
-            <span className="text-[9px] text-slate-400 font-medium select-none">mm</span>
-          </div>
-        </div>
+        </button>
 
-        {/* Cột 3: Cao */}
-        {config.shape !== 'circle' ? (
-          <div
-            onClick={() => caoInputRef.current?.focus()}
-            className="flex items-center justify-between bg-slate-50 hover:bg-slate-100/80 border border-slate-200/90 rounded-xl px-2 py-1.5 transition-all focus-within:ring-2 focus-within:ring-violet-300 focus-within:border-violet-500 focus-within:bg-white shadow-2xs cursor-text"
-          >
-            <span className="text-[10px] font-semibold text-slate-600 truncate pr-0.5 select-none">
-              Cao (H)
-            </span>
-            <div className="flex items-center gap-0.5 shrink-0">
-              <DebouncedNumberInput
-                inputRef={caoInputRef as any}
-                step={0.1}
-                min={1}
-                value={config.itemH}
-                onChange={v => {
-                  setConfig(c => ({ ...c, itemH: v }));
-                  updateActiveTabProp({ itemH: v });
-                }}
-                className="w-14 sm:w-16 min-w-[44px] bg-transparent text-right font-bold text-xs text-slate-800 focus:outline-none"
-              />
-              <span className="text-[9px] text-slate-400 font-medium select-none">mm</span>
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-center justify-between bg-slate-100/60 border border-dashed border-slate-200 rounded-xl px-2 py-1.5 text-slate-400">
-            <span className="text-[10px] font-medium">Tỷ lệ</span>
-            <span className="text-xs font-bold font-mono">1:1</span>
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={() => {
+            const nextVal = !isTabAutoRotateImage;
+            setConfig(c => ({ ...c, autoRotateImage: nextVal }));
+            updateActiveTabProp({ autoRotateImage: nextVal });
+          }}
+          className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl px-2 py-1.5 border transition-all shadow-2xs cursor-pointer select-none ${
+            isTabAutoRotateImage
+              ? 'border-emerald-600 bg-emerald-600 hover:bg-emerald-700 text-white font-medium ring-2 ring-emerald-200 shadow-xs'
+              : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+          }`}
+          title={isTabAutoRotateImage ? 'Tự xoay ảnh: BẬT — bấm để tắt' : 'Tự xoay ảnh: TẮT — bấm để bật'}
+        >
+          <RotateCw size={13} className="shrink-0" />
+          <span className="text-[10px] font-bold truncate">Tự xoay ảnh</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleResetOriginalThumb}
+          disabled={!canResetThumb}
+          className="flex-1 flex items-center justify-center gap-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200/90 rounded-xl px-2 py-1.5 text-amber-800 transition-all shadow-2xs cursor-pointer select-none disabled:opacity-40 disabled:cursor-not-allowed"
+          title={canResetThumb ? "Khôi phục lại ảnh ban đầu (Reset ảnh)" : "Không có thay đổi để khôi phục"}
+        >
+          <RotateCcw size={13} className="text-amber-700 shrink-0" />
+          <span className="text-[10px] font-bold truncate">Reset ảnh</span>
+        </button>
       </div>
 
-      {/* Pill khôi phục kích thước chuẩn ảnh gốc */}
-      {activeTab.sourceImage && (activeTab.sourceImage.w || 0) > 0 && (activeTab.sourceImage.h || 0) > 0 && (
-        (config.itemW !== activeTab.sourceImage.w || (config.shape !== 'circle' && config.itemH !== activeTab.sourceImage.h)) ? (
-          <div className="flex items-center justify-between px-2.5 py-1 mb-2 bg-amber-50/90 border border-amber-200/90 rounded-xl text-[11px] text-amber-800 animate-fadeIn">
-            <span className="flex items-center gap-1.5 truncate">
-              <Sparkles size={12} className="text-amber-600 shrink-0" />
-              <span className="truncate">
-                Chuẩn ảnh: <strong className="font-mono">{activeTab.sourceImage.w} × {config.shape === 'circle' ? activeTab.sourceImage.w : activeTab.sourceImage.h} mm</strong>
-              </span>
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                const targetW = activeTab.sourceImage?.w || config.itemW;
-                const targetH = config.shape === 'circle' ? targetW : (activeTab.sourceImage?.h || config.itemH);
-                setConfig(c => ({ ...c, itemW: targetW, itemH: targetH }));
-                updateActiveTabProp({ itemW: targetW, itemH: targetH });
-                safeToastSuccess(`Đã đặt lại về kích thước chuẩn ảnh: ${targetW} × ${targetH} mm`);
-              }}
-              className="px-2 py-0.5 text-[10px] font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-md cursor-pointer transition shadow-2xs shrink-0 ml-1"
-              title="Bấm để khôi phục kích thước chuẩn ảnh gốc ban đầu"
-            >
-              Khôi phục chuẩn
-            </button>
-          </div>
-        ) : null
-      )}
+      {/* Kích thước Layer, Số lượng, Khóa tỉ lệ & Pill chuẩn ảnh */}
+      <ImpositionLayerDimensions
+        activeTab={activeTab}
+        config={config}
+        setConfig={setConfig}
+        updateActiveTabProp={updateActiveTabProp}
+        isMultiShape={isMultiShape}
+      />
 
-      {/* Input Row 2: Khoảng cách (Gap), Bù cắt (Bleed), Bo góc (Radius), Khử trắng, và nút Trang cuối nếu có dư */}
+      {/* Fit mode: Segmented radio toggle */}
+      <div className="mb-2">
+        <div className="flex h-7 rounded-lg border border-slate-200 bg-slate-100/80 p-0.5">
+          {[
+            {
+              v: 'stretch',
+              label: 'Kéo giãn',
+              title: 'Kéo giãn',
+              icon: (
+                <svg viewBox="0 0 20 16" className="w-3.5 h-3 flex-shrink-0">
+                  <rect x="0.5" y="0.5" width="19" height="15" fill="none" stroke="currentColor" strokeWidth="1" strokeDasharray="2,1"/>
+                  <rect x="0.5" y="0.5" width="19" height="15" fill="currentColor" opacity="0.2"/>
+                  <path d="M3 8h14M10 3v10" stroke="currentColor" strokeWidth="1.2"/>
+                </svg>
+              )
+            },
+            {
+              v: 'fill',
+              label: 'Lấp đầy',
+              title: 'Lấp đầy',
+              icon: (
+                <svg viewBox="0 0 20 16" className="w-3.5 h-3 flex-shrink-0">
+                  <rect x="0.5" y="0.5" width="19" height="15" fill="none" stroke="currentColor" strokeWidth="1" strokeDasharray="2,1"/>
+                  <rect x="0.5" y="0.5" width="19" height="15" fill="currentColor" opacity="0.4"/>
+                  <rect x="3" y="2" width="14" height="12" fill="none" stroke="currentColor" strokeWidth="1.2"/>
+                </svg>
+              )
+            },
+            {
+              v: 'fit',
+              label: 'Vừa khít',
+              title: 'Vừa khít',
+              icon: (
+                <svg viewBox="0 0 20 16" className="w-3.5 h-3 flex-shrink-0">
+                  <rect x="0.5" y="0.5" width="19" height="15" fill="none" stroke="currentColor" strokeWidth="1" strokeDasharray="2,1"/>
+                  <rect x="4" y="2" width="12" height="12" fill="currentColor" opacity="0.2"/>
+                  <rect x="4" y="2" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.2"/>
+                </svg>
+              )
+            },
+            {
+              v: 'actual',
+              label: '100%',
+              title: 'Tỷ lệ 100% (Bấm để tuỳ chỉnh)',
+              icon: (
+                <svg viewBox="0 0 20 16" className="w-3.5 h-3 flex-shrink-0">
+                  <rect x="0.5" y="0.5" width="19" height="15" fill="none" stroke="currentColor" strokeWidth="1" strokeDasharray="2,1"/>
+                  <rect x="5" y="4" width="10" height="8" fill="currentColor" opacity="0.2"/>
+                  <rect x="5" y="4" width="10" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/>
+                </svg>
+              )
+            },
+          ].map((btn) => {
+            const isSelected = config.fitMode === btn.v;
+            return (
+              <button
+                key={btn.v}
+                type="button"
+                onClick={() => {
+                  setConfig(c => ({ ...c, fitMode: btn.v as any }));
+                  if (btn.v === 'actual') {
+                    setIsScaleModalOpen(true);
+                  }
+                }}
+                className={`flex-1 flex items-center justify-center gap-1 rounded-md text-[10px] font-medium transition-all cursor-pointer select-none whitespace-nowrap ${
+                  isSelected
+                    ? 'bg-emerald-600 text-white shadow-sm border border-emerald-700'
+                    : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
+                }`}
+                title={btn.title}
+              >
+                {btn.icon}
+                <span>{btn.v === 'actual' && customScale !== 100 ? `${customScale}%` : btn.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+
+      {/* Hàng cuối: Gap, Bleed, Radius — kéo dãn vừa khít */}
       <div
-        className={`grid ${
+        className={`grid gap-1.5 ${
           ['rect', 'trapezoid', 'triangle', 'hexagon'].includes(config.shape)
-            ? hasLastSheetBlanks && totalSheets > 1 ? 'grid-cols-5' : 'grid-cols-4'
-            : hasLastSheetBlanks && totalSheets > 1 ? 'grid-cols-4' : 'grid-cols-3'
-        } gap-1.5 mb-2`}
+            ? 'grid-cols-3'
+            : 'grid-cols-2'
+        }`}
       >
         {/* Khoảng cách (Gap) */}
         <div
@@ -287,7 +306,7 @@ export const ImpositionLayerCard: React.FC<ImpositionLayerCardProps> = ({
           </div>
         </div>
 
-        {/* Bù cắt (Bleed) - min/default 3mm */}
+        {/* Bù cắt (Bleed) */}
         <div
           className="flex items-center justify-between bg-slate-50 hover:bg-slate-100/80 border border-slate-200/90 rounded-xl px-2.5 py-1.5 transition-all focus-within:ring-2 focus-within:ring-violet-300 focus-within:border-violet-500 focus-within:bg-white shadow-2xs"
           title="Bù cắt / Tràn viền (Cut Bleed) - Mặc định và tối thiểu 3mm"
@@ -333,157 +352,10 @@ export const ImpositionLayerCard: React.FC<ImpositionLayerCardProps> = ({
             </div>
           </div>
         )}
-
-        {/* Nút Khử nền trắng & Nút Reset */}
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={handleRemoveWhiteBackground}
-            disabled={isRemovingWhite || (!activeTab.sourceImage?.thumb && allPages.length === 0)}
-            className={`flex-1 flex items-center justify-center gap-1.5 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-200/90 rounded-xl px-2 py-1.5 text-indigo-700 transition-all shadow-2xs cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed select-none ${
-              isRemovingWhite ? 'animate-pulse' : ''
-            }`}
-            title="Khử nền trắng & gọt sạch bóng đổ, bảo vệ màu sắc và chi tiết bên trong"
-          >
-            <Sparkles size={13} className={`shrink-0 text-indigo-600 ${isRemovingWhite ? 'animate-spin' : ''}`} />
-            <span className="text-[10px] font-bold truncate">
-              {isRemovingWhite ? 'Đang khử...' : 'Khử trắng'}
-            </span>
-          </button>
-
-          {activeTab.sourceImage?.originalThumb && activeTab.sourceImage.originalThumb !== activeTab.sourceImage.thumb && (
-            <button
-              type="button"
-              onClick={handleResetOriginalThumb}
-              className="p-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200/90 rounded-xl text-amber-700 transition-all shadow-2xs cursor-pointer select-none shrink-0"
-              title="Khôi phục lại ảnh ban đầu (Reset)"
-            >
-              <RotateCcw size={13} className="text-amber-600" />
-            </button>
-          )}
-        </div>
-
-        {/* Nút Trang cuối nếu có dư trắng */}
-        {hasLastSheetBlanks && totalSheets > 1 && (
-          <button
-            type="button"
-            onClick={() => setCurrentSheetIndex(totalSheets - 1)}
-            className={`px-1.5 py-1.5 rounded-xl text-[10px] font-medium transition-all flex items-center justify-center gap-1 cursor-pointer border select-none ${
-              currentSheetIndex === totalSheets - 1
-                ? 'bg-amber-500 border-amber-600 text-white shadow-xs font-semibold'
-                : 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900 shadow-2xs animate-pulse'
-            }`}
-            title={`Xem trang cuối (Tờ ${totalSheets}) - Có ${lastSheetBlankCount} ô dư trắng`}
-          >
-            <span className="truncate">Trang cuối</span>
-            <span className="bg-amber-200/90 text-amber-950 font-bold px-1 rounded text-[9px] shrink-0">
-              dư {lastSheetBlankCount}
-            </span>
-          </button>
-        )}
-      </div>
-
-      {/* Unified 5-Button Row: 4 Fit Modes + Auto Rotate */}
-      <div className="mb-0">
-        <div className="grid grid-cols-5 gap-1.5">
-          {[
-            { 
-              v: 'stretch', 
-              label: 'Kéo giãn', 
-              icon: (
-                <svg viewBox="0 0 20 16" className="w-3.5 h-3 flex-shrink-0">
-                  <rect x="0.5" y="0.5" width="19" height="15" fill="none" stroke="currentColor" strokeWidth="1" strokeDasharray="2,1"/>
-                  <rect x="0.5" y="0.5" width="19" height="15" fill="currentColor" opacity="0.2"/>
-                  <path d="M3 8h14M10 3v10" stroke="currentColor" strokeWidth="1.2"/>
-                </svg>
-              )
-            },
-            { 
-              v: 'fill', 
-              label: 'Lấp đầy', 
-              icon: (
-                <svg viewBox="0 0 20 16" className="w-3.5 h-3 flex-shrink-0">
-                  <rect x="0.5" y="0.5" width="19" height="15" fill="none" stroke="currentColor" strokeWidth="1" strokeDasharray="2,1"/>
-                  <rect x="0.5" y="0.5" width="19" height="15" fill="currentColor" opacity="0.4"/>
-                  <rect x="3" y="2" width="14" height="12" fill="none" stroke="currentColor" strokeWidth="1.2"/>
-                </svg>
-              )
-            },
-            { 
-              v: 'fit', 
-              label: 'Vừa khít', 
-              icon: (
-                <svg viewBox="0 0 20 16" className="w-3.5 h-3 flex-shrink-0">
-                  <rect x="0.5" y="0.5" width="19" height="15" fill="none" stroke="currentColor" strokeWidth="1" strokeDasharray="2,1"/>
-                  <rect x="4" y="2" width="12" height="12" fill="currentColor" opacity="0.2"/>
-                  <rect x="4" y="2" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.2"/>
-                </svg>
-              )
-            },
-            { 
-              v: 'actual', 
-              label: '100%', 
-              icon: (
-                <svg viewBox="0 0 20 16" className="w-3.5 h-3 flex-shrink-0">
-                  <rect x="0.5" y="0.5" width="19" height="15" fill="none" stroke="currentColor" strokeWidth="1" strokeDasharray="2,1"/>
-                  <rect x="5" y="4" width="10" height="8" fill="currentColor" opacity="0.2"/>
-                  <rect x="5" y="4" width="10" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/>
-                </svg>
-              )
-            }
-          ].map((btn) => {
-            const isSelected = config.fitMode === btn.v;
-            return (
-              <button
-                key={btn.v}
-                type="button"
-                onClick={() => {
-                  setConfig(c => ({ ...c, fitMode: btn.v as any }));
-                  if (btn.v === 'actual') {
-                    setIsScaleModalOpen(true);
-                  }
-                }}
-                className={`h-7 px-1 rounded-lg border flex items-center justify-center gap-1 transition-all cursor-pointer select-none whitespace-nowrap ${
-                  isSelected
-                    ? 'border-violet-600 bg-violet-600 text-white shadow-2xs font-medium ring-2 ring-violet-200'
-                    : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 shadow-2xs'
-                }`}
-                title={btn.v === 'actual' ? 'Tỷ lệ 100% (Bấm để tuỳ chỉnh)' : btn.label}
-              >
-                {btn.icon}
-                <span className="text-[10px] font-medium whitespace-nowrap">
-                  {btn.v === 'actual' && customScale !== 100 ? `${customScale}%` : btn.label}
-                </span>
-              </button>
-            );
-          })}
-
-          {/* 5th Button: Tự xoay ảnh vừa khung */}
-          <button
-            type="button"
-            onClick={() => {
-              const nextVal = !isTabAutoRotateImage;
-              setConfig(c => ({ ...c, autoRotateImage: nextVal }));
-              if (isMultiShape) {
-                updateActiveTabProp({ autoRotateImage: nextVal });
-              }
-            }}
-            className={`h-7 px-1.5 rounded-lg border flex items-center justify-center gap-1 transition-all cursor-pointer select-none whitespace-nowrap ${
-              isTabAutoRotateImage
-                ? 'border-emerald-600 bg-emerald-600 text-white shadow-2xs font-medium ring-2 ring-emerald-200'
-                : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 shadow-2xs'
-            }`}
-            title={
-              isTabAutoRotateImage
-                ? "Tự xoay ảnh vừa khung: Đang BẬT (Ảnh tự xoay 90° khi tỷ lệ ngược khung - bấm để tắt)"
-                : "Tự xoay ảnh vừa khung: Đang TẮT (Giữ nguyên chiều ảnh gốc - bấm để bật)"
-            }
-          >
-            <RotateCw size={12} className={isTabAutoRotateImage ? 'text-white' : 'text-slate-500'} />
-            <span className="text-[10px] font-medium whitespace-nowrap">Tự xoay ảnh</span>
-          </button>
-        </div>
       </div>
     </div>
   );
 };
+
+export const ImpositionJobCard = ImpositionLayerCard;
+export type ImpositionJobCardProps = ImpositionLayerCardProps;

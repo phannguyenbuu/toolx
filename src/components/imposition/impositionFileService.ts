@@ -11,10 +11,12 @@ export interface FileGroupItem {
   fileId: string;
   fileName: string;
   fileType: 'pdf' | 'image' | 'shape';
+  jobCount?: number;
   layerCount: number;
   tabs: ShapeTabItem[];
   thumbUrl?: string | null;
   dimensionsText?: string;
+  hasActiveJob?: boolean;
   hasActiveLayer: boolean;
 }
 
@@ -61,18 +63,22 @@ export function groupTabsByFile(
         fileId,
         fileName: fileName || 'Tệp không tên',
         fileType,
+        jobCount: 0,
         layerCount: 0,
         tabs: [],
         thumbUrl,
         dimensionsText: `${tab.itemW} × ${tab.itemH} mm`,
+        hasActiveJob: false,
         hasActiveLayer: false,
       });
     }
 
     const group = groupsMap.get(fileId)!;
+    group.jobCount = (group.jobCount || 0) + 1;
     group.layerCount += 1;
     group.tabs.push(tab);
     if (tab.id === activeTabId) {
+      group.hasActiveJob = true;
       group.hasActiveLayer = true;
     }
     if (!group.thumbUrl && tab.sourceImage?.thumb) {
@@ -92,31 +98,32 @@ export function processImageFile(file: File): Promise<{
   heightMm: number;
 }> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const dataUrl = e.target?.result as string;
-      const img = new Image();
-      img.onload = async () => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = async () => {
+      try {
         const dims = await calculateStandardImageDimensionsMm(img.naturalWidth, img.naturalHeight, file);
-        const thumbUrl = (await createClientThumbnail(img, 320, 0.8)) || dataUrl;
+        const thumbUrl = (await createClientThumbnail(img, 320, 0.8)) || objectUrl;
         const pageItem: PageItem = {
           fileIndex: 0,
           pageIndex: 1,
+          file,
           thumb: thumbUrl,
-          originalThumb: dataUrl,
-          baseThumb: thumbUrl,
+          originalThumb: objectUrl,
+          baseThumb: objectUrl,
+          url: objectUrl,
           name: file.name.replace(/\.[^/.]+$/, ''),
           w: dims.w,
           h: dims.h,
           rotation: 0,
         };
         resolve({ pageItem, widthMm: dims.w, heightMm: dims.h });
-      };
-      img.onerror = () => reject(new Error(`Không thể nạp ảnh ${file.name}`));
-      img.src = dataUrl;
+      } catch (err) {
+        reject(err);
+      }
     };
-    reader.onerror = () => reject(new Error(`Không thể đọc file ${file.name}`));
-    reader.readAsDataURL(file);
+    img.onerror = () => reject(new Error(`Không thể nạp ảnh ${file.name}`));
+    img.src = objectUrl;
   });
 }
 
@@ -127,7 +134,8 @@ export function createShapeTabsFromPdfPages(
   pdfPages: ExtractedPdfPage[],
   fileId: string,
   fileName: string,
-  startTabIndex: number
+  startTabIndex: number,
+  sourceFile?: File | Blob
 ): { tabs: ShapeTabItem[]; pages: PageItem[] } {
   const tabs: ShapeTabItem[] = [];
   const pages: PageItem[] = [];
@@ -136,9 +144,10 @@ export function createShapeTabsFromPdfPages(
     const pageItem: PageItem = {
       fileIndex: idx,
       pageIndex: p.pageIndex,
+      file: sourceFile,
       thumb: p.thumbUrl,
       originalThumb: p.dataUrl,
-      baseThumb: p.thumbUrl,
+      baseThumb: p.dataUrl,
       name: p.name,
       w: p.widthMm,
       h: p.heightMm,
@@ -158,7 +167,7 @@ export function createShapeTabsFromPdfPages(
       shape: 'rect',
       itemW: p.widthMm,
       itemH: p.heightMm,
-      quantity: 10,
+      quantity: 1,
       useTotalLimit: false,
       cornerRadius: 0,
       sourceImage: pageItem,
@@ -174,6 +183,61 @@ export function createShapeTabsFromPdfPages(
   });
 
   return { tabs, pages };
+}
+
+/**
+ * PDF nhiều trang → 1 tab duy nhất (dùng trang đầu làm sourceImage)
+ *   + tất cả các trang đưa vào allPages để single-shape cycling qua từng trang.
+ * Behavior mới (thay thế createShapeTabsFromPdfPages cho PDF multi-page).
+ */
+export function createSingleShapeTabFromPdfPages(
+  pdfPages: ExtractedPdfPage[],
+  fileId: string,
+  fileName: string,
+  tabIndex: number,
+  sourceFile?: File | Blob
+): { tab: ShapeTabItem; pages: PageItem[] } {
+  const first = pdfPages[0];
+
+  const pages: PageItem[] = pdfPages.map((p, idx) => ({
+    fileIndex: idx,
+    pageIndex: p.pageIndex,
+    file: sourceFile,
+    thumb: p.thumbUrl,
+    originalThumb: p.dataUrl,
+    baseThumb: p.dataUrl,
+    name: p.name,
+    w: p.widthMm,
+    h: p.heightMm,
+    rotation: 0,
+  }));
+
+  const letter = getTabLetter(tabIndex);
+  const color = TAB_COLORS[tabIndex % TAB_COLORS.length] || '#8b5cf6';
+  const tabId = `tab-pdf-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+
+  const tab: ShapeTabItem = {
+    id: tabId,
+    name: letter,
+    enabled: true,
+    shape: 'rect',
+    itemW: first.widthMm,
+    itemH: first.heightMm,
+    quantity: 1,
+    useTotalLimit: false,
+    cornerRadius: 0,
+    sourceImage: pages[0],
+    vectorMaskResult: null,
+    customSvgData: '',
+    color,
+    canRotate: true,
+    autoRotateImage: true,
+    fileId,
+    fileName,
+    fileType: 'pdf',
+  };
+
+  return { tab, pages };
 }
 
 /**
@@ -196,7 +260,7 @@ export function createShapeTabFromImage(
     shape: 'rect',
     itemW: res.widthMm,
     itemH: res.heightMm,
-    quantity: 10,
+    quantity: 1,
     useTotalLimit: false,
     cornerRadius: 0,
     sourceImage: res.pageItem,

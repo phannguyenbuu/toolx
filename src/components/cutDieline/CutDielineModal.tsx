@@ -37,6 +37,8 @@ export const CutDielineModal: React.FC<CutDielineModalProps> = ({
     customFilename,
     setCustomFilename,
     isCopied,
+    isCopyingCorel,
+    isCorelCopied,
     isExporting,
     zoom,
     pan,
@@ -48,6 +50,7 @@ export const CutDielineModal: React.FC<CutDielineModalProps> = ({
     handleDownloadSvg,
     handleDownloadPdf,
     handleCopySvg,
+    handleCopyCorel,
     handleMouseDown,
     handleMouseMove,
     handleMouseUp,
@@ -159,9 +162,12 @@ export const CutDielineModal: React.FC<CutDielineModalProps> = ({
             onSetCustomFilename={setCustomFilename}
             isExporting={isExporting}
             isCopied={isCopied}
+            isCopyingCorel={isCopyingCorel}
+            isCorelCopied={isCorelCopied}
             onDownloadSvg={handleDownloadSvg}
             onDownloadPdf={handleDownloadPdf}
             onCopySvg={handleCopySvg}
+            onCopyCorel={handleCopyCorel}
           />
         </div>
       </div>

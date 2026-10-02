@@ -21,6 +21,18 @@ export function hasOverlap(items: PackedItem[]): boolean {
 }
 
 /**
+ * Check if any placed item exceeds sheet boundaries
+ */
+export function isOutOfBounds(items: PackedItem[], sheetW: number, sheetH: number): boolean {
+  for (const it of items) {
+    if (it.x < -0.01 || it.y < -0.01 || it.x + it.w > sheetW + 0.05 || it.y + it.h > sheetH + 0.05) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Sequential 2D MaxRects bin packing preserving Layer A -> B -> C order
  * and intelligently inserting items into any open pocket or free rectangular space
  */
@@ -74,8 +86,8 @@ export function maxRectsPackSequential(
   const allPlaced: PackedItem[] = [];
   sheets.forEach(s => allPlaced.push(...s.placedItems));
 
-  // Fallback to sequential shelf pack if any overlap is detected
-  if (hasOverlap(allPlaced)) {
+  // Fallback to sequential shelf pack if any overlap or out-of-bounds is detected
+  if (hasOverlap(allPlaced) || isOutOfBounds(allPlaced, sheetW, sheetH)) {
     return shelfPackSequential(items, sheetW, sheetH, padding, allowRotation, allowMultiSheet);
   }
 
@@ -143,11 +155,11 @@ export function packMultiSize(
     });
   }
 
-  // Plan 5: Hàng chuẩn theo Layer (A→B→C)
+  // Plan 5: Hàng chuẩn theo Job (A→B→C)
   const p5 = shelfPackLayerByLayer(items, sheetW, sheetH, padding, canRot, allowMultiSheet);
   if (p5.items.length > 0) {
     results.push({
-      name: canRot ? 'Hàng chuẩn theo Layer (A→B→C)' : 'Hàng chuẩn theo Layer (Giữ nguyên hướng)',
+      name: canRot ? 'Hàng chuẩn theo Job (A→B→C)' : 'Hàng chuẩn theo Job (Giữ nguyên hướng)',
       items: p5.items,
       totalSheets: p5.totalSheets,
       skipped: p5.skipped
@@ -166,10 +178,13 @@ export function packMultiSize(
     });
   }
 
-  // Deduplicate results
+  // Deduplicate and validate results
   const unique: PackResult[] = [];
   const seen = new Set<string>();
   for (const r of results) {
+    if (isOutOfBounds(r.items, sheetW, sheetH) || hasOverlap(r.items)) {
+      continue;
+    }
     const key = `${r.items.length}-${r.totalSheets}-${r.name}`;
     if (!seen.has(key)) {
       seen.add(key);

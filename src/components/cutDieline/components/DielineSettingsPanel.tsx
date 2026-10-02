@@ -6,6 +6,8 @@ import {
   FileCode,
   Download,
   Copy,
+  Zap,
+  Loader2,
 } from 'lucide-react';
 import { CUT_COLOR_PRESETS } from '../constants';
 
@@ -27,9 +29,12 @@ interface DielineSettingsPanelProps {
   onSetCustomFilename: (name: string) => void;
   isExporting: boolean;
   isCopied: boolean;
+  isCopyingCorel?: boolean;
+  isCorelCopied?: boolean;
   onDownloadSvg: () => void;
   onDownloadPdf: () => void;
   onCopySvg: () => void;
+  onCopyCorel?: () => void;
 }
 
 export const DielineSettingsPanel: React.FC<DielineSettingsPanelProps> = ({
@@ -50,9 +55,12 @@ export const DielineSettingsPanel: React.FC<DielineSettingsPanelProps> = ({
   onSetCustomFilename,
   isExporting,
   isCopied,
+  isCopyingCorel = false,
+  isCorelCopied = false,
   onDownloadSvg,
   onDownloadPdf,
   onCopySvg,
+  onCopyCorel,
 }) => {
   return (
     <div className="w-full lg:w-80 xl:w-88 flex flex-col justify-between bg-slate-50/70 p-5 overflow-y-auto space-y-5">
@@ -207,6 +215,32 @@ export const DielineSettingsPanel: React.FC<DielineSettingsPanelProps> = ({
 
       {/* Export Actions Buttons */}
       <div className="space-y-2 pt-2 border-t border-slate-200">
+        {/* CorelDRAW Copy Button (GoAgent CF_HDROP) */}
+        {onCopyCorel && (
+          <button
+            type="button"
+            onClick={onCopyCorel}
+            disabled={isCopyingCorel}
+            className="w-full py-2.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-2xl font-bold text-xs shadow-md shadow-emerald-500/20 hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50"
+            title="Gửi lệnh qua GoAgent để nạp SVG vào Clipboard chuẩn CF_HDROP. Sang CorelDRAW nhấn Ctrl+V để dán trực tiếp không cần VBA macro!"
+          >
+            {isCopyingCorel ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : isCorelCopied ? (
+              <Check size={16} className="text-white" />
+            ) : (
+              <Zap size={16} className="text-amber-300" />
+            )}
+            <span>
+              {isCopyingCorel
+                ? 'Đang gửi qua GoAgent...'
+                : isCorelCopied
+                ? 'Đã chép! Sang Corel nhấn Ctrl+V'
+                : 'Chép vào CorelDRAW (Ctrl+V)'}
+            </span>
+          </button>
+        )}
+
         {/* SVG Download Button */}
         <button
           type="button"
@@ -228,19 +262,24 @@ export const DielineSettingsPanel: React.FC<DielineSettingsPanelProps> = ({
           <span>{isExporting ? 'Đang tạo PDF...' : 'Tải file PDF (.pdf)'}</span>
         </button>
 
-        {/* Copy SVG Code */}
+        {/* Copy SVG Vector */}
         <button
           type="button"
           onClick={onCopySvg}
           className="w-full py-2 px-3 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-2xl font-medium text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+          title="Sao chép SVG vào Clipboard (Dán trực tiếp Ctrl+V vào Illustrator/Figma)"
         >
           {isCopied ? (
             <Check size={14} className="text-emerald-500" />
           ) : (
             <Copy size={14} className="text-slate-400" />
           )}
-          <span>{isCopied ? 'Đã sao chép mã SVG!' : 'Sao chép mã SVG'}</span>
+          <span>{isCopied ? 'Đã sao chép SVG!' : 'Sao chép SVG (Illustrator/Figma)'}</span>
         </button>
+
+        <p className="text-[10px] text-slate-400 text-center leading-tight pt-1">
+          💡 Với Corel: Bấm <b>Chép vào CorelDRAW</b> rồi sang Corel nhấn <b>Ctrl + V</b> (không cần cài macro).
+        </p>
       </div>
     </div>
   );

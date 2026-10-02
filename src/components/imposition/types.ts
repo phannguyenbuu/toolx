@@ -26,7 +26,7 @@ export interface ShapeTabItem {
 
 export const TAB_COLORS = ['#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#3b82f6', '#84cc16', '#6366f1'];
 
-export const LAYER_COLOR_PRESETS = [
+export const JOB_COLOR_PRESETS = [
   '#8b5cf6', // Violet
   '#3b82f6', // Blue
   '#06b6d4', // Cyan
@@ -40,6 +40,9 @@ export const LAYER_COLOR_PRESETS = [
   '#14b8a6', // Teal
   '#64748b', // Slate
 ];
+export const LAYER_COLOR_PRESETS = JOB_COLOR_PRESETS;
+
+export type JobTabItem = ShapeTabItem;
 
 export interface ImpositionConfig {
   shape: 'rect' | 'circle' | 'oval' | 'trapezoid' | 'triangle' | 'hexagon' | 'custom-svg' | 'svg-image' | 'pdf-source';
@@ -76,6 +79,7 @@ export type ImpositionStyle = 'sheetwise' | 'work-and-turn' | 'work-and-tumble';
 export interface SourcePage {
   id?: string;
   url?: string;
+  file?: File | Blob;
   fileIndex?: number;
   pageIndex?: number;
   thumb: string;
@@ -87,6 +91,7 @@ export interface SourcePage {
   serverPath?: string;
   fileId?: string;
   rotation: number; // 0, 90, 180, 270
+  copies?: number; // Lặp lại chi tiết cho từng trang
   cropSettings?: CropTransform;
   colorSettings?: ColorAdjustSettings;
   bleedPercent?: number;

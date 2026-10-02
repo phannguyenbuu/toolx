@@ -12,8 +12,8 @@ import {
 } from 'lucide-react';
 import { PlanItem, LayoutPlan } from '../../utils/layoutSolver';
 import { ImpositionConfig, ShapeTabItem, PageItem } from './types';
-import { DebouncedNumberInput } from './DebouncedNumberInput';
-import { ImpositionCanvasSlotItem } from './ImpositionCanvasSlotItem';
+import { DebouncedNumberInput } from '../common/DebouncedNumberInput';
+import { ImpositionCanvasSlotItem, ImpositionCanvasSlotItemMemo } from './ImpositionCanvasSlotItem';
 import { ImpositionCanvasDock } from './ImpositionCanvasDock';
 import { VectorMaskResult } from '../VectorMaskEditorModal';
 import { generateItemCropMarksPath, generatePageCropMarksPath } from './marksRenderer';
@@ -115,6 +115,13 @@ export const ImpositionCanvasView: React.FC<ImpositionCanvasViewProps> = ({
 }) => {
   const allPlanItems = impositionStyleEnabled && styledPlan ? styledPlan.items : (currentPlan?.items || []);
 
+  // Ref để apply CSS transform trực tiếp vào DOM khi pan — tránh React re-render 100 SlotItems mỗi mousemove
+  const transformDivRef = useRef<HTMLDivElement>(null);
+
+  // Deduplicate: single-shape + no data pages → tất cả sheets giống hệt nhau, chỉ hiện 1
+  const allSheetsIdentical = !isMultiShape && allPages.length === 0 && totalSheets > 1;
+  const visibleSheetCount = allSheetsIdentical ? 1 : totalSheets;
+
   return (
     <main
       ref={containerRef as any}
@@ -132,18 +139,31 @@ export const ImpositionCanvasView: React.FC<ImpositionCanvasViewProps> = ({
         if (isPanning) {
           const dx = e.clientX - panStartRef.current.x;
           const dy = e.clientY - panStartRef.current.y;
+          const newX = Math.round(panOffsetRef.current.x + dx);
+          const newY = Math.round(panOffsetRef.current.y + dy);
+          // Apply transform trực tiếp vào DOM — không gọi setState, không re-render
+          if (transformDivRef.current) {
+            transformDivRef.current.style.transform = `translate(${newX}px, ${newY}px) scale(${canvasZoom})`;
+          }
+        }
+      }}
+      onMouseUp={(e) => {
+        if (isPanning) {
+          // Sync lại state khi thả chuột (chỉ 1 lần)
+          const dx = e.clientX - panStartRef.current.x;
+          const dy = e.clientY - panStartRef.current.y;
           setCanvasPan({
             x: Math.round(panOffsetRef.current.x + dx),
             y: Math.round(panOffsetRef.current.y + dy),
           });
-        }
-      }}
-      onMouseUp={(e) => {
-        if (e.button === 1 || isPanning) {
           setIsPanning(false);
         }
       }}
-      onMouseLeave={() => setIsPanning(false)}
+      onMouseLeave={() => {
+        if (isPanning) {
+          setIsPanning(false);
+        }
+      }}
       onDoubleClick={(e) => {
         if (e.target === containerRef.current) {
           setCanvasZoom(1);
@@ -188,8 +208,24 @@ export const ImpositionCanvasView: React.FC<ImpositionCanvasViewProps> = ({
         </button>
       </div>
 
+      {/* Cảnh báo khi không có tem nào vừa giấy */}
+      {allPlanItems.length === 0 && activeTab?.sourceImage && (
+        <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+          <div className="bg-white/95 backdrop-blur-sm rounded-2xl px-6 py-5 shadow-xl border border-amber-200 text-center max-w-sm">
+            <div className="text-3xl mb-2">⚠️</div>
+            <p className="text-sm font-bold text-slate-700 mb-1">Kích thước tem quá lớn</p>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Tem <strong>{Math.round(config.itemW)}×{Math.round(config.itemH)}mm</strong> không vừa vặn trên giấy{' '}
+              <strong>{Math.round(config.pageW)}×{Math.round(config.pageH)}mm</strong>.
+              <br />Hãy giảm kích thước tem hoặc tăng khổ giấy in.
+            </p>
+          </div>
+        </div>
+      )}
+
       {currentPlan ? (
         <div
+          ref={transformDivRef}
           style={{
             transform: `translate(${canvasPan.x}px, ${canvasPan.y}px) scale(${canvasZoom})`,
             transformOrigin: 'center center',
@@ -199,11 +235,11 @@ export const ImpositionCanvasView: React.FC<ImpositionCanvasViewProps> = ({
           <div
             className="grid gap-12 items-start justify-center p-8"
             style={{
-              gridTemplateColumns: `repeat(${Math.min(totalSheets, 20)}, ${config.pageW * scale}px)`,
+              gridTemplateColumns: `repeat(${Math.min(visibleSheetCount, 20)}, ${config.pageW * scale}px)`,
               width: 'max-content',
             }}
           >
-            {Array.from({ length: totalSheets }, (_, sIdx) => {
+            {Array.from({ length: visibleSheetCount }, (_, sIdx) => {
               const isCurrentActiveSheet = currentSheetIndex === sIdx;
               const sheetItems = isMultiShape
                 ? allPlanItems.filter(it => (it.sheetIndex ?? 0) === sIdx)
@@ -222,19 +258,31 @@ export const ImpositionCanvasView: React.FC<ImpositionCanvasViewProps> = ({
                             : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200'
                         }`}
                       >
-                        <span>Tờ {sIdx + 1}</span>
-                        {totalSheets > 1 && <span className="opacity-70 font-normal text-[10px]">/ {totalSheets}</span>}
+                        <span>{allSheetsIdentical ? 'Tờ mẫu' : `Tờ ${sIdx + 1}`}</span>
+                        {!allSheetsIdentical && totalSheets > 1 && <span className="opacity-70 font-normal text-[10px]">/ {totalSheets}</span>}
                       </button>
                       <span className="text-[10px] text-slate-500 font-medium bg-white/80 px-2 py-0.5 rounded-md border border-slate-200 shadow-2xs">
                         {isMultiShape ? `${sheetItems.length} tem` : `${sheetItems.length} vị trí`}
                       </span>
                     </div>
-                    {isCurrentActiveSheet && totalSheets > 1 && (
+                    {isCurrentActiveSheet && !allSheetsIdentical && totalSheets > 1 && (
                       <span className="text-[10px] font-semibold text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full border border-violet-200 flex items-center gap-1">
                         <Check size={11} /> Đang chọn
                       </span>
                     )}
+                    {allSheetsIdentical && (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1 whitespace-nowrap">
+                        ×{totalSheets} tờ
+                      </span>
+                    )}
                   </div>
+
+                  {/* Badge "X tờ giống nhau" hiện bên dưới sheet khi collapsed */}
+                  {allSheetsIdentical && (
+                    <div className="mt-1.5 text-[10px] text-slate-500 bg-white/90 border border-slate-200 rounded-lg px-3 py-1 shadow-2xs text-center leading-tight">
+                      <span className="font-semibold text-slate-700">{totalSheets} tờ in</span> có nội dung giống nhau
+                    </div>
+                  )}
 
                   {/* Sheet Body Container with Drag & Drop Zone */}
                   <div
@@ -387,7 +435,7 @@ export const ImpositionCanvasView: React.FC<ImpositionCanvasViewProps> = ({
 
                     {/* Render Sheet Items */}
                     {sheetItems.map((it, i) => (
-                      <ImpositionCanvasSlotItem
+                      <ImpositionCanvasSlotItemMemo
                         key={`slot-${sIdx}-${i}`}
                         it={it}
                         i={i}

@@ -20,7 +20,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     isOpen, onClose,
     imageUrl, imageSrc,
     imageName, fileName,
-    itemW = 100, itemH = 100, shape = 'rect', quantity = 10,
+    itemW = 100, itemH = 100, shape = 'rect', quantity = 1,
     cutBleed = 3, initialBleedMm = 3, gap = 0,
     initialColorSettings, initialCropSettings,
     initialBleedBounds = null, originalImageBleedBounds = null,
@@ -55,6 +55,12 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
   const [showGrid, setShowGrid] = useState(false);
   const [colorSettings, setColorSettings] = useState<ColorAdjustSettings>(initialColorSettings || { ...DEFAULT_COLOR_SETTINGS });
   const [colorTab, setColorTab] = useState<ColorTabType>('bleed');
+  // Lưu tất cả trang khi import PDF nhiều trang (để pass về allPages, không tạo N layer)
+  const [pdfAllPages, setPdfAllPages] = useState<Array<{
+    fileIndex: number; pageIndex: number;
+    thumb: string; originalThumb: string;
+    name: string; w: number; h: number; rotation: number;
+  }> | null>(null);
 
 
 
@@ -149,7 +155,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
       setCurrentTabId(tab.id);
       const nw = tab.itemW || 100;
       const nh = tab.shape === 'circle' ? nw : (tab.itemH || 100);
-      setLocalItemW(nw); setLocalItemH(nh); setLocalShape(tab.shape || 'rect'); setLocalQuantity(tab.quantity || 10);
+      setLocalItemW(nw); setLocalItemH(nh); setLocalShape(tab.shape || 'rect'); setLocalQuantity(tab.quantity || 1);
       const src = tab.sourceImage;
       const initialImg = src?.originalThumb || src?.thumb || effectiveImgSrc;
       initialOriginalSrcRef.current = initialImg;
@@ -161,7 +167,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     } else {
       const nw = itemW || 100;
       const nh = shape === 'circle' ? nw : (itemH || 100);
-      setLocalItemW(nw); setLocalItemH(nh); setLocalShape(shape || 'rect'); setLocalQuantity(quantity || 10);
+      setLocalItemW(nw); setLocalItemH(nh); setLocalShape(shape || 'rect'); setLocalQuantity(quantity || 1);
       initialOriginalSrcRef.current = effectiveImgSrc;
       setCurrentImageSrc(effectiveImgSrc); setCurrentFileName(effectiveFileName);
       setCrop(initialCropSettings || { ...DEFAULT_CROP_TRANSFORM });
@@ -208,41 +214,39 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
         setLocalItemW(p1.widthMm); setLocalItemH(p1.heightMm);
         setImageStandardDim({ w: p1.widthMm, h: p1.heightMm });
         setCrop({ ...DEFAULT_CROP_TRANSFORM });
+        const allPdfPgs = pages.map((p, idx) => ({
+          fileIndex: idx, pageIndex: p.pageIndex,
+          thumb: p.thumbUrl, originalThumb: p.dataUrl,
+          name: p.name, w: p.widthMm, h: p.heightMm, rotation: 0,
+        }));
+        setPdfAllPages(allPdfPgs.length > 1 ? allPdfPgs : null);
         if (pages.length > 1) {
-          setTabs(pages.map((p, idx) => ({
-            id: `tab-pdf-${Date.now()}-${idx}`, name: `${idx + 1}`, enabled: true, shape: 'rect',
-            itemW: p.widthMm, itemH: p.heightMm, quantity: 10, useTotalLimit: true,
-            color: TAB_COLORS[idx % TAB_COLORS.length],
-            sourceImage: {
-              fileIndex: idx, pageIndex: p.pageIndex, thumb: p.thumbUrl, originalThumb: p.dataUrl,
-              name: p.name, w: p.widthMm, h: p.heightMm, rotation: 0,
-              cropSettings: { ...DEFAULT_CROP_TRANSFORM }, colorSettings: { ...DEFAULT_COLOR_SETTINGS }
-            }
-          })));
-          setBleedStatusMsg(`✓ Đã nạp ${pages.length} trang PDF thành ${pages.length} Layer!`);
+          // Không tạo N tab — chỉ cập nhật kích thước tab hiện tại, allPages sẽ chứa tất cả trang
+          setTabs(prev => prev.map(t => t.id === currentTabId ? { ...t, itemW: p1.widthMm, itemH: p1.heightMm } : t));
+          setBleedStatusMsg(`✓ Đã nạp ${pages.length} trang PDF → cycling ${pages.length} trang`);
           setTimeout(() => setBleedStatusMsg(null), 4000);
         }
       } catch (err: any) { alert(`Lỗi PDF: ${err.message || 'Không hợp lệ'}`); }
       e.target.value = '';
       return;
     }
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const res = ev.target?.result as string;
-      if (!res) return;
-      setCurrentImageSrc(res); setCurrentFileName(file.name);
-      setOriginalBackupSrc(null); setOriginalBleedBounds(null); setOriginalDimensions(null);
-      setCrop({ ...DEFAULT_CROP_TRANSFORM });
-      const img = new Image();
-      img.onload = async () => {
-        const std = await calculateStandardImageDimensionsMm(img.naturalWidth || img.width, img.naturalHeight || img.height, file);
-        const fw = std.w, fh = localShape === 'circle' ? std.w : std.h;
-        setImageStandardDim({ w: fw, h: fh }); setLocalItemW(fw); setLocalItemH(fh);
-        setTabs(prev => prev.map(t => t.id === currentTabId ? { ...t, itemW: fw, itemH: fh } : t));
-      };
-      img.src = res;
+    const objectUrl = URL.createObjectURL(file);
+    setCurrentImageSrc(objectUrl);
+    setCurrentFileName(file.name);
+    setOriginalBackupSrc(null);
+    setOriginalBleedBounds(null);
+    setOriginalDimensions(null);
+    setCrop({ ...DEFAULT_CROP_TRANSFORM });
+    const img = new Image();
+    img.onload = async () => {
+      const std = await calculateStandardImageDimensionsMm(img.naturalWidth || img.width, img.naturalHeight || img.height, file);
+      const fw = std.w, fh = localShape === 'circle' ? std.w : std.h;
+      setImageStandardDim({ w: fw, h: fh });
+      setLocalItemW(fw);
+      setLocalItemH(fh);
+      setTabs(prev => prev.map(t => t.id === currentTabId ? { ...t, itemW: fw, itemH: fh } : t));
     };
-    reader.readAsDataURL(file);
+    img.src = objectUrl;
     e.target.value = '';
   };
 
@@ -298,7 +302,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     if (!tab) return;
     setCurrentTabId(targetTabId);
     const tw = tab.itemW || 100, th = tab.shape === 'circle' ? tw : (tab.itemH || 100);
-    setLocalItemW(tw); setLocalItemH(th); setLocalShape(tab.shape || 'rect'); setLocalQuantity(tab.quantity || 10);
+    setLocalItemW(tw); setLocalItemH(th); setLocalShape(tab.shape || 'rect'); setLocalQuantity(tab.quantity || 1);
     const src = tab.sourceImage;
     setImageStandardDim(src?.w && src?.h ? { w: src.w, h: src.h } : null);
     const initialImg = src?.originalThumb || src?.thumb || null;
@@ -313,7 +317,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
     const idx = tabs.length;
     const newTab: CropModalLayerTab = {
       id: `tab-${Date.now()}`, name: String.fromCharCode(65 + (idx % 26)), enabled: true,
-      shape: 'rect', itemW: localItemW, itemH: localItemH, quantity: 10, color: TAB_COLORS[idx % TAB_COLORS.length],
+      shape: 'rect', itemW: localItemW, itemH: localItemH, quantity: 1, color: TAB_COLORS[idx % TAB_COLORS.length],
     };
     setTabs([...tabs, newTab]);
     setCurrentTabId(newTab.id);
@@ -359,6 +363,7 @@ export const SourceImageCropColorModal: React.FC<SourceImageCropColorModalProps>
       w_mm: finalItemW, h_mm: finalItemH, colorSettings, cropSettings: crop, filename: currentFileName,
       updatedTabs: finalTabs, activeTabId: currentTabId, bleedBounds: originalBleedBounds,
       bleedPercent: bleedMode !== 'off' ? bleedPercent : 0, bleedMm: finalBleedMm, addedGapMm: addedGap,
+      allPages: pdfAllPages || undefined,
     });
     onClose();
   };

@@ -155,9 +155,20 @@ export function renderExportCanvas({
   bleedBgColor,
 }: ExportRenderParams): string | null {
   if (!imgElement || !imgLoaded) return currentImageSrc;
-  const exportScale = 3;
-  const exportW = Math.max(1, Math.round(cropBox.w * exportScale));
-  const exportH = Math.max(1, Math.round(cropBox.h * exportScale));
+
+  const isDefaultCrop = crop.zoom === 1 && crop.panX === 0 && crop.panY === 0 && crop.rotation === 0 && !crop.flipH && !crop.flipV;
+  const isDefaultColor = isDefaultColorSettings(colorSettings);
+  const isDefaultBleed = !bleedBgColor || bleedBgColor === 'transparent' || bleedBgColor === '#ffffff';
+  const imgAspect = (imgElement.naturalWidth || imgElement.width) / Math.max(1, (imgElement.naturalHeight || imgElement.height));
+  const boxAspect = cropBox.w / Math.max(1, cropBox.h);
+  if (isDefaultCrop && isDefaultColor && isDefaultBleed && Math.abs(imgAspect - boxAspect) < 0.01 && currentImageSrc) {
+    return currentImageSrc;
+  }
+
+  const naturalW = imgElement.naturalWidth || imgElement.width || 1200;
+  const exportScale = Math.min(2.5, Math.max(1, naturalW / Math.max(1, cropBox.w)));
+  const exportW = Math.max(1, Math.min(3200, Math.round(cropBox.w * exportScale)));
+  const exportH = Math.max(1, Math.min(3200, Math.round(cropBox.h * exportScale)));
 
   const offCanvas = document.createElement('canvas');
   offCanvas.width = exportW;
@@ -178,7 +189,6 @@ export function renderExportCanvas({
   offCtx.rotate((crop.rotation * Math.PI) / 180);
   offCtx.scale(crop.flipH ? -1 : 1, crop.flipV ? -1 : 1);
 
-  const imgAspect = imgElement.width / imgElement.height;
   const baseW = exportW;
   const baseH = baseW / imgAspect;
   const drawW = baseW * crop.zoom;

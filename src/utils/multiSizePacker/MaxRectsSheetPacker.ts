@@ -67,9 +67,9 @@ export class MaxRectsSheetPacker {
       // 2. Check rotated orientation
       if (canRotate) {
         const neededWRot = itemH + (free.x + itemH < this.sheetW ? this.padding : 0);
-        const neededHRot = itemW + (free.y + itemH < this.sheetH ? this.padding : 0);
+        const neededHRot = itemW + (free.y + itemW < this.sheetH ? this.padding : 0);
 
-        if (free.w >= neededWRot && free.h >= neededHRot && free.x + itemH <= this.sheetW && free.y + itemH <= this.sheetH) {
+        if (free.w >= neededWRot && free.h >= neededHRot && free.x + itemH <= this.sheetW && free.y + itemW <= this.sheetH) {
           let score1 = 0;
           let score2 = 0;
 

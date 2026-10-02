@@ -1,42 +1,65 @@
-import React from 'react';
-import { Clock, Trash2, ChevronUp, ChevronDown, LayoutGrid } from 'lucide-react';
-import { ImpositionHistoryItem } from '../types';
+import React, { useState } from 'react';
+import {
+  Clock,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  LayoutGrid,
+  FileJson
+} from 'lucide-react';
+import { ImpositionHistoryItem } from './types';
 
-interface ImpositionHistoryListProps {
-  isHistorySectionOpen: boolean;
-  setIsHistorySectionOpen: React.Dispatch<React.SetStateAction<boolean>>;
+export interface ImpositionHistoryListProps {
   impositionHistory: ImpositionHistoryItem[];
-  onRemoveHistoryItem: (id: string, e?: React.MouseEvent) => void;
+  onRestoreHistory: (item: ImpositionHistoryItem) => void;
+  onDeleteItem: (id: string, e?: React.MouseEvent) => void;
   onClearHistory: () => void;
-  onRestoreHistoryConfig: (item: ImpositionHistoryItem) => void;
+  /** Optional: nếu truyền vào sẽ hiện nút JSON export cho từng item */
+  onExportJson?: (item: ImpositionHistoryItem) => void;
+  isExportingJson?: boolean;
+  /** Optional: controlled open/close. Nếu không truyền, tự quản lý nội bộ */
+  isOpen?: boolean;
+  onToggleOpen?: () => void;
 }
 
 export const ImpositionHistoryList: React.FC<ImpositionHistoryListProps> = ({
-  isHistorySectionOpen,
-  setIsHistorySectionOpen,
   impositionHistory,
-  onRemoveHistoryItem,
+  onRestoreHistory,
+  onDeleteItem,
   onClearHistory,
-  onRestoreHistoryConfig
+  onExportJson,
+  isExportingJson = false,
+  isOpen: isOpenProp,
+  onToggleOpen,
 }) => {
+  const [isOpenInternal, setIsOpenInternal] = useState(true);
+
+  // Nếu có prop controlled thì dùng prop, không thì dùng state nội bộ
+  const isOpen = isOpenProp !== undefined ? isOpenProp : isOpenInternal;
+  const handleToggle = () => {
+    if (onToggleOpen) {
+      onToggleOpen();
+    } else {
+      setIsOpenInternal(v => !v);
+    }
+  };
+
   return (
     <div className="border-t border-slate-200">
       <div
         className="px-4 py-3 bg-slate-50 border-b flex items-center justify-between cursor-pointer select-none hover:bg-slate-100/70 transition"
-        onClick={() => setIsHistorySectionOpen((v) => !v)}
+        onClick={handleToggle}
       >
         <div className="flex items-center gap-2 min-w-0">
           <Clock size={16} className="text-indigo-600 flex-shrink-0" />
-          <span className="text-xs font-medium text-slate-800 uppercase tracking-wider">
-            Lịch sử bình trang
-          </span>
+          <span className="text-xs font-medium text-slate-800 uppercase tracking-wider">Lịch sử bình trang</span>
           {impositionHistory.length > 0 && (
             <span className="text-[10px] bg-indigo-100 text-indigo-700 font-medium px-2 py-0.5 rounded-full">
               {impositionHistory.length}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
           {impositionHistory.length > 0 && (
             <button
               type="button"
@@ -49,16 +72,16 @@ export const ImpositionHistoryList: React.FC<ImpositionHistoryListProps> = ({
           )}
           <button
             type="button"
-            onClick={() => setIsHistorySectionOpen((v) => !v)}
+            onClick={handleToggle}
             className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-200 transition cursor-pointer"
-            title={isHistorySectionOpen ? 'Thu gọn' : 'Mở rộng'}
+            title={isOpen ? 'Thu gọn' : 'Mở rộng'}
           >
-            {isHistorySectionOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
         </div>
       </div>
 
-      {isHistorySectionOpen && (
+      {isOpen && (
         <div className="p-4">
           {impositionHistory.length === 0 ? (
             <div className="py-10 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
@@ -73,11 +96,13 @@ export const ImpositionHistoryList: React.FC<ImpositionHistoryListProps> = ({
               {impositionHistory.map((item) => (
                 <div
                   key={item.id}
-                  onClick={() => item.configSnapshot && onRestoreHistoryConfig(item)}
-                  className="p-3 bg-white hover:bg-slate-50/80 border border-slate-200 rounded-xl shadow-xs transition group cursor-pointer"
+                  onClick={() => onRestoreHistory(item)}
+                  className="p-3 bg-white hover:bg-violet-50/50 hover:border-violet-300 border border-slate-200 rounded-xl shadow-xs transition group cursor-pointer"
                   title="Nhấn để nạp lại thông số bình trang này"
                 >
+                  {/* Main Row: Thumbnail + Info + JSON button (nếu có) */}
                   <div className="flex items-start gap-3">
+                    {/* Thumbnail */}
                     {item.thumbnail ? (
                       <img
                         src={item.thumbnail}
@@ -90,38 +115,56 @@ export const ImpositionHistoryList: React.FC<ImpositionHistoryListProps> = ({
                       </div>
                     )}
 
+                    {/* Info */}
                     <div className="min-w-0 flex-1 text-[11px] text-slate-600 space-y-0.5">
                       <div className="truncate">
                         <span className="text-slate-400">Khổ:</span>{' '}
-                        <strong className="text-slate-700 font-semibold">
-                          {item.paperW}×{item.pageH}mm
-                        </strong>
+                        <strong className="text-slate-700 font-semibold">{item.paperW}×{item.pageH}mm</strong>
                       </div>
                       <div className="truncate">
                         <span className="text-slate-400">Tem:</span>{' '}
-                        <strong className="text-slate-700 font-semibold">
-                          {item.itemW}×{item.itemH}mm
-                        </strong>
+                        <strong className="text-slate-700 font-semibold">{item.itemW}×{item.itemH}mm</strong>
                       </div>
                       <div className="flex items-center gap-1.5 truncate">
                         <span>
                           <span className="text-slate-400">Số lượng:</span>{' '}
-                          <strong className="text-slate-700 font-semibold">
-                            {item.layoutCount} tem
-                          </strong>
+                          <strong className="text-slate-700 font-semibold">{item.layoutCount} tem</strong>
                         </span>
-                        {item.processMode && (
-                          <span className="capitalize px-1.5 py-0.2 bg-slate-100 rounded text-slate-600 text-[10px] flex-shrink-0">
+                        {/* Badge: layer count (advanced) hoặc processMode (basic) */}
+                        {item.shapeTabsSnapshot && item.shapeTabsSnapshot.length > 0 && (
+                          <span className="px-1.5 py-0.5 bg-violet-100 text-violet-700 font-semibold rounded text-[10px] flex-shrink-0">
+                            {item.shapeTabsSnapshot.length} Layer
+                          </span>
+                        )}
+                        {item.processMode && !item.shapeTabsSnapshot && (
+                          <span className="capitalize px-1.5 py-0.5 bg-slate-100 rounded text-slate-600 text-[10px] flex-shrink-0">
                             {item.processMode}
                           </span>
                         )}
                       </div>
                     </div>
+
+                    {/* Nút JSON export — chỉ hiện khi có onExportJson */}
+                    {onExportJson && (
+                      <div className="flex-shrink-0" onClick={e => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => onExportJson(item)}
+                          disabled={isExportingJson}
+                          className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                          title="Xuất JSON SortJob của lịch sử này lưu về VPS"
+                        >
+                          <FileJson size={13} />
+                          <span>JSON</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
 
+                  {/* Footer: ngày + nút xóa */}
                   <div
                     className="flex items-center justify-between pt-2 mt-2 border-t border-slate-100 text-[11px] text-slate-400"
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={e => e.stopPropagation()}
                   >
                     <div className="flex items-center gap-1.5 text-slate-400">
                       <Clock size={12} className="flex-shrink-0" />
@@ -129,7 +172,7 @@ export const ImpositionHistoryList: React.FC<ImpositionHistoryListProps> = ({
                     </div>
                     <button
                       type="button"
-                      onClick={(e) => onRemoveHistoryItem(item.id, e)}
+                      onClick={(e) => onDeleteItem(item.id, e)}
                       className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition cursor-pointer"
                       title="Xóa mục này"
                     >

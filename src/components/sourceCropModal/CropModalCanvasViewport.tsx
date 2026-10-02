@@ -209,7 +209,7 @@ export const CropModalCanvasViewport: React.FC<CropModalCanvasViewportProps> = (
               <Upload size={26} />
             </div>
             <h3 className="text-sm font-bold text-slate-200 mb-1">
-              Chọn ảnh nguồn cho Layer {currentTabName}
+              Chọn ảnh nguồn cho Job {currentTabName}
             </h3>
             <p className="text-xs text-slate-400 mb-4">
               Bấm để chọn tệp hình ảnh hoặc PDF từ máy tính

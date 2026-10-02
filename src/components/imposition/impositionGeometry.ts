@@ -20,6 +20,32 @@ export interface SlotPageLookupParams {
 }
 
 /**
+ * Phân bổ slot theo thứ tự: (lặp lại chi tiết trang N * nhân bản toàn layer) xong hết rồi mới tới trang tiếp theo.
+ */
+export function getSlotPageIndex(
+  globalSlot: number,
+  allPages: PageItem[],
+  quantity: number
+): { pageIdx: number; page: PageItem | null; isBlank: boolean } {
+  if (!allPages || allPages.length === 0) {
+    return { pageIdx: 0, page: null, isBlank: false };
+  }
+  const qty = Math.max(1, quantity);
+
+  let accumulated = 0;
+  for (let idx = 0; idx < allPages.length; idx++) {
+    const pageCopies = allPages[idx].copies !== undefined ? allPages[idx].copies! : 1;
+    if (pageCopies <= 0) continue;
+    const totalSlotForThisPage = pageCopies * qty;
+    if (globalSlot < accumulated + totalSlotForThisPage) {
+      return { pageIdx: idx, page: allPages[idx], isBlank: false };
+    }
+    accumulated += totalSlotForThisPage;
+  }
+  return { pageIdx: -1, page: null, isBlank: true };
+}
+
+/**
  * Xác định trang nguồn nào được phân bổ cho một vị trí tem (slot) trên tờ in
  */
 export function getPageForSlot(params: SlotPageLookupParams): number {
@@ -100,43 +126,49 @@ export function calculateSlotTotalRotation(
   shapeTabs: ShapeTabItem[],
   isBackSide: boolean = false
 ): number {
-  let pageRotation = page ? (page.rotation || 0) : 0;
-  const isRotatedItem = !!it.rot;
   const itemShape = (it.shape || config.shape) as string;
   const isSpecialShape = ['trapezoid', 'triangle', 'hexagon'].includes(itemShape);
+  const isRotatedItem = !!it.rot;
 
   const correspondingTab = isMultiShape
     ? shapeTabs.find(t => t.id === it.tabId || t.name === it.tabName)
-    : null;
+    : (shapeTabs && shapeTabs.length > 0 ? shapeTabs[0] : null);
+
+  const effectiveImg: PageItem | null | undefined =
+    correspondingTab?.sourceImage ||
+    (it.sourceImage as PageItem) ||
+    page ||
+    (shapeTabs && shapeTabs.length > 0 ? shapeTabs[0]?.sourceImage : null);
+
+  let pageRotation = effectiveImg ? (effectiveImg.rotation || 0) : 0;
+
   const isTabAutoRotate = isMultiShape
     ? (correspondingTab?.autoRotateImage !== undefined
         ? correspondingTab.autoRotateImage
         : (correspondingTab?.autoRotate !== undefined
             ? correspondingTab.autoRotate
             : (config.autoRotateImage ?? true)))
-    : (config.autoRotateImage ?? true);
+    : (correspondingTab?.autoRotateImage !== undefined
+        ? correspondingTab.autoRotateImage
+        : (config.autoRotateImage ?? true));
 
-  const actualW = it.w !== undefined ? it.w : (it.rot ? config.itemH : config.itemW);
-  const originalItemH = itemShape === 'circle' ? actualW : (it.h !== undefined ? it.h : (it.rot ? config.itemW : config.itemH));
+  // 1. Tự xoay toàn bộ tem (cả outer frame và nội dung) theo ô layout khi solver xoay 90°
+  if (isRotatedItem && !isSpecialShape) {
+    pageRotation += 90;
+  }
 
-  // So sánh tỉ lệ hướng của ảnh gốc (srcRatio) với khung tem gốc (baseRatio)
-  if (isTabAutoRotate && page && page.w && page.h) {
-    const srcRatio = page.w / page.h;
+  // 2. Tự xoay ảnh nguồn khi tỉ lệ ảnh ngược hướng với khung tem cơ bản (1 ngang, 1 đứng)
+  if (isTabAutoRotate && !isSpecialShape && effectiveImg && effectiveImg.w && effectiveImg.h) {
+    const imgRatio = effectiveImg.w / effectiveImg.h;
     const baseW = correspondingTab ? correspondingTab.itemW : config.itemW;
     const baseH = correspondingTab
       ? (correspondingTab.shape === 'circle' ? baseW : correspondingTab.itemH)
       : (itemShape === 'circle' ? baseW : config.itemH);
     const baseRatio = (baseW && baseH) ? baseW / baseH : 1;
 
-    // Nếu ảnh gốc và dáng tem gốc ngược hướng nhau (1 ngang, 1 đứng), tự xoay 90° để khớp dáng tem
-    if ((srcRatio > 1 && baseRatio < 1) || (srcRatio < 1 && baseRatio > 1)) {
+    if ((imgRatio > 1 && baseRatio < 1) || (imgRatio < 1 && baseRatio > 1)) {
       pageRotation += 90;
     }
-  }
-
-  // Nếu ô này trong layout được solver xoay 90° để vừa khổ in:
-  if (isRotatedItem && !isSpecialShape) {
-    pageRotation += 90;
   }
 
   const itemRotation = (isSpecialShape && isRotatedItem) ? 180 : 0;
@@ -169,22 +201,24 @@ export function enrichPlanItemsWithRotation(
   return items.map((it, i) => {
     const sheetIdx = it.sheetIndex ?? 0;
     const isBackSide = config.is2Sided && (sheetIdx % 2 === 1);
-    const pageIdx = getPageForSlot({
-      slotIndex: i,
-      sheetIdx,
-      allPagesLength: allPages.length,
-      itemsPerSheet: items.length,
-      isMultiShape,
-      useTotalLimit: config.useTotalLimit,
-      totalOrder: config.totalOrder,
-      is2Sided: config.is2Sided,
-      twoSideMode: config.twoSideMode,
-      previewSide: isBackSide ? 'back' : 'front',
-      overrideSide: isBackSide ? 'back' : 'front',
-      effectiveDataMode,
-      standardQty,
-      xUpQty
-    });
+    const pageIdx = isMultiShape
+      ? Math.max(0, shapeTabs.findIndex(t => t.id === it.tabId || t.name === it.tabName))
+      : getPageForSlot({
+          slotIndex: i,
+          sheetIdx,
+          allPagesLength: allPages.length,
+          itemsPerSheet: items.length,
+          isMultiShape,
+          useTotalLimit: config.useTotalLimit,
+          totalOrder: config.totalOrder,
+          is2Sided: config.is2Sided,
+          twoSideMode: config.twoSideMode,
+          previewSide: isBackSide ? 'back' : 'front',
+          overrideSide: isBackSide ? 'back' : 'front',
+          effectiveDataMode,
+          standardQty,
+          xUpQty
+        });
 
     const page = pageIdx >= 0 && pageIdx < allPages.length ? allPages[pageIdx] : null;
     const totRot = calculateSlotTotalRotation(it, page, config, isMultiShape, shapeTabs, isBackSide);
@@ -206,6 +240,66 @@ export function enrichPlanItemsWithRotation(
 /**
  * Tính toán danh sách LayoutPlan cho cả chế độ đơn hình và đa hình (Multi-Shape)
  */
+
+/** Dịch chuyển group items theo alignX/alignY trong vùng in (ox, oy, pw, ph) */
+function applyAlignment<T extends { x: number; y: number; w: number; h: number }>(
+  items: T[],
+  ox: number, oy: number, pw: number, ph: number,
+  alignX: string, alignY: string,
+): T[] {
+  if (!items.length) return items;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  items.forEach(it => {
+    minX = Math.min(minX, it.x); minY = Math.min(minY, it.y);
+    maxX = Math.max(maxX, it.x + it.w); maxY = Math.max(maxY, it.y + it.h);
+  });
+  const contentW = maxX - minX;
+  const contentH = maxY - minY;
+  let dx = 0, dy = 0;
+  if (alignX === 'center')      dx = ox + (pw - contentW) / 2 - minX;
+  else if (alignX === 'right')  dx = ox + pw - contentW - minX;
+  else                          dx = ox - minX; // left
+  if (alignY === 'middle')      dy = oy + (ph - contentH) / 2 - minY;
+  else if (alignY === 'bottom') dy = oy + ph - contentH - minY;
+  else                          dy = oy - minY; // top
+  if (dx === 0 && dy === 0) return items;
+  return items.map(it => ({ ...it, x: it.x + dx, y: it.y + dy }));
+}
+
+/**
+ * Per-sheet alignment: center items on each sheet first (matching LayoutSolver.centerItems),
+ * then apply the user-chosen alignment.
+ *
+ * This ensures ALL 9 alignment buttons produce visible movement, not just non-left/non-top ones.
+ * Without this, packMultiSize items start at (0,0) so 'left'/'top' alignment = dx=0 (invisible).
+ */
+function applyAlignmentPerSheet<T extends { x: number; y: number; w: number; h: number; sheetIndex?: number }>(
+  items: T[],
+  ox: number, oy: number, pw: number, ph: number,
+  alignX: string, alignY: string,
+): T[] {
+  if (!items.length) return items;
+
+  // Group by sheetIndex
+  const sheetMap = new Map<number, T[]>();
+  items.forEach(it => {
+    const si = it.sheetIndex ?? 0;
+    if (!sheetMap.has(si)) sheetMap.set(si, []);
+    sheetMap.get(si)!.push(it);
+  });
+
+  const result: T[] = [];
+  sheetMap.forEach(sheetItems => {
+    // Step 1: center items within the print area (matching LayoutSolver.centerItems behaviour)
+    const centered = applyAlignment(sheetItems, ox, oy, pw, ph, 'center', 'middle');
+    // Step 2: apply user alignment from centered state
+    const aligned = applyAlignment(centered, ox, oy, pw, ph, alignX, alignY);
+    result.push(...aligned);
+  });
+  return result;
+}
+
+
 export function calculatePlans(
   config: ImpositionConfig,
   shapeTabs: ShapeTabItem[],
@@ -254,11 +348,8 @@ export function calculatePlans(
     });
 
     const results = packMultiSize(multiItems, pw, ph, config.padding, true, config.autoRotate);
-    return results.map(r => ({
-      name: r.name,
-      qty: r.items.length,
-      priority: 0,
-      items: r.items.map(it => ({
+    return results.map(r => {
+      const rawItems = r.items.map(it => ({
         x: it.x + ox,
         y: it.y + oy,
         w: it.w,
@@ -273,8 +364,11 @@ export function calculatePlans(
         vectorMaskResult: it.vectorMaskResult,
         customSvgData: it.customSvgData,
         color: it.color,
-      })),
-    }));
+      }));
+      // Use per-sheet centering so all 9 alignment buttons produce visible movement
+      const alignedItems = applyAlignmentPerSheet(rawItems, ox, oy, pw, ph, config.alignX ?? 'center', config.alignY ?? 'middle');
+      return { name: r.name, qty: r.items.length, priority: 0, items: alignedItems };
+    });
   }
 
   // Multi-size packing for svg-image / pdf-source
@@ -291,16 +385,12 @@ export function calculatePlans(
     }
     const packItems = allPages.map((p, i) => ({ w: p.w || config.itemW, h: p.h || config.itemH, id: i, canRotate: config.autoRotate }));
     const results = packMultiSize(packItems, pw, ph, config.padding, true, config.autoRotate);
-    return results.map(r => ({
-      name: r.name,
-      qty: r.items.length,
-      priority: 0,
-      items: r.items.map(it => ({
-        x: it.x + ox, y: it.y + oy,
-        w: it.w, h: it.h,
-        rot: it.rot,
-      })),
-    }));
+    return results.map(r => {
+      // Include sheetIndex so applyAlignmentPerSheet can group per sheet
+      const rawItems = r.items.map(it => ({ x: it.x + ox, y: it.y + oy, w: it.w, h: it.h, rot: it.rot, sheetIndex: it.sheetIndex ?? 0 }));
+      const alignedItems = applyAlignmentPerSheet(rawItems, ox, oy, pw, ph, config.alignX ?? 'center', config.alignY ?? 'middle');
+      return { name: r.name, qty: r.items.length, priority: 0, items: alignedItems };
+    });
   }
 
   if (config.itemW <= 0 || config.itemH <= 0) return [];

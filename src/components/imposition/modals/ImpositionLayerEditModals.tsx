@@ -1,15 +1,25 @@
 import React from 'react';
 import { X, Check, AlertTriangle, Save } from 'lucide-react';
-import { ShapeTabItem, LAYER_COLOR_PRESETS, ImpositionHistoryItem } from '../types';
+import { ShapeTabItem, JOB_COLOR_PRESETS, LAYER_COLOR_PRESETS, ImpositionHistoryItem } from '../types';
 
-export interface ImpositionLayerEditModalsProps {
-  editingLayerModalTab: ShapeTabItem | null;
-  setEditingLayerModalTab: (tab: ShapeTabItem | null) => void;
-  layerModalName: string;
-  setLayerModalName: (name: string) => void;
-  layerModalColor: string;
-  setLayerModalColor: (color: string) => void;
-  handleSaveLayerModal: () => void;
+export interface ImpositionJobEditModalsProps {
+  editingJobModalTab?: ShapeTabItem | null;
+  setEditingJobModalTab?: (tab: ShapeTabItem | null) => void;
+  jobModalName?: string;
+  setJobModalName?: (name: string) => void;
+  jobModalColor?: string;
+  setJobModalColor?: (color: string) => void;
+  handleSaveJobModal?: () => void;
+
+  // Legacy aliases
+  editingLayerModalTab?: ShapeTabItem | null;
+  setEditingLayerModalTab?: (tab: ShapeTabItem | null) => void;
+  layerModalName?: string;
+  setLayerModalName?: (name: string) => void;
+  layerModalColor?: string;
+  setLayerModalColor?: (color: string) => void;
+  handleSaveLayerModal?: () => void;
+
   isScaleModalOpen: boolean;
   setIsScaleModalOpen: (open: boolean) => void;
   customScale: number;
@@ -24,7 +34,16 @@ export interface ImpositionLayerEditModalsProps {
   saveToFileManager: (silent?: boolean) => Promise<boolean>;
 }
 
-export const ImpositionLayerEditModals: React.FC<ImpositionLayerEditModalsProps> = ({
+export type ImpositionLayerEditModalsProps = ImpositionJobEditModalsProps;
+
+export const ImpositionJobEditModals: React.FC<ImpositionJobEditModalsProps> = ({
+  editingJobModalTab,
+  setEditingJobModalTab,
+  jobModalName,
+  setJobModalName,
+  jobModalColor,
+  setJobModalColor,
+  handleSaveJobModal,
   editingLayerModalTab,
   setEditingLayerModalTab,
   layerModalName,
@@ -45,13 +64,21 @@ export const ImpositionLayerEditModals: React.FC<ImpositionLayerEditModalsProps>
   applyHistoryItem,
   saveToFileManager
 }) => {
+  const activeJobTab = editingJobModalTab !== undefined ? editingJobModalTab : editingLayerModalTab;
+  const setActiveJobTab = setEditingJobModalTab || setEditingLayerModalTab || (() => {});
+  const activeJobName = jobModalName !== undefined ? jobModalName : (layerModalName || '');
+  const setActiveJobName = setJobModalName || setLayerModalName || (() => {});
+  const activeJobColor = jobModalColor !== undefined ? jobModalColor : (layerModalColor || '#8b5cf6');
+  const setActiveJobColor = setJobModalColor || setLayerModalColor || (() => {});
+  const onSaveJobModal = handleSaveJobModal || handleSaveLayerModal || (() => {});
+
   return (
     <>
-      {/* Edit Layer Modal Toast (Tên & Màu sắc của Layer) */}
-      {editingLayerModalTab && (
+      {/* Edit Job Modal Toast (Tên & Màu sắc của Job) */}
+      {activeJobTab && (
         <div 
           className="fixed inset-0 bg-black/40 backdrop-blur-xs z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-150 select-none"
-          onClick={() => setEditingLayerModalTab(null)}
+          onClick={() => setActiveJobTab(null)}
         >
           <div 
             className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 w-full max-w-[340px] animate-in zoom-in-95 duration-150 flex flex-col gap-3.5"
@@ -62,38 +89,38 @@ export const ImpositionLayerEditModals: React.FC<ImpositionLayerEditModalsProps>
               <div className="flex items-center gap-2">
                 <div 
                   className="w-6 h-6 rounded-lg flex items-center justify-center text-white shadow-2xs font-bold text-xs"
-                  style={{ backgroundColor: layerModalColor }}
+                  style={{ backgroundColor: activeJobColor }}
                 >
-                  {layerModalName.slice(0, 1).toUpperCase() || 'L'}
+                  {activeJobName.slice(0, 1).toUpperCase() || 'J'}
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-slate-800">Thuộc tính Layer</h4>
+                  <h4 className="text-xs font-bold text-slate-800">Thuộc tính Job</h4>
                   <span className="text-[10px] text-slate-400">Đổi tên & màu nhận diện</span>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setEditingLayerModalTab(null)}
+                onClick={() => setActiveJobTab(null)}
                 className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
               >
                 <X size={15} />
               </button>
             </div>
 
-            {/* Input: Tên Layer */}
+            {/* Input: Tên Job */}
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-semibold text-slate-600 flex items-center justify-between">
-                <span>Tên Layer</span>
+                <span>Tên Job</span>
                 <span className="text-[9px] text-slate-400 font-normal">Tối đa 20 ký tự</span>
               </label>
               <div className="relative">
                 <input
                   type="text"
-                  value={layerModalName}
-                  onChange={(e) => setLayerModalName(e.target.value.slice(0, 20))}
+                  value={activeJobName}
+                  onChange={(e) => setActiveJobName(e.target.value.slice(0, 20))}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSaveLayerModal();
-                    if (e.key === 'Escape') setEditingLayerModalTab(null);
+                    if (e.key === 'Enter') onSaveJobModal();
+                    if (e.key === 'Escape') setActiveJobTab(null);
                   }}
                   autoFocus
                   placeholder="Ví dụ: A, Tem tròn, Nhãn chai..."
@@ -106,16 +133,16 @@ export const ImpositionLayerEditModals: React.FC<ImpositionLayerEditModalsProps>
             <div className="flex flex-col gap-1.5">
               <label className="text-[11px] font-semibold text-slate-600 flex items-center justify-between">
                 <span>Màu đại diện</span>
-                <span className="text-[10px] font-mono text-slate-500 font-medium uppercase">{layerModalColor}</span>
+                <span className="text-[10px] font-mono text-slate-500 font-medium uppercase">{activeJobColor}</span>
               </label>
               <div className="grid grid-cols-6 gap-2">
-                {LAYER_COLOR_PRESETS.map((col) => {
-                  const isSelected = layerModalColor.toLowerCase() === col.toLowerCase();
+                {JOB_COLOR_PRESETS.map((col) => {
+                  const isSelected = activeJobColor.toLowerCase() === col.toLowerCase();
                   return (
                     <button
                       key={col}
                       type="button"
-                      onClick={() => setLayerModalColor(col)}
+                      onClick={() => setActiveJobColor(col)}
                       className={`w-9 h-8 rounded-xl transition-all cursor-pointer flex items-center justify-center relative shadow-2xs hover:scale-105 active:scale-95 ${
                         isSelected ? 'ring-2 ring-offset-2 ring-slate-800 shadow-sm scale-105' : 'hover:opacity-90'
                       }`}
@@ -134,14 +161,14 @@ export const ImpositionLayerEditModals: React.FC<ImpositionLayerEditModalsProps>
                 <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2 py-1 flex-1">
                   <input
                     type="color"
-                    value={layerModalColor}
-                    onChange={(e) => setLayerModalColor(e.target.value)}
+                    value={activeJobColor}
+                    onChange={(e) => setActiveJobColor(e.target.value)}
                     className="w-5 h-5 rounded-md border-0 p-0 cursor-pointer bg-transparent"
                   />
                   <input
                     type="text"
-                    value={layerModalColor}
-                    onChange={(e) => setLayerModalColor(e.target.value)}
+                    value={activeJobColor}
+                    onChange={(e) => setActiveJobColor(e.target.value)}
                     className="w-full bg-transparent text-[11px] font-mono font-medium text-slate-700 uppercase focus:outline-none"
                     placeholder="#000000"
                   />
@@ -153,16 +180,16 @@ export const ImpositionLayerEditModals: React.FC<ImpositionLayerEditModalsProps>
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => setEditingLayerModalTab(null)}
+                onClick={() => setActiveJobTab(null)}
                 className="px-3 py-1.5 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-100 transition cursor-pointer"
               >
                 Huỷ
               </button>
               <button
                 type="button"
-                onClick={handleSaveLayerModal}
+                onClick={onSaveJobModal}
                 className="px-4 py-1.5 rounded-xl text-xs font-bold text-white shadow-sm hover:shadow transition cursor-pointer"
-                style={{ backgroundColor: layerModalColor || '#8b5cf6' }}
+                style={{ backgroundColor: activeJobColor || '#8b5cf6' }}
               >
                 Lưu thay đổi
               </button>
@@ -353,7 +380,7 @@ export const ImpositionLayerEditModals: React.FC<ImpositionLayerEditModalsProps>
                   Dự án hiện tại chưa được lưu!
                 </h3>
                 <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                  Bản bình trang hiện tại có các thay đổi chưa được lưu. Nếu bạn nạp lịch sử <strong className="text-slate-800 font-semibold">"{pendingHistoryToLoad.title}"</strong>, toàn bộ thông số và layer hiện tại trên canvas sẽ bị thay thế.
+                  Bản bình trang hiện tại có các thay đổi chưa được lưu. Nếu bạn nạp lịch sử <strong className="text-slate-800 font-semibold">"{pendingHistoryToLoad.title}"</strong>, toàn bộ thông số và job hiện tại trên canvas sẽ bị thay thế.
                 </p>
               </div>
             </div>
@@ -404,3 +431,5 @@ export const ImpositionLayerEditModals: React.FC<ImpositionLayerEditModalsProps>
     </>
   );
 };
+
+export const ImpositionLayerEditModals = ImpositionJobEditModals;

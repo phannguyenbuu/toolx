@@ -184,5 +184,107 @@ for space, profs in icc_profiles.items():
     for p in profs:
         print(f"  ✓ {p}")
 `
+  },
+
+  // --- NHÓM 9: LIÊN KẾT CORELDRAW & VECTOR (COREL CLIPBOARD SERVICE) ---
+  {
+    command: 'corel_paste_svg',
+    label: 'Chép Dieline SVG sang CorelDRAW (Ctrl+V)',
+    category: '🎨 CorelDRAW & Vector',
+    language: 'python',
+    is_visible: true,
+    description: 'Nạp file SVG khuôn bế vào Windows Clipboard chuẩn CF_HDROP để dán trực tiếp Ctrl+V vào CorelDRAW không cần cài macro VBA',
+    command_content: `import os
+import sys
+import tempfile
+import ctypes
+import json
+import base64
+from ctypes import wintypes
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
+svg_b64 = "__SVG_BASE64__"
+if not svg_b64 or svg_b64.startswith("__"):
+    svg_data = '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="red"/></svg>'
+else:
+    svg_data = base64.b64decode(svg_b64.encode('utf-8')).decode('utf-8')
+
+temp_dir = tempfile.gettempdir()
+svg_path = os.path.join(temp_dir, 'toolx_dieline.svg')
+with open(svg_path, 'w', encoding='utf-8') as f:
+    f.write(svg_data)
+
+abs_path = os.path.abspath(svg_path)
+
+# 1. Thử nạp trực tiếp qua CorelDRAW COM nếu Corel đang mở
+corel_imported = False
+try:
+    import win32com.client
+    app = win32com.client.GetActiveObject("CorelDRAW.Application")
+    if app and app.ActiveDocument:
+        app.ActiveDocument.ActiveLayer.Import(abs_path)
+        corel_imported = True
+except Exception:
+    pass
+
+# 2. Luôn ghi file vào Windows Clipboard định dạng CF_HDROP (Ctrl+V native)
+kernel32 = ctypes.windll.kernel32
+user32 = ctypes.windll.user32
+
+kernel32.GlobalAlloc.restype = wintypes.HGLOBAL
+kernel32.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
+kernel32.GlobalLock.restype = wintypes.LPVOID
+kernel32.GlobalLock.argtypes = [wintypes.HGLOBAL]
+kernel32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+user32.OpenClipboard.argtypes = [wintypes.HWND]
+user32.SetClipboardData.restype = wintypes.HANDLE
+user32.SetClipboardData.argtypes = [wintypes.UINT, wintypes.HANDLE]
+
+class DROPFILES(ctypes.Structure):
+    _fields_ = [
+        ('pFiles', wintypes.DWORD),
+        ('pt', wintypes.POINT),
+        ('fNC', wintypes.BOOL),
+        ('fWide', wintypes.BOOL),
+    ]
+
+files_bytes = (abs_path + '\\0\\0').encode('utf-16le')
+df = DROPFILES()
+df.pFiles = ctypes.sizeof(DROPFILES)
+df.pt = wintypes.POINT(0, 0)
+df.fNC = False
+df.fWide = True
+
+buf = bytes(df) + files_bytes
+GHND = 0x0042
+hGlobal = kernel32.GlobalAlloc(GHND, len(buf))
+pGlobal = kernel32.GlobalLock(hGlobal)
+ctypes.memmove(pGlobal, buf, len(buf))
+kernel32.GlobalUnlock(hGlobal)
+
+user32.OpenClipboard(None)
+user32.EmptyClipboard()
+CF_HDROP = 15
+res = user32.SetClipboardData(CF_HDROP, hGlobal)
+user32.CloseClipboard()
+
+msg = 'Đã tự động nạp thẳng vào CorelDRAW đang mở!' if corel_imported else 'Đã chép dieline SVG vào Clipboard! Sang CorelDRAW chỉ cần nhấn Ctrl + V là xong.'
+print(f'• File SVG tạm: {abs_path}')
+print(f'• Trạng thái Clipboard CF_HDROP: {bool(res)}')
+if corel_imported:
+    print('• Tự động nạp qua CorelDRAW COM: Thành công')
+print(msg)
+
+print("__GOAGENT_RESULT__" + json.dumps({
+    "ok": bool(res) or corel_imported,
+    "res": bool(res),
+    "corel_imported": corel_imported,
+    "path": abs_path,
+    "message": msg
+}))
+`
   }
 ];
+

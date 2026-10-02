@@ -218,8 +218,8 @@ export const ImpositionRenderModal: React.FC<ImpositionRenderModalProps> = ({
               </div>
               <div className="w-px h-6 bg-slate-200" />
               <div>
-                <span className="text-slate-400 block text-[10px] uppercase font-bold">Mẫu / Layer</span>
-                <span className="font-semibold text-slate-800">{shapeTabs.length} Layer ({currentPlan?.items?.length || 0} con/trang)</span>
+                <span className="text-slate-400 block text-[10px] uppercase font-bold">Mẫu / Job</span>
+                <span className="font-semibold text-slate-800">{shapeTabs.length} Job ({currentPlan?.items?.length || 0} con/trang)</span>
               </div>
               <div className="w-px h-6 bg-slate-200" />
               <div>

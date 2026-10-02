@@ -17,6 +17,7 @@ export interface SortJobModalData {
     name: string;
     items?: any[];
   };
+  jobs?: any[];
   layers?: any[];
   summary?: {
     vps_endpoint?: string;
@@ -37,10 +38,12 @@ export const ImpositionSortJobModal: React.FC<ImpositionSortJobModalProps> = ({
   handleCopyJobId,
   copiedJobId
 }) => {
-  const [sortJobTab, setSortJobTab] = useState<'overview' | 'layers' | 'json'>('overview');
+  const [sortJobTab, setSortJobTab] = useState<'overview' | 'jobs' | 'layers' | 'json'>('overview');
   const [copiedJson, setCopiedJson] = useState(false);
 
   if (!sortJobModalData) return null;
+
+  const jobsList = sortJobModalData.jobs || sortJobModalData.layers || [];
 
   const handleCopyJobJson = (data: any) => {
     navigator.clipboard.writeText(JSON.stringify(data, null, 2));
@@ -121,8 +124,8 @@ export const ImpositionSortJobModal: React.FC<ImpositionSortJobModalProps> = ({
             <span className="font-bold text-violet-700">{sortJobModalData.selected_plan?.quantity} tem</span>
           </div>
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5">
-            <span className="text-slate-400 block text-[10px] uppercase font-bold">Số Layer</span>
-            <span className="font-bold text-slate-800">{sortJobModalData.layers?.length || 0} Layer</span>
+            <span className="text-slate-400 block text-[10px] uppercase font-bold">Số Job</span>
+            <span className="font-bold text-slate-800">{jobsList.length} Job</span>
           </div>
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5">
             <span className="text-slate-400 block text-[10px] uppercase font-bold">Phương án</span>
@@ -147,14 +150,14 @@ export const ImpositionSortJobModal: React.FC<ImpositionSortJobModalProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => setSortJobTab('layers')}
+            onClick={() => setSortJobTab('jobs')}
             className={`px-3 py-1.5 rounded-lg font-semibold transition cursor-pointer ${
-              sortJobTab === 'layers'
+              sortJobTab === 'jobs' || sortJobTab === 'layers'
                 ? 'bg-violet-100 text-violet-800'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
-            Chi tiết Layers ({sortJobModalData.layers?.length || 0})
+            Chi tiết Jobs ({jobsList.length})
           </button>
           <button
             type="button"
@@ -180,7 +183,7 @@ export const ImpositionSortJobModal: React.FC<ImpositionSortJobModalProps> = ({
                     SortJob đã được khởi tạo và đồng bộ lên cụm Job Engine (157.66.80.125)
                   </p>
                   <p className="text-[11px] text-slate-600 mt-0.5">
-                    Mã ID <strong className="font-mono text-indigo-700">{sortJobModalData.id}</strong> chứa đầy đủ vector, tọa độ xếp, và thông số mọi layer. Bạn chỉ cần gửi mã ID này để kiểm tra hoặc tái hiện lại tác vụ sắp xếp.
+                    Mã ID <strong className="font-mono text-indigo-700">{sortJobModalData.id}</strong> chứa đầy đủ vector, tọa độ xếp, và thông số mọi job. Bạn chỉ cần gửi mã ID này để kiểm tra hoặc tái hiện lại tác vụ sắp xếp.
                   </p>
                 </div>
               </div>
@@ -197,7 +200,7 @@ export const ImpositionSortJobModal: React.FC<ImpositionSortJobModalProps> = ({
                         <span className="w-5 h-5 rounded bg-slate-100 text-slate-600 font-mono text-[10px] flex items-center justify-center font-bold">
                           #{it.index}
                         </span>
-                        <span className="font-semibold text-slate-900">{it.layer_name || `Layer ${idx + 1}`}</span>
+                        <span className="font-semibold text-slate-900">{it.job_name || it.layer_name || `Job ${idx + 1}`}</span>
                         <span className="text-slate-400 text-[10px]">({it.shape})</span>
                       </div>
                       <div className="flex items-center gap-3 font-mono text-[11px] text-slate-600">
@@ -213,29 +216,29 @@ export const ImpositionSortJobModal: React.FC<ImpositionSortJobModalProps> = ({
             </div>
           )}
 
-          {sortJobTab === 'layers' && (
+          {(sortJobTab === 'jobs' || sortJobTab === 'layers') && (
             <div className="space-y-2">
-              {sortJobModalData.layers?.map((layer: any, idx: number) => (
+              {jobsList.map((job: any, idx: number) => (
                 <div key={idx} className="p-3 border border-slate-200 rounded-2xl bg-white flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <div
                       className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-xs flex-shrink-0 shadow-2xs"
-                      style={{ backgroundColor: layer.color || '#8b5cf6' }}
+                      style={{ backgroundColor: job.color || '#8b5cf6' }}
                     >
-                      {layer.name?.[0]?.toUpperCase() || `L${idx + 1}`}
+                      {job.name?.[0]?.toUpperCase() || `J${idx + 1}`}
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-800 text-xs truncate">{layer.name}</span>
+                        <span className="font-bold text-slate-800 text-xs truncate">{job.name}</span>
                         <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-mono">
-                          {layer.shape}
+                          {job.shape}
                         </span>
                       </div>
                       <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
-                        <span>Khổ tem: <strong>{layer.width_mm}×{layer.height_mm}mm</strong></span>
+                        <span>Khổ tem: <strong>{job.width_mm}×{job.height_mm}mm</strong></span>
                         <span>&bull;</span>
-                        <span>Số lượng: <strong className="text-violet-700">{layer.quantity}</strong></span>
-                        {layer.has_vector_mask && (
+                        <span>Số lượng: <strong className="text-violet-700">{job.quantity}</strong></span>
+                        {job.has_vector_mask && (
                           <span className="px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 font-semibold text-[9px] border border-emerald-200">
                             Vector Mask
                           </span>
@@ -243,11 +246,11 @@ export const ImpositionSortJobModal: React.FC<ImpositionSortJobModalProps> = ({
                       </div>
                     </div>
                   </div>
-                  {layer.source_file && (
+                  {job.source_file && (
                     <div className="text-right text-[11px] text-slate-500 truncate max-w-[180px]">
                       <span className="text-slate-400 block text-[9px]">File nguồn</span>
-                      <span className="font-medium text-slate-700 truncate block" title={layer.source_file.name}>
-                        {layer.source_file.name}
+                      <span className="font-medium text-slate-700 truncate block" title={job.source_file.name}>
+                        {job.source_file.name}
                       </span>
                     </div>
                   )}

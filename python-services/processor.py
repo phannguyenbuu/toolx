@@ -49,6 +49,56 @@ def register_unicode_font():
         print(f"Warning: Could not register Unicode font: {e}")
         return "Helvetica"
 
+def draw_cmyk_color_bar(c, page_w: float, page_h: float, position: str = 'bottom', padding: float = 3.0):
+    """Vẽ dải màu CMYK nguyên bản ToolX (10 ô màu: CMYK, RGB, 2 mức xám, trắng)"""
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+
+    cmyk_colors = [
+        colors.HexColor('#00FFFF'),
+        colors.HexColor('#FF00FF'),
+        colors.HexColor('#FFFF00'),
+        colors.HexColor('#000000'),
+        colors.HexColor('#FF0000'),
+        colors.HexColor('#00FF00'),
+        colors.HexColor('#0000FF'),
+        colors.HexColor('#777777'),
+        colors.HexColor('#BBBBBB'),
+        colors.HexColor('#FFFFFF'),
+    ]
+
+    positions = ['top', 'bottom', 'left', 'right'] if position == 'all' else [position]
+    thick = 3.0 * mm
+
+    for pos in positions:
+        c.saveState()
+        c.setStrokeColor(colors.HexColor('#999999'))
+        c.setLineWidth(0.15)
+        is_h = pos in ('top', 'bottom')
+        bar_len = (page_w * 0.6 if is_h else page_h * 0.6) * mm
+        seg_w = bar_len / len(cmyk_colors)
+
+        if pos == 'bottom':
+            sx = (page_w * mm - bar_len) / 2
+            sy = padding * mm
+        elif pos == 'top':
+            sx = (page_w * mm - bar_len) / 2
+            sy = (page_h - padding) * mm - thick
+        elif pos == 'left':
+            sx = padding * mm
+            sy = (page_h * mm - bar_len) / 2
+        else: # 'right'
+            sx = (page_w - padding) * mm - thick
+            sy = (page_h * mm - bar_len) / 2
+
+        for i, col in enumerate(cmyk_colors):
+            c.setFillColor(col)
+            if is_h:
+                c.rect(sx + i * seg_w, sy, seg_w, thick, fill=1, stroke=1)
+            else:
+                c.rect(sx, sy + i * seg_w, thick, seg_w, fill=1, stroke=1)
+        c.restoreState()
+
 def sanitize_pdf_indexed_colorspaces(doc: fitz.Document) -> int:
     """
     Khắc phục triệt để lỗi MuPDF khi giải mã Indexed ColorSpace có base là Indirect Reference
@@ -858,7 +908,10 @@ def generate_pdf_vector(
     dpi: int = 300,
     color_mode: str = 'original',
     custom_scale: float = 100.0,
-    background_color: str = '#ffffff'
+    background_color: str = '#ffffff',
+    use_color_bar: bool = False,
+    color_bar_position: str = 'bottom',
+    color_bar_padding: float = 3.0
 ) -> bytes:
     """
     Generate PDF in vector mode using ReportLab with native PDF Clipping Path.
@@ -1251,6 +1304,10 @@ def generate_pdf_vector(
         ty = page_h * mm - 3 * mm  # 3mm from top
         c.drawString(tx, ty, info_text)
     
+    # Draw CMYK Color Bar
+    if use_color_bar:
+        draw_cmyk_color_bar(c, page_w, page_h, color_bar_position, color_bar_padding)
+
     # End first page
     c.showPage()
     
@@ -1375,6 +1432,10 @@ def generate_pdf_vector(
             c.line(page_w_pt - pcd_pt - pcl_pt, pcd_pt, page_w_pt - pcd_pt, pcd_pt)
             c.line(page_w_pt - pcd_pt, pcd_pt, page_w_pt - pcd_pt, pcd_pt + pcl_pt)
         
+        # Draw CMYK Color Bar on back
+        if use_color_bar:
+            draw_cmyk_color_bar(c, page_w, page_h, color_bar_position, color_bar_padding)
+
         c.showPage()
     
     # Finalize PDF
@@ -1417,7 +1478,10 @@ def generate_pdf(
     rot_180_back: bool = False,
     data_mode: int = 1,
     x_up_qty: int = 1,
-    standard_qty: int = 1
+    standard_qty: int = 1,
+    use_color_bar: bool = False,
+    color_bar_position: str = 'bottom',
+    color_bar_padding: float = 3.0
 ) -> bytes:
     """
     Generate PDF from source image with layout
@@ -1459,7 +1523,10 @@ def generate_pdf(
                 dpi=dpi,
                 color_mode=color_mode,
                 custom_scale=custom_scale,
-                background_color=background_color
+                background_color=background_color,
+                use_color_bar=use_color_bar,
+                color_bar_position=color_bar_position,
+                color_bar_padding=color_bar_padding
             )
         except Exception as e:
             print(f"Vector mode failed, falling back to raster: {e}")
@@ -1832,7 +1899,10 @@ def generate_pdf_multipage(
     x_up_qty: int = 1,
     standard_qty: int = 1,
     total_sheets: int = 1,
-    target_sheet_index: int = None
+    target_sheet_index: int = None,
+    use_color_bar: bool = False,
+    color_bar_position: str = 'bottom',
+    color_bar_padding: float = 3.0
 ) -> bytes:
     """
     Generate multi-page PDF from multiple source images with layout.
@@ -2062,19 +2132,24 @@ def generate_pdf_multipage(
             if item.get('sheetIndex') is not None and item.get('sheetIndex') != sheet_idx:
                 continue
 
-            page_idx = get_page_for_slot(sheet_idx, slot_idx)
+            if item.get('pageIndex') is not None and 0 <= item.get('pageIndex') < len(processed_images):
+                page_idx = item.get('pageIndex')
+            else:
+                page_idx = get_page_for_slot(sheet_idx, slot_idx)
+
             if page_idx < 0 or page_idx >= len(processed_images):
                 continue
             
             img_reader = processed_images[page_idx]
+            item_shape = item.get('shape') or shape
             
             # Calculate dimensions
-            eff_item_h = item_w if shape == 'circle' else item_h
+            eff_item_h = item_w if item_shape == 'circle' else item_h
             if is_flip_shape:
                 w_mm = item_w
                 h_mm = eff_item_h
                 is_rotated = item.get('rot', False)
-            elif shape == 'circle':
+            elif item_shape == 'circle':
                 w_mm = item_w
                 h_mm = item_w
                 is_rotated = False
@@ -2091,7 +2166,7 @@ def generate_pdf_multipage(
                 w_mm = float(item['w'])
             if 'h' in item and item['h'] is not None:
                 h_mm = float(item['h'])
-            if shape == 'circle':
+            if item_shape == 'circle':
                 h_mm = w_mm
             
             w_pt = w_mm * mm
@@ -2103,10 +2178,10 @@ def generate_pdf_multipage(
             
             # Create clipping path
             path = c.beginPath()
-            if shape in ('circle', 'oval'):
+            if item_shape in ('circle', 'oval'):
                 path.ellipse(x_pt, y_pt, x_pt + w_pt, y_pt + h_pt)
             else:
-                points = get_clip_points(shape, x_pt, y_pt, w_pt, h_pt, is_rotated if is_flip_shape else False)
+                points = get_clip_points(item_shape, x_pt, y_pt, w_pt, h_pt, is_rotated if is_flip_shape else False)
                 if points:
                     path.moveTo(points[0][0], points[0][1])
                     for px, py in points[1:]:
@@ -2183,8 +2258,8 @@ def generate_pdf_multipage(
                 cy = y_pt + h_pt / 2
                 c.translate(cx, cy)
                 c.rotate(-90)
-                orig_w_pt = item_w * mm
-                orig_h_pt = item_h * mm
+                orig_w_pt = (float(item['h']) * mm) if ('h' in item and item['h'] is not None) else (item_w * mm)
+                orig_h_pt = (float(item['w']) * mm) if ('w' in item and item['w'] is not None) else (item_h * mm)
                 c.drawImage(img_reader, -orig_w_pt/2, -orig_h_pt/2, width=orig_w_pt, height=orig_h_pt, mask='auto')
                 c.restoreState()
             else:
@@ -2263,6 +2338,10 @@ def generate_pdf_multipage(
             ty = page_h * mm - 3 * mm
             c.drawString(tx, ty, info_text)
         
+        # Draw CMYK color bar
+        if use_color_bar:
+            draw_cmyk_color_bar(c, page_w, page_h, color_bar_position, color_bar_padding)
+
         c.showPage()
         
         # Generate back page for 2-sided printing
@@ -2328,8 +2407,8 @@ def generate_pdf_multipage(
                     cy = y_pt + h_pt / 2
                     c.translate(cx, cy)
                     c.rotate(-90)
-                    orig_w_pt = item_w * mm
-                    orig_h_pt = item_h * mm
+                    orig_w_pt = (float(item['h']) * mm) if ('h' in item and item['h'] is not None) else (item_w * mm)
+                    orig_h_pt = (float(item['w']) * mm) if ('w' in item and item['w'] is not None) else (item_h * mm)
                     c.drawImage(img_reader, -orig_w_pt/2, -orig_h_pt/2, width=orig_w_pt, height=orig_h_pt, mask='auto')
                     c.restoreState()
                 else:
@@ -2340,6 +2419,23 @@ def generate_pdf_multipage(
             if rot_180_back:
                 c.restoreState()
             
+            # Draw page crop marks on back
+            if use_page_crop:
+                c.setStrokeColorRGB(pr, pg, pb)
+                c.setLineWidth(page_crop_thick * mm)
+                c.line(pcd_pt, page_h_pt - pcd_pt, pcd_pt + pcl_pt, page_h_pt - pcd_pt)
+                c.line(pcd_pt, page_h_pt - pcd_pt, pcd_pt, page_h_pt - pcd_pt - pcl_pt)
+                c.line(page_w_pt - pcd_pt - pcl_pt, page_h_pt - pcd_pt, page_w_pt - pcd_pt, page_h_pt - pcd_pt)
+                c.line(page_w_pt - pcd_pt, page_h_pt - pcd_pt, page_w_pt - pcd_pt, page_h_pt - pcd_pt - pcl_pt)
+                c.line(pcd_pt, pcd_pt, pcd_pt + pcl_pt, pcd_pt)
+                c.line(pcd_pt, pcd_pt, pcd_pt, pcd_pt + pcl_pt)
+                c.line(page_w_pt - pcd_pt - pcl_pt, pcd_pt, page_w_pt - pcd_pt, pcd_pt)
+                c.line(page_w_pt - pcd_pt, pcd_pt, page_w_pt - pcd_pt, pcd_pt + pcl_pt)
+            
+            # Draw CMYK color bar on back
+            if use_color_bar:
+                draw_cmyk_color_bar(c, page_w, page_h, color_bar_position, color_bar_padding)
+
             c.showPage()
     
     c.save()

@@ -80,59 +80,72 @@ export function useImpositionActions(params: UseImpositionActionsParams) {
   const [skipThumbnails, setSkipThumbnails] = useState(false);
 
   const handleSourceImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
     try {
-      if (isPdfFile(file)) {
-        const pages = await extractPdfPages(file);
-        if (pages.length > 0) {
-          const first = pages[0];
-          const pageItem: PageItem = {
-            fileIndex: 0,
-            pageIndex: first.pageIndex,
-            thumb: first.thumbUrl,
-            originalThumb: first.dataUrl,
-            baseThumb: first.thumbUrl,
-            name: first.name,
-            w: first.widthMm || config.itemW,
-            h: first.heightMm || config.itemH,
-            rotation: 0
-          };
-          const finalW = first.widthMm || config.itemW;
-          const finalH = first.heightMm || config.itemH;
-          updateActiveTabProp({ sourceImage: pageItem, itemW: finalW, itemH: finalH });
-          setConfig(c => ({ ...c, itemW: finalW, itemH: finalH }));
-          setAllPages(prev => (prev.length === 0 ? [pageItem] : prev));
-          safeToastSuccess(`Đã nạp trang PDF: ${file.name}`);
-          setIsSourceEditorOpen(true);
-        }
-      } else {
-        const url = URL.createObjectURL(file);
-        const img = new Image();
-        img.onload = async () => {
-          const dims = await calculateStandardImageDimensionsMm(img.naturalWidth, img.naturalHeight, file);
+      const newPages: PageItem[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (isPdfFile(file)) {
+          const pages = await extractPdfPages(file);
+          pages.forEach((page, pIdx) => {
+            newPages.push({
+              id: `pdf-${Date.now()}-${i}-${pIdx}`,
+              file,
+              fileIndex: i,
+              pageIndex: page.pageIndex,
+              thumb: page.thumbUrl,
+              originalThumb: page.dataUrl,
+              baseThumb: page.dataUrl,
+              name: page.name,
+              w: page.widthMm || config.itemW,
+              h: page.heightMm || config.itemH,
+              rotation: 0
+            });
+          });
+        } else {
+          const url = URL.createObjectURL(file);
           const thumb = await createClientThumbnail(file, 320);
-          const pageItem: PageItem = {
-            id: `img-${Date.now()}`,
+          const dims = await new Promise<{ w: number; h: number }>((resolve) => {
+            const img = new Image();
+            img.onload = async () => {
+              const d = await calculateStandardImageDimensionsMm(img.naturalWidth, img.naturalHeight, file);
+              resolve(d);
+            };
+            img.onerror = () => resolve({ w: config.itemW, h: config.itemH });
+            img.src = url;
+          });
+          newPages.push({
+            id: `img-${Date.now()}-${i}`,
             name: file.name,
+            file,
             url,
             thumb: thumb || url,
-            originalThumb: thumb || url,
-            baseThumb: thumb || url,
+            originalThumb: url,
+            baseThumb: url,
             w: dims.w,
             h: dims.h,
             rotation: 0
-          };
-          updateActiveTabProp({ sourceImage: pageItem, itemW: dims.w, itemH: dims.h });
-          setConfig(c => ({ ...c, itemW: dims.w, itemH: dims.h }));
-          setAllPages(prev => (prev.length === 0 ? [pageItem] : prev));
-          safeToastSuccess(`Đã tải ảnh: ${file.name} (${dims.w}x${dims.h}mm)`);
-          setIsSourceEditorOpen(true);
-        };
-        img.src = url;
+          });
+        }
+      }
+
+      if (newPages.length > 0) {
+        if (!activeTab?.sourceImage) {
+          updateActiveTabProp({
+            sourceImage: newPages[0],
+            itemW: newPages[0].w || config.itemW,
+            itemH: newPages[0].h || config.itemH
+          });
+          setConfig(c => ({ ...c, itemW: newPages[0].w || c.itemW, itemH: newPages[0].h || c.itemH }));
+        }
+        setAllPages(prev => [...prev, ...newPages]);
+        safeToastSuccess(`Đã thêm ${newPages.length} ảnh nguồn vào job`);
       }
     } catch (err: any) {
       safeToastError(`Lỗi nạp file: ${err.message}`);
+    } finally {
+      e.target.value = '';
     }
   };
 
@@ -148,11 +161,12 @@ export function useImpositionActions(params: UseImpositionActionsParams) {
           const p = await extractPdfPages(f);
           const pdfItems: PageItem[] = p.map((page, pIdx) => ({
             id: `pdf-${Date.now()}-${i}-${pIdx}`,
+            file: f,
             fileIndex: i,
             pageIndex: page.pageIndex,
             thumb: page.thumbUrl,
             originalThumb: page.dataUrl,
-            baseThumb: page.thumbUrl,
+            baseThumb: page.dataUrl,
             name: page.name,
             w: page.widthMm,
             h: page.heightMm,
@@ -161,8 +175,19 @@ export function useImpositionActions(params: UseImpositionActionsParams) {
           loadedPages.push(...pdfItems);
         } else {
           const url = URL.createObjectURL(f);
-          const thumb = skipThumbnails ? url : await createClientThumbnail(f, 300);
-          loadedPages.push({ id: `page-${Date.now()}-${i}`, name: f.name, url, thumb, w: config.itemW, h: config.itemH, rotation: 0 });
+          const thumb = skipThumbnails ? url : await createClientThumbnail(f, 320);
+          loadedPages.push({
+            id: `page-${Date.now()}-${i}`,
+            file: f,
+            name: f.name,
+            url,
+            thumb: thumb || url,
+            originalThumb: url,
+            baseThumb: url,
+            w: config.itemW,
+            h: config.itemH,
+            rotation: 0
+          });
         }
       } catch (err) {
         console.error(err);
@@ -199,7 +224,7 @@ export function useImpositionActions(params: UseImpositionActionsParams) {
     try {
       if (selectedRenderEngine === 'goagent' && goAgentInfo?.detected) {
         await exportGoAgentPdf({
-          config, currentPlan, allPages, shapeTabs, isMultiShape,
+          config, currentPlan, allPages, shapeTabs, activeTab, isMultiShape,
           totalSheets, effectiveDataMode: dataMode, standardQty, xUpQty,
           selectedPresetId, apiStatus, goAgentPort: GOAGENT_DEFAULT_PORT,
           onProgress: (p) => {
@@ -214,7 +239,7 @@ export function useImpositionActions(params: UseImpositionActionsParams) {
         });
       } else {
         await exportLocalPdf({
-          config, currentPlan, allPages, shapeTabs, isMultiShape,
+          config, currentPlan, allPages, shapeTabs, activeTab, isMultiShape,
           totalSheets, effectiveDataMode: dataMode, standardQty, xUpQty,
           customSvgData, vectorMaskResult, backgroundColor, apiStatus,
           onProgress: (p) => {

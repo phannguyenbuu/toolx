@@ -72,15 +72,18 @@ export const ImpositionCanvasSlotItem: React.FC<ImpositionCanvasSlotItemProps> =
 
   const pageIdx = getPageForSlot(i, sIdx);
   const page = pageIdx >= 0 ? allPages[pageIdx] : null;
-  const correspondingTab = isMultiShape ? shapeTabs.find(t => t.id === it.tabId || t.name === it.tabName) : null;
-  const previewSrc = (it.sourceImage as any)?.thumb ||
-    (typeof it.sourceImage === 'string' ? it.sourceImage : null) ||
-    (correspondingTab?.sourceImage as any)?.thumb ||
-    (typeof correspondingTab?.sourceImage === 'string' ? correspondingTab?.sourceImage : null) ||
-    (activeTab?.sourceImage as any)?.thumb ||
-    (page ? page.thumb : (allPages.length > 0 ? allPages[i % allPages.length]?.thumb : null));
+  const correspondingTab = isMultiShape ? shapeTabs.find(t => t.id === it.tabId || t.name === it.tabName) : (shapeTabs.length > 0 ? shapeTabs[0] : null);
+  const effectiveImgItem: PageItem | null | undefined =
+    (it.sourceImage as PageItem) ||
+    correspondingTab?.sourceImage ||
+    (activeTab?.sourceImage as PageItem) ||
+    page ||
+    (allPages.length > 0 ? allPages[i % allPages.length] : null);
 
-  const totalRotation = calculateSlotTotalRotation(it, page, isBackSide);
+  const previewSrc = (effectiveImgItem as any)?.thumb ||
+    (typeof effectiveImgItem === 'string' ? (effectiveImgItem as any) : null);
+
+  const totalRotation = calculateSlotTotalRotation(it, effectiveImgItem, isBackSide);
   const imgTransform = totalRotation !== 0 ? `rotate(${totalRotation}deg)` : 'none';
 
   const getPreserveAspectRatio = () => {
@@ -473,3 +476,5 @@ export const ImpositionCanvasSlotItem: React.FC<ImpositionCanvasSlotItemProps> =
     </div>
   );
 };
+
+export const ImpositionCanvasSlotItemMemo = React.memo(ImpositionCanvasSlotItem);

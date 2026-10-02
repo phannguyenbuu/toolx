@@ -8,7 +8,7 @@ import { calculateStandardImageDimensionsMm } from '../../utils/imageDimensions'
 import { safeToastSuccess } from './impositionHelpers';
 import { LayoutPlan } from '../../utils/layoutSolver';
 import { ImpositionPaperCatalogModal } from './modals/ImpositionPaperCatalogModal';
-import { ImpositionLayerEditModals } from './modals/ImpositionLayerEditModals';
+import { ImpositionJobEditModals, ImpositionLayerEditModals } from './modals/ImpositionLayerEditModals';
 import { ImpositionDataModal } from './modals/ImpositionDataModal';
 import { ImpositionAiModal } from './modals/ImpositionAiModal';
 import { ImpositionExportModal } from './modals/ImpositionExportModal';
@@ -25,13 +25,21 @@ export interface ImpositionPageModalsProps {
   config: ImpositionConfig;
   setConfig: React.Dispatch<React.SetStateAction<ImpositionConfig>>;
 
-  // Layer edit modals
-  editingLayerModalTab: ShapeTabItem | null;
-  setEditingLayerModalTab: (tab: ShapeTabItem | null) => void;
-  layerModalName: string;
-  setLayerModalName: (name: string) => void;
-  layerModalColor: string;
-  setLayerModalColor: (color: string) => void;
+  // Job edit modals
+  editingJobModalTab?: ShapeTabItem | null;
+  setEditingJobModalTab?: (tab: ShapeTabItem | null) => void;
+  jobModalName?: string;
+  setJobModalName?: (name: string) => void;
+  jobModalColor?: string;
+  setJobModalColor?: (color: string) => void;
+
+  // Legacy layer aliases
+  editingLayerModalTab?: ShapeTabItem | null;
+  setEditingLayerModalTab?: (tab: ShapeTabItem | null) => void;
+  layerModalName?: string;
+  setLayerModalName?: (name: string) => void;
+  layerModalColor?: string;
+  setLayerModalColor?: (color: string) => void;
   shapeTabs: ShapeTabItem[];
   setShapeTabs: React.Dispatch<React.SetStateAction<ShapeTabItem[]>>;
   isScaleModalOpen: boolean;
@@ -143,6 +151,12 @@ export const ImpositionPageModals: React.FC<ImpositionPageModalsProps> = ({
   isMultiShape = false,
   config,
   setConfig,
+  editingJobModalTab,
+  setEditingJobModalTab,
+  jobModalName,
+  setJobModalName,
+  jobModalColor,
+  setJobModalColor,
   editingLayerModalTab,
   setEditingLayerModalTab,
   layerModalName,
@@ -232,6 +246,13 @@ export const ImpositionPageModals: React.FC<ImpositionPageModalsProps> = ({
   setIsFilePickerOpen,
   handleFileFromManager
 }) => {
+  const currentEditingTab = editingJobModalTab !== undefined ? editingJobModalTab : editingLayerModalTab;
+  const setCurrentEditingTab = setEditingJobModalTab || setEditingLayerModalTab || (() => {});
+  const currentJobName = jobModalName !== undefined ? jobModalName : (layerModalName || '');
+  const setCurrentJobName = setJobModalName || setLayerModalName || (() => {});
+  const currentJobColor = jobModalColor !== undefined ? jobModalColor : (layerModalColor || '#8b5cf6');
+  const setCurrentJobColor = setJobModalColor || setLayerModalColor || (() => {});
+
   return (
     <>
       <ImpositionPaperCatalogModal
@@ -245,17 +266,17 @@ export const ImpositionPageModals: React.FC<ImpositionPageModalsProps> = ({
         currentPresetName={`${config.pageW}x${config.pageH}mm`}
       />
 
-      <ImpositionLayerEditModals
-        editingLayerModalTab={editingLayerModalTab}
-        setEditingLayerModalTab={setEditingLayerModalTab}
-        layerModalName={layerModalName}
-        setLayerModalName={setLayerModalName}
-        layerModalColor={layerModalColor}
-        setLayerModalColor={setLayerModalColor}
-        handleSaveLayerModal={() => {
-          if (editingLayerModalTab) {
-            setShapeTabs(tabs => tabs.map(t => t.id === editingLayerModalTab.id ? { ...t, name: layerModalName, color: layerModalColor } : t));
-            setEditingLayerModalTab(null);
+      <ImpositionJobEditModals
+        editingJobModalTab={currentEditingTab}
+        setEditingJobModalTab={setCurrentEditingTab}
+        jobModalName={currentJobName}
+        setJobModalName={setCurrentJobName}
+        jobModalColor={currentJobColor}
+        setJobModalColor={setCurrentJobColor}
+        handleSaveJobModal={() => {
+          if (currentEditingTab) {
+            setShapeTabs(tabs => tabs.map(t => t.id === currentEditingTab.id ? { ...t, name: currentJobName, color: currentJobColor } : t));
+            setCurrentEditingTab(null);
           }
         }}
         isScaleModalOpen={isScaleModalOpen}
@@ -377,12 +398,15 @@ export const ImpositionPageModals: React.FC<ImpositionPageModalsProps> = ({
         isOpen={isCropColorModalOpen}
         onClose={() => setIsCropColorModalOpen(false)}
         onApply={(result) => {
+          const highResData = result.originalImage || result.dataUrl;
           const updatedPage: PageItem = {
             id: `crop-${Date.now()}`,
             name: result.filename || activeTab.name,
-            url: result.dataUrl,
+            file: activeTab.sourceImage?.file,
+            url: highResData,
             thumb: result.dataUrl,
-            originalThumb: result.originalImage,
+            originalThumb: highResData,
+            baseThumb: highResData,
             w: result.w_mm || activeTab.itemW,
             h: result.h_mm || activeTab.itemH,
             rotation: 0,
@@ -391,8 +415,18 @@ export const ImpositionPageModals: React.FC<ImpositionPageModalsProps> = ({
             bleedBounds: result.bleedBounds || undefined,
             bleedPercent: result.bleedPercent
           };
-          if (result.updatedTabs && result.updatedTabs.length > 0) {
-            setShapeTabs(result.updatedTabs as ShapeTabItem[]);
+          if (result.allPages && result.allPages.length > 1) {
+            // Multi-page PDF: 1 tab + tất cả trang vào allPages (không tạo N layer)
+            const singleTab = result.updatedTabs?.find(t => t.id === result.activeTabId)
+              || result.updatedTabs?.[0];
+            if (singleTab) setShapeTabs([singleTab as ShapeTabItem]);
+            setAllPages(result.allPages as PageItem[]);
+          } else {
+            // Single image / single-page PDF: reset allPages về 1 trang, xóa multi-page cũ
+            setAllPages([updatedPage]);
+            if (result.updatedTabs && result.updatedTabs.length > 0) {
+              setShapeTabs(result.updatedTabs as ShapeTabItem[]);
+            }
           }
           const finalW = result.w_mm || activeTab.itemW;
           const finalH = result.h_mm || activeTab.itemH;
@@ -401,7 +435,12 @@ export const ImpositionPageModals: React.FC<ImpositionPageModalsProps> = ({
           setIsCropColorModalOpen(false);
           safeToastSuccess('Đã áp dụng cắt & màu cho ảnh nguồn');
         }}
-        imageUrl={activeTab.sourceImage?.thumb || (allPages.length > 0 ? allPages[0]?.thumb : '')}
+        imageUrl={
+          activeTab.sourceImage?.originalThumb ||
+          activeTab.sourceImage?.url ||
+          activeTab.sourceImage?.thumb ||
+          (allPages.length > 0 ? (allPages[0]?.originalThumb || allPages[0]?.url || allPages[0]?.thumb) : '')
+        }
         imageName={activeTab.name}
         itemW={activeTab.itemW || config.itemW}
         itemH={activeTab.itemH || config.itemH}
@@ -414,7 +453,12 @@ export const ImpositionPageModals: React.FC<ImpositionPageModalsProps> = ({
       <VectorMaskEditorModal
         isOpen={isVectorMaskEditorOpen}
         onClose={() => setIsVectorMaskEditorOpen(false)}
-        imageUrl={activeTab.sourceImage?.thumb || (allPages.length > 0 ? allPages[0]?.thumb : null)}
+        imageUrl={
+          activeTab.sourceImage?.originalThumb ||
+          activeTab.sourceImage?.url ||
+          activeTab.sourceImage?.thumb ||
+          (allPages.length > 0 ? (allPages[0]?.originalThumb || allPages[0]?.url || allPages[0]?.thumb) : null)
+        }
         imageName={activeTab.name}
         itemW={activeTab.itemW || config.itemW}
         itemH={activeTab.shape === 'circle' ? activeTab.itemW : (activeTab.itemH || config.itemH)}

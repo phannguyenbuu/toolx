@@ -7,6 +7,8 @@ import {
   DEFAULT_CONFIG,
   ImpositionConfig,
   ShapeTabItem,
+  TAB_COLORS,
+  safeToastSuccess,
   PageItem,
   DataMode,
   ImpositionStyle,
@@ -20,10 +22,10 @@ import {
   useImpositionActions,
   generateImpositionPdfBlob,
   ImpositionHeader,
-  ImpositionLayerBar,
-  ImpositionLayerCard,
+  ImpositionJobBar,
+  ImpositionJobCard,
   ImpositionPlanPicker,
-  ImpositionCanvasView,
+  ImpositionKonvaCanvas,
   ImpositionPaperSidebar,
   ImpositionPageModals,
   RenderSuccessInfo,
@@ -36,25 +38,18 @@ export interface ImpositionAdvancedPageProps {
 
 export const ImpositionAdvancedPage: React.FC<ImpositionAdvancedPageProps> = ({ onClose }) => {
   const [config, setConfig] = useState<ImpositionConfig>(DEFAULT_CONFIG);
-  const [currentPlanIndex, setCurrentPlanIndex] = useState(0);
-  const [currentSheetIndex, setCurrentSheetIndex] = useState(0);
-  const [previewSide, setPreviewSide] = useState<'front' | 'back'>('front');
-  const [allPages, setAllPages] = useState<PageItem[]>([]);
-  const [dataMode, setDataMode] = useState<DataMode>(1);
-  const [dataModeEnabled, setDataModeEnabled] = useState(true);
-  const [standardQty, setStandardQty] = useState(1);
-  const [xUpQty, setXUpQty] = useState(1);
-  const [impositionStyle, setImpositionStyle] = useState<ImpositionStyle>('sheetwise');
-  const [impositionStyleEnabled, setImpositionStyleEnabled] = useState(false);
-  const [customScale, setCustomScale] = useState(100);
-  const [customSvgData, setCustomSvgData] = useState('');
-  const [backgroundColor, setBackgroundColor] = useState('#ffffff');
-  const [vectorMaskResult, setVectorMaskResult] = useState<VectorMaskResult | null>(null);
+  const [currentPlanIndex, setCurrentPlanIndex] = useState(0), [currentSheetIndex, setCurrentSheetIndex] = useState(0);
+  const [previewSide, setPreviewSide] = useState<'front' | 'back'>('front'), [allPages, setAllPages] = useState<PageItem[]>([]);
+  const [dataMode, setDataMode] = useState<DataMode>(1), [dataModeEnabled, setDataModeEnabled] = useState(true);
+  const [standardQty, setStandardQty] = useState(1), [xUpQty, setXUpQty] = useState(1);
+  const [impositionStyle, setImpositionStyle] = useState<ImpositionStyle>('sheetwise'), [impositionStyleEnabled, setImpositionStyleEnabled] = useState(false);
+  const [customScale, setCustomScale] = useState(100), [customSvgData, setCustomSvgData] = useState('');
+  const [backgroundColor, setBackgroundColor] = useState('#ffffff'), [vectorMaskResult, setVectorMaskResult] = useState<VectorMaskResult | null>(null);
 
   const [shapeTabs, setShapeTabs] = useState<ShapeTabItem[]>([
     {
       id: 'tab-a', name: 'A', enabled: true, shape: 'rect', itemW: 90, itemH: 54,
-      quantity: 10, useTotalLimit: false, cornerRadius: 0, sourceImage: null,
+      quantity: 1, useTotalLimit: false, cornerRadius: 0, sourceImage: null,
       vectorMaskResult: null, customSvgData: '', color: '#8b5cf6',
       autoRotateImage: true, canRotate: true
     }
@@ -62,6 +57,17 @@ export const ImpositionAdvancedPage: React.FC<ImpositionAdvancedPageProps> = ({ 
   const [activeTabId, setActiveTabId] = useState('tab-a');
   const activeTab = useMemo(() => shapeTabs.find(t => t.id === activeTabId) || shapeTabs[0], [shapeTabs, activeTabId]);
   const isMultiShape = shapeTabs.length > 1;
+
+  // Sync config whenever active tab changes to isolate each job's dimensions
+  useEffect(() => {
+    if (!activeTab) return;
+    const tabW = activeTab.itemW || config.itemW;
+    const tabH = activeTab.shape === 'circle' ? tabW : (activeTab.itemH || config.itemH);
+    setConfig(c => ({
+      ...c, itemW: tabW, itemH: tabH, shape: activeTab.shape || c.shape,
+      cornerRadius: activeTab.cornerRadius !== undefined ? activeTab.cornerRadius : c.cornerRadius
+    }));
+  }, [activeTabId]);
 
   // Zoom / Pan
   const [canvasZoom, setCanvasZoom] = useState(1);
@@ -74,23 +80,16 @@ export const ImpositionAdvancedPage: React.FC<ImpositionAdvancedPageProps> = ({ 
   const { containerRef, scale } = useCanvasContainer(config, setCanvasZoom);
 
   // Modals & UI States
-  const [isDataModalOpen, setIsDataModalOpen] = useState(false);
-  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
-  const [showDownloadModal, setShowDownloadModal] = useState(false);
-  const [isCropColorModalOpen, setIsCropColorModalOpen] = useState(false);
-  const [isVectorMaskEditorOpen, setIsVectorMaskEditorOpen] = useState(false);
-  const [isCutSvgModalOpen, setIsCutSvgModalOpen] = useState(false);
-  const [isPaperDropdownOpen, setIsPaperDropdownOpen] = useState(false);
-  const [isRenderModalOpen, setIsRenderModalOpen] = useState(false);
-  const [isFilePickerOpen, setIsFilePickerOpen] = useState(false);
-  const [isScaleModalOpen, setIsScaleModalOpen] = useState(false);
-  const [editingLayerModalTab, setEditingLayerModalTab] = useState<ShapeTabItem | null>(null);
-  const [layerModalName, setLayerModalName] = useState('');
-  const [layerModalColor, setLayerModalColor] = useState('');
+  const [isDataModalOpen, setIsDataModalOpen] = useState(false), [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [showDownloadModal, setShowDownloadModal] = useState(false), [isCropColorModalOpen, setIsCropColorModalOpen] = useState(false);
+  const [isVectorMaskEditorOpen, setIsVectorMaskEditorOpen] = useState(false), [isCutSvgModalOpen, setIsCutSvgModalOpen] = useState(false);
+  const [isPaperDropdownOpen, setIsPaperDropdownOpen] = useState(false), [isRenderModalOpen, setIsRenderModalOpen] = useState(false);
+  const [isFilePickerOpen, setIsFilePickerOpen] = useState(false), [isScaleModalOpen, setIsScaleModalOpen] = useState(false);
+  const [editingJobModalTab, setEditingJobModalTab] = useState<ShapeTabItem | null>(null);
+  const [jobModalName, setJobModalName] = useState(''), [jobModalColor, setJobModalColor] = useState('');
   const [renderSuccessModal, setRenderSuccessModal] = useState<RenderSuccessInfo | null>(null);
   const [sortJobModalData, setSortJobModalData] = useState<SortJobModalData | null>(null);
-  const [isExportingSortJob, setIsExportingSortJob] = useState(false);
-  const [copiedJobId, setCopiedJobId] = useState(false);
+  const [isExportingSortJob, setIsExportingSortJob] = useState(false), [copiedJobId, setCopiedJobId] = useState(false);
 
   // Outpaint states
   const [isOutpaintPanelOpen, setIsOutpaintPanelOpen] = useState(false);
@@ -128,10 +127,26 @@ export const ImpositionAdvancedPage: React.FC<ImpositionAdvancedPageProps> = ({ 
     return () => clearInterval(iv);
   }, []);
 
-  // Layout calculation
+  // Layout calculation — debounce 800ms để tránh calculatePlans chạy mỗi keystroke
+  const [planShapeTabs, setPlanShapeTabs] = useState(shapeTabs);
+  const [planConfig, setPlanConfig] = useState(config);
+  const planDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isRecalculating, setIsRecalculating] = useState(false);
+
+  useEffect(() => {
+    setIsRecalculating(true);
+    if (planDebounceRef.current) clearTimeout(planDebounceRef.current);
+    planDebounceRef.current = setTimeout(() => {
+      setPlanShapeTabs(shapeTabs);
+      setPlanConfig(config);
+      setIsRecalculating(false);
+    }, 300);
+    return () => { if (planDebounceRef.current) clearTimeout(planDebounceRef.current); };
+  }, [shapeTabs, config]);
+
   const plans = useMemo(() => {
-    return calculatePlans(config, shapeTabs, isMultiShape, allPages);
-  }, [config, shapeTabs, isMultiShape, allPages]);
+    return calculatePlans(planConfig, planShapeTabs, isMultiShape, allPages);
+  }, [planConfig, planShapeTabs, isMultiShape, allPages]);
 
   const currentPlan = useMemo(() => {
     if (plans.length === 0) return null;
@@ -145,27 +160,70 @@ export const ImpositionAdvancedPage: React.FC<ImpositionAdvancedPageProps> = ({ 
       const maxIdx = Math.max(...currentPlan.items.map(it => it.sheetIndex ?? 0), 0);
       return maxIdx + 1;
     }
-    if (allPages.length > 0) {
-      return Math.ceil(allPages.length / Math.max(1, currentPlan.items.length));
-    }
-    return 1;
-  }, [currentPlan, isMultiShape, allPages.length]);
+    // Khi 0 item fit trên giấy (itemW > pageW) → hiển thị 1 tờ trống thay vì N tờ trống
+    if (currentPlan.items.length === 0) return 1;
+    // Số trang hiệu dụng: tính tổng copies của từng trang (lặp lại chi tiết) * nhân bản toàn layer
+    const qty = activeTab?.quantity || 1;
+    const totalPageCopies = allPages.length > 0
+      ? allPages.reduce((sum, p) => sum + (p.copies !== undefined ? p.copies : 1), 0)
+      : 1;
+    return Math.ceil(totalPageCopies * qty / currentPlan.items.length);
+  }, [currentPlan, isMultiShape, allPages, activeTab?.quantity]);
 
   const { hasLastSheetBlanks, lastSheetBlankCount } = useMemo(() => {
-    if (!currentPlan || allPages.length === 0 || isMultiShape || totalSheets <= 1) {
+    if (!currentPlan || isMultiShape || totalSheets <= 1) {
       return { hasLastSheetBlanks: false, lastSheetBlankCount: 0 };
     }
-    const rem = allPages.length % currentPlan.items.length;
+    if (currentPlan.items.length === 0) return { hasLastSheetBlanks: false, lastSheetBlankCount: 0 };
+    const qty = activeTab?.quantity || 1;
+    const totalPageCopies = allPages.length > 0
+      ? allPages.reduce((sum, p) => sum + (p.copies !== undefined ? p.copies : 1), 0)
+      : 1;
+    const totalItems = totalPageCopies * qty;
+    const rem = totalItems % currentPlan.items.length;
     return {
       hasLastSheetBlanks: rem > 0,
       lastSheetBlankCount: rem > 0 ? currentPlan.items.length - rem : 0
     };
-  }, [currentPlan, allPages.length, isMultiShape, totalSheets]);
+  }, [currentPlan, allPages, isMultiShape, totalSheets, activeTab?.quantity]);
 
   // Layer update helper
   const updateActiveTabProp = useCallback((props: Partial<ShapeTabItem>) => {
     setShapeTabs(tabs => tabs.map(t => t.id === activeTabId ? { ...t, ...props } : t));
+    if (props.sourceImage) {
+      setAllPages(prev => (prev.length <= 1 ? [props.sourceImage!] : [props.sourceImage!, ...prev.slice(1)]));
+    }
   }, [activeTabId]);
+
+  // Tạo Job mới trực tiếp
+  const handleAddNewJob = useCallback(() => {
+    const nextChar = String.fromCharCode(65 + (shapeTabs.length % 26));
+    const nextColor = TAB_COLORS[shapeTabs.length % TAB_COLORS.length] || '#8b5cf6';
+    const newId = `shape_${Date.now()}`;
+    const newTab: ShapeTabItem = {
+      id: newId,
+      name: `Job ${nextChar}`,
+      enabled: true,
+      shape: 'rect',
+      itemW: config.itemW || 90,
+      itemH: config.itemH || 54,
+      quantity: 10,
+      useTotalLimit: false,
+      cornerRadius: 0,
+      sourceImage: null,
+      vectorMaskResult: null,
+      customSvgData: '',
+      color: nextColor,
+      canRotate: true,
+      autoRotateImage: true,
+      fileId: `job-${newId}`,
+      fileName: `Job ${nextChar}`,
+      fileType: 'shape',
+    };
+    setShapeTabs(prev => [...prev, newTab]);
+    setActiveTabId(newId);
+    safeToastSuccess(`Đã tạo ${newTab.name}`);
+  }, [shapeTabs.length, config.itemW, config.itemH]);
 
   // History & Workspace hooks
   const sharedState = {
@@ -234,7 +292,7 @@ export const ImpositionAdvancedPage: React.FC<ImpositionAdvancedPageProps> = ({ 
         generateImpositionPdfBlob={() => generateImpositionPdfBlob({
           allPages, apiStatus, currentPlan, config, customScale: 100,
           backgroundColor, dataMode, impositionStyle: 'sheetwise', impositionStyleEnabled: false,
-          xUpQty, standardQty, totalSheets, shapeTabs, isMultiShape, previewSide: 'front'
+          xUpQty, standardQty, totalSheets, shapeTabs, activeTab, isMultiShape, previewSide: 'front'
         })}
         handleReset={() => {
           autoSaveHook.clearAutoSave();
@@ -254,26 +312,31 @@ export const ImpositionAdvancedPage: React.FC<ImpositionAdvancedPageProps> = ({ 
 
       {/* 2. Main Workspace Area */}
       <div className="flex-1 flex overflow-hidden min-h-0">
-        {/* Left Side: Layer (50vh) & Sắp xếp (50vh) */}
-        <aside className="w-[576px] max-w-[45vw] bg-white border-r border-slate-200 flex flex-col h-full overflow-hidden flex-shrink-0 select-none z-10 shadow-xs">
-          {/* Phân vùng 1: LAYER (chiếm 50vh, cuộn độc lập) */}
-          <div className="h-[50vh] flex flex-col overflow-y-auto border-b border-slate-200 flex-shrink-0">
-            <ImpositionLayerBar
+        {/* Left Side: Job (50vh) & Sắp xếp (50vh) */}
+        <aside className="w-[360px] max-w-[48vw] bg-white border-r border-slate-200 flex flex-col h-full overflow-hidden flex-shrink-0 select-none z-10 shadow-xs">
+          {/* Phân vùng 1: JOB (tự fit theo chiều cao nội dung, không scroll thừa) */}
+          <div className="flex flex-col border-b border-slate-200 flex-shrink-0">
+            <ImpositionJobBar
               shapeTabs={shapeTabs}
               activeTabId={activeTabId}
               setActiveTabId={setActiveTabId}
               setShapeTabs={setShapeTabs}
-              setEditingLayerModalTab={setEditingLayerModalTab}
-              setLayerModalName={setLayerModalName}
-              setLayerModalColor={setLayerModalColor}
+              setEditingJobModalTab={setEditingJobModalTab}
+              setJobModalName={setJobModalName}
+              setJobModalColor={setJobModalColor}
+              config={config}
+              setConfig={setConfig}
+              allPages={allPages}
+              setAllPages={setAllPages}
             />
-            <div className="p-3">
-              <ImpositionLayerCard
+            <div className="p-2.5 pt-2">
+              <ImpositionJobCard
                 activeTab={activeTab}
                 config={config}
                 setConfig={setConfig}
                 updateActiveTabProp={updateActiveTabProp}
                 allPages={allPages}
+                setAllPages={setAllPages}
                 isMultiShape={isMultiShape}
                 vectorMaskResult={vectorMaskResult}
                 customScale={customScale}
@@ -290,12 +353,13 @@ export const ImpositionAdvancedPage: React.FC<ImpositionAdvancedPageProps> = ({ 
                 caoInputRef={caoInputRef}
                 setIsVectorMaskEditorOpen={setIsVectorMaskEditorOpen}
                 setIsScaleModalOpen={setIsScaleModalOpen}
+                onAddNewJob={handleAddNewJob}
               />
             </div>
           </div>
 
-          {/* Phân vùng 2: SẮP XẾP (chiếm 50vh, cuộn danh sách phương án) */}
-          <div className="h-[50vh] flex flex-col min-h-0 flex-1 overflow-hidden">
+          {/* Phân vùng 2: SẮP XẾP (chiếm toàn bộ chiều cao còn lại, cuộn danh sách phương án) */}
+          <div className="flex flex-col min-h-0 flex-1 overflow-hidden">
             <ImpositionPlanPicker
               plans={plans}
               currentPlan={currentPlan}
@@ -313,23 +377,12 @@ export const ImpositionAdvancedPage: React.FC<ImpositionAdvancedPageProps> = ({ 
           </div>
         </aside>
 
-        {/* Center: Canvas View */}
-        <ImpositionCanvasView
+        {/* Center: Canvas View (Konva) */}
+        <ImpositionKonvaCanvas
           containerRef={containerRef}
-          canvasPan={canvasPan}
-          setCanvasPan={setCanvasPan}
-          canvasZoom={canvasZoom}
-          setCanvasZoom={setCanvasZoom}
-          isPanning={isPanning}
-          setIsPanning={setIsPanning}
-          panStartRef={panStartRef}
-          panOffsetRef={panOffsetRef}
           currentPlan={currentPlan}
           styledPlan={null}
           impositionStyleEnabled={impositionStyleEnabled}
-          totalSheets={totalSheets}
-          currentSheetIndex={currentSheetIndex}
-          setCurrentSheetIndex={setCurrentSheetIndex}
           config={config}
           setConfig={setConfig}
           scale={scale}
@@ -343,29 +396,15 @@ export const ImpositionAdvancedPage: React.FC<ImpositionAdvancedPageProps> = ({ 
           setPreviewSide={setPreviewSide}
           serverPreviewUrl=""
           isLoadingServerPreview={false}
-          dragOverSheetIdx={null}
-          setDragOverSheetIdx={() => {}}
-          draggedSlotIdx={null}
-          setDraggedSlotIdx={() => {}}
-          dragOverSlotIdx={null}
-          setDragOverSlotIdx={() => {}}
-          setDraggedItemData={() => {}}
-          handleMoveItemToSheet={() => {}}
-          handleMovePageToSheet={() => {}}
-          handleSwapSlots={() => {}}
-          handleSwapDataPages={() => {}}
-          getPageForSlot={(slotIdx, sIdx) => getPageForSlot({
-            slotIndex: slotIdx, sheetIdx: sIdx, allPagesLength: allPages.length,
-            itemsPerSheet: currentPlan?.items?.length || 1, isMultiShape,
-            useTotalLimit: config.useTotalLimit, totalOrder: config.totalOrder,
-            is2Sided: config.is2Sided, twoSideMode: config.twoSideMode,
-            previewSide, effectiveDataMode: dataMode, standardQty, xUpQty
-          })}
-          calculateSlotTotalRotation={(it, page, isBack) => calculateSlotTotalRotation(it, page, config, isMultiShape, shapeTabs, isBack)}
+          isRecalculating={isRecalculating}
+          currentSheetIndex={currentSheetIndex}
+          setCurrentSheetIndex={setCurrentSheetIndex}
+          totalSheets={totalSheets}
           hasLastSheetBlanks={hasLastSheetBlanks}
           lastSheetBlankCount={lastSheetBlankCount}
           isRightSidebarCollapsed={isRightSidebarCollapsed}
           toggleRightSidebar={() => setIsRightSidebarCollapsed(c => !c)}
+          onOpenCutDieline={() => setIsCutSvgModalOpen(true)}
         />
 
         {/* Right Side: Paper Settings & History Sidebar */}
@@ -398,12 +437,12 @@ export const ImpositionAdvancedPage: React.FC<ImpositionAdvancedPageProps> = ({ 
         setIsPaperDropdownOpen={setIsPaperDropdownOpen}
         config={config}
         setConfig={setConfig}
-        editingLayerModalTab={editingLayerModalTab}
-        setEditingLayerModalTab={setEditingLayerModalTab}
-        layerModalName={layerModalName}
-        setLayerModalName={setLayerModalName}
-        layerModalColor={layerModalColor}
-        setLayerModalColor={setLayerModalColor}
+        editingJobModalTab={editingJobModalTab}
+        setEditingJobModalTab={setEditingJobModalTab}
+        jobModalName={jobModalName}
+        setJobModalName={setJobModalName}
+        jobModalColor={jobModalColor}
+        setJobModalColor={setJobModalColor}
         shapeTabs={shapeTabs}
         setShapeTabs={setShapeTabs}
         isScaleModalOpen={isScaleModalOpen}

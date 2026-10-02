@@ -68,7 +68,18 @@ export async function executeUtiCommand(
 
       const stdout = res.stdout || '';
       const stderr = res.stderr || (!res.ok ? (res.error || 'Lỗi thực thi từ Agent.') : '');
-      const payload = res.result_payload || null;
+      let payload = res.result_payload || null;
+      if (!payload && stdout) {
+        for (const line of stdout.split('\n')) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('__GOAGENT_RESULT__')) {
+            try {
+              payload = JSON.parse(trimmed.slice('__GOAGENT_RESULT__'.length));
+              break;
+            } catch {}
+          }
+        }
+      }
 
       // Trích xuất cloud_url hoặc local_path từ payload nếu có
       const cloudUrl = payload?.cloud_url || payload?.url || (nodeDest === 'cloud' && payload?.preview_b64 ? '(Cloud Preview Base64)' : undefined);

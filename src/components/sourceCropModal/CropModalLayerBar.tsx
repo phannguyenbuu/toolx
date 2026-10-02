@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Scissors, Upload, Eye, EyeOff, X, Layers, Edit3, Plus, Check } from 'lucide-react';
-import { CropModalLayerTab, LAYER_COLOR_PRESETS } from './types';
+import { Scissors, Upload, Eye, EyeOff, X, Briefcase, Edit3, Plus, Check } from 'lucide-react';
+import { CropModalLayerTab, CropModalJobTab, JOB_COLOR_PRESETS, LAYER_COLOR_PRESETS } from './types';
 
-export interface CropModalLayerBarProps {
-  tabs: CropModalLayerTab[];
+export interface CropModalJobBarProps {
+  tabs: CropModalJobTab[];
   currentTabId: string;
   currentImageSrc: string | null;
   showOriginal: boolean;
@@ -13,10 +13,12 @@ export interface CropModalLayerBarProps {
   onAddTab: () => void;
   onDeleteTab: (tabId: string) => void;
   onToggleTab: (tabId: string) => void;
-  onUpdateTab: (tabId: string, updates: Partial<CropModalLayerTab>) => void;
+  onUpdateTab: (tabId: string, updates: Partial<CropModalJobTab>) => void;
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onClose: () => void;
 }
+
+export type CropModalLayerBarProps = CropModalJobBarProps;
 
 interface ContextMenuState {
   tabId: string;
@@ -162,15 +164,15 @@ export const CropModalLayerBar: React.FC<CropModalLayerBarProps> = ({
         </div>
       </div>
 
-      {/* SUBHEADER: LAYER MANAGEMENT TABS */}
+      {/* SUBHEADER: JOB MANAGEMENT TABS */}
       <div className="px-4 py-2 border-b border-slate-200 bg-slate-100/80 flex items-center justify-between gap-3 select-none flex-wrap flex-shrink-0">
         <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 w-full">
           <div className="flex items-center gap-1.5 shrink-0 pr-1">
             <div className="w-5 h-5 rounded-md bg-violet-100 text-violet-700 flex items-center justify-center font-bold text-xs shadow-2xs">
-              <Layers size={12} />
+              <Briefcase size={12} />
             </div>
             <span className="text-[11px] font-bold text-slate-800 tracking-wide uppercase">
-              LAYER ({tabs.length})
+              JOB ({tabs.length})
             </span>
           </div>
 
@@ -192,7 +194,7 @@ export const CropModalLayerBar: React.FC<CropModalLayerBarProps> = ({
                     : 'bg-slate-200/50 border-dashed border-slate-300 text-slate-400 opacity-60'
                 }`}
                 style={{ borderColor: isActive ? tabColor : undefined }}
-                title="Click để chọn · Chuột phải để sửa/xoá/ẩn layer"
+                title="Click để chọn · Chuột phải để sửa/xoá/ẩn job"
               >
                 <span
                   className="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-black/10"
@@ -213,7 +215,7 @@ export const CropModalLayerBar: React.FC<CropModalLayerBarProps> = ({
             type="button"
             onClick={onAddTab}
             className="flex items-center justify-center w-6 h-6 rounded-lg border border-dashed border-slate-300 hover:border-violet-400 text-slate-400 hover:text-violet-600 bg-white/70 hover:bg-violet-50 transition cursor-pointer shrink-0"
-            title="Thêm layer mới"
+            title="Thêm job mới"
           >
             <Plus size={12} />
           </button>
@@ -252,7 +254,7 @@ export const CropModalLayerBar: React.FC<CropModalLayerBarProps> = ({
             className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer"
           >
             {contextTab.enabled ? <EyeOff size={13} /> : <Eye size={13} />}
-            {contextTab.enabled ? 'Ẩn layer khỏi trang in' : 'Bật hiển thị layer'}
+            {contextTab.enabled ? 'Ẩn job khỏi trang in' : 'Bật hiển thị job'}
           </button>
 
           {tabs.length > 1 && (
@@ -264,14 +266,14 @@ export const CropModalLayerBar: React.FC<CropModalLayerBarProps> = ({
                 className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-rose-600 hover:bg-rose-50 transition cursor-pointer"
               >
                 <X size={13} />
-                Xoá layer này
+                Xoá job này
               </button>
             </>
           )}
         </div>
       )}
 
-      {/* Edit Layer Modal Toast */}
+      {/* Edit Job Modal Toast */}
       {editingLayerTab && (
         <div
           className="absolute inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150 select-none"
@@ -287,10 +289,10 @@ export const CropModalLayerBar: React.FC<CropModalLayerBarProps> = ({
                   className="w-6 h-6 rounded-lg flex items-center justify-center text-white shadow-2xs font-bold text-xs"
                   style={{ backgroundColor: editLayerColor }}
                 >
-                  {editLayerName.slice(0, 1).toUpperCase() || 'L'}
+                  {editLayerName.slice(0, 1).toUpperCase() || 'J'}
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-slate-800">Thuộc tính Layer</h4>
+                  <h4 className="text-xs font-bold text-slate-800">Thuộc tính Job</h4>
                   <span className="text-[10px] text-slate-400">Đổi tên & màu nhận diện</span>
                 </div>
               </div>
@@ -305,7 +307,7 @@ export const CropModalLayerBar: React.FC<CropModalLayerBarProps> = ({
 
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-semibold text-slate-600 flex items-center justify-between">
-                <span>Tên Layer</span>
+                <span>Tên Job</span>
                 <span className="text-[9px] text-slate-400 font-normal">Tối đa 20 ký tự</span>
               </label>
               <input
@@ -328,7 +330,7 @@ export const CropModalLayerBar: React.FC<CropModalLayerBarProps> = ({
                 <span className="text-[10px] font-mono text-slate-500 font-medium uppercase">{editLayerColor}</span>
               </label>
               <div className="grid grid-cols-6 gap-2">
-                {LAYER_COLOR_PRESETS.map((col) => {
+                {JOB_COLOR_PRESETS.map((col) => {
                   const isSelected = editLayerColor.toLowerCase() === col.toLowerCase();
                   return (
                     <button
@@ -370,3 +372,5 @@ export const CropModalLayerBar: React.FC<CropModalLayerBarProps> = ({
     </>
   );
 };
+
+export const CropModalJobBar = CropModalLayerBar;

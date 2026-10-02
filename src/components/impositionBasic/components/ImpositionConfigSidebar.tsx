@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { ImpositionConfig } from '../types';
 import { PAPER_PRESETS } from '../constants';
-import { DebouncedNumberInput } from './DebouncedNumberInput';
+import { DebouncedNumberInput } from '../../common/DebouncedNumberInput';
 
 interface ImpositionConfigSidebarProps {
   config: ImpositionConfig;

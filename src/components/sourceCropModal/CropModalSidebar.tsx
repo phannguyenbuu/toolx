@@ -5,7 +5,7 @@ import {
   COLOR_PRESETS,
   isDefaultColorSettings
 } from '../../utils/colorAdjustment';
-import { DimDropdownCombobox, ModalNumberInput } from './DimDropdownCombobox';
+import { DimDropdownCombobox } from './DimDropdownCombobox';
 import { CropModalColorAdjustPanels } from './CropModalColorAdjustPanels';
 import { CropModalRemoveBgPanel } from './CropModalRemoveBgPanel';
 import { BleedMode, BleedGapMode, ColorTabType, RemoveBgSettings } from './types';

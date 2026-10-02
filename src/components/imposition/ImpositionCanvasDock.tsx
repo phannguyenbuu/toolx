@@ -3,7 +3,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  Scissors
 } from 'lucide-react';
 import { ImpositionConfig, PageItem } from './types';
 import { LayoutPlan } from '../../utils/layoutSolver';
@@ -18,7 +19,8 @@ export interface ImpositionCanvasDockProps {
   allPages: PageItem[];
   totalSheets: number;
   currentSheetIndex: number;
-  setCurrentSheetIndex: React.Dispatch<React.SetStateAction<number>>;
+  setCurrentSheetIndex: React.Dispatch<React.SetStateAction<number>> | ((i: number | ((prev: number) => number)) => void);
+  onOpenCutDieline?: () => void;
 }
 
 export const ImpositionCanvasDock: React.FC<ImpositionCanvasDockProps> = ({
@@ -30,7 +32,8 @@ export const ImpositionCanvasDock: React.FC<ImpositionCanvasDockProps> = ({
   allPages,
   totalSheets,
   currentSheetIndex,
-  setCurrentSheetIndex
+  setCurrentSheetIndex,
+  onOpenCutDieline
 }) => {
   const [isPageCropPopoverOpen, setIsPageCropPopoverOpen] = useState(false);
   const [isCropPopoverOpen, setIsCropPopoverOpen] = useState(false);
@@ -138,8 +141,22 @@ export const ImpositionCanvasDock: React.FC<ImpositionCanvasDockProps> = ({
           </button>
         </div>
 
+        {/* 4. Khuôn cắt (Die-Cut Dieline) Button */}
+        {onOpenCutDieline && (
+          <button
+            type="button"
+            onClick={onOpenCutDieline}
+            disabled={!currentPlan}
+            className="px-3 py-1.5 rounded-xl flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all cursor-pointer border select-none bg-amber-50 hover:bg-amber-100 border-amber-200/90 text-amber-800 font-medium shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Xem trước & Tải khuôn cắt (Die-Cut Dieline SVG)"
+          >
+            <Scissors size={13} className="text-amber-600 shrink-0" />
+            <span className="text-xs font-medium whitespace-nowrap">Khuôn cắt</span>
+          </button>
+        )}
+
         {/* Page Navigation */}
-        {allPages.length > 0 && totalSheets > 0 && (
+        {totalSheets > 0 && (
           <>
             <div className="w-px h-6 bg-slate-300 mx-1 shrink-0" />
             <div className="flex items-center gap-1.5 whitespace-nowrap shrink-0">

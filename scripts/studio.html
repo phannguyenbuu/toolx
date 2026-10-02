@@ -1,0 +1,1252 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Toolx AI Studio — Render & Inpainting 4K</title>
+  <!-- Exact Toolx Official Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g1' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2306b6d4'/%3E%3Cstop offset='50%25' stop-color='%238b5cf6'/%3E%3Cstop offset='100%25' stop-color='%23ec4899'/%3E%3C/linearGradient%3E%3ClinearGradient id='g2' x1='100%25' y1='0%25' x2='0%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23ec4899'/%3E%3Cstop offset='50%25' stop-color='%238b5cf6'/%3E%3Cstop offset='100%25' stop-color='%2306b6d4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='3' y='3' width='94' height='94' rx='22' fill='%23ffffff' stroke='%23e2e8f0' stroke-width='2'/%3E%3Ccircle cx='50' cy='50' r='34' fill='none' stroke='%23f1f5f9' stroke-width='2' stroke-dasharray='6 6'/%3E%3Ccircle cx='50' cy='50' r='28' fill='none' stroke='%23fdf4ff' stroke-width='2'/%3E%3Cpath d='M26 26 L74 74' stroke='url(%23g1)' stroke-width='14' stroke-linecap='round'/%3E%3Cpath d='M74 26 L26 74' stroke='url(%23g2)' stroke-width='14' stroke-linecap='round'/%3E%3Crect x='42' y='42' width='16' height='16' transform='rotate(45 50 50)' fill='%23ffffff' stroke='%23c084fc' stroke-width='2'/%3E%3Crect x='45' y='45' width='10' height='10' transform='rotate(45 50 50)' fill='%23d946ef'/%3E%3Ccircle cx='26' cy='26' r='4' fill='%2306b6d4' stroke='%23ffffff' stroke-width='1.5'/%3E%3Ccircle cx='74' cy='74' r='4' fill='%23ec4899' stroke='%23ffffff' stroke-width='1.5'/%3E%3Ccircle cx='74' cy='26' r='4' fill='%238b5cf6' stroke='%23ffffff' stroke-width='1.5'/%3E%3Ccircle cx='26' cy='74' r='4' fill='%2306b6d4' stroke='%23ffffff' stroke-width='1.5'/%3E%3C/svg%3E">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    code, pre { font-family: 'JetBrains Mono', monospace; }
+    /* Custom thin scrollbar */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  </style>
+</head>
+<body class="h-full overflow-hidden bg-slate-100 text-slate-800 flex flex-col antialiased select-none">
+  
+  <!-- ========================================================================= -->
+  <!-- HEADER: Exact Toolx Logo & Minimalist Titlebar                             -->
+  <!-- ========================================================================= -->
+  <header class="h-13 shrink-0 border-b border-slate-200 bg-white/95 px-4 sm:px-6 flex items-center justify-between z-20 shadow-2xs backdrop-blur-md">
+    <div class="flex items-center gap-3">
+      <!-- Toolx Official SVG Logo -->
+      <div class="w-8 h-8 shrink-0 flex items-center justify-center">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="w-full h-full">
+          <defs>
+            <linearGradient id="tech-g1" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#06b6d4" />
+              <stop offset="50%" stop-color="#8b5cf6" />
+              <stop offset="100%" stop-color="#ec4899" />
+            </linearGradient>
+            <linearGradient id="tech-g2" x1="100%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#ec4899" />
+              <stop offset="50%" stop-color="#8b5cf6" />
+              <stop offset="100%" stop-color="#06b6d4" />
+            </linearGradient>
+          </defs>
+          <rect x="3" y="3" width="94" height="94" rx="22" fill="#ffffff" stroke="#e2e8f0" stroke-width="2" />
+          <circle cx="50" cy="50" r="34" fill="none" stroke="#f1f5f9" stroke-width="2" stroke-dasharray="6 6" />
+          <circle cx="50" cy="50" r="28" fill="none" stroke="#fdf4ff" stroke-width="2" />
+          <path d="M26 26 L74 74" stroke="url(#tech-g1)" stroke-width="14" stroke-linecap="round" />
+          <path d="M74 26 L26 74" stroke="url(#tech-g2)" stroke-width="14" stroke-linecap="round" />
+          <rect x="42" y="42" width="16" height="16" transform="rotate(45 50 50)" fill="#ffffff" stroke="#c084fc" stroke-width="2" />
+          <rect x="45" y="45" width="10" height="10" transform="rotate(45 50 50)" fill="#d946ef" />
+          <circle cx="26" cy="26" r="4" fill="#06b6d4" stroke="#ffffff" stroke-width="1.5" />
+          <circle cx="74" cy="74" r="4" fill="#ec4899" stroke="#ffffff" stroke-width="1.5" />
+          <circle cx="74" cy="26" r="4" fill="#8b5cf6" stroke="#ffffff" stroke-width="1.5" />
+          <circle cx="26" cy="74" r="4" fill="#06b6d4" stroke="#ffffff" stroke-width="1.5" />
+        </svg>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <h1 class="text-sm font-bold tracking-tight text-slate-900">Toolx AI Studio</h1>
+        <span class="text-[10px] font-bold uppercase tracking-wider bg-violet-50 text-violet-700 border border-violet-200 px-2 py-0.5 rounded">
+          Render & Inpainting 4K
+        </span>
+        <span class="hidden md:inline-block text-xs text-slate-400 font-normal">| Super-Resolution 300 DPI</span>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2.5">
+      <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+        Online
+      </div>
+      <button onclick="openRenderFolder()" class="px-2.5 py-1 rounded-md bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-medium border border-slate-200 transition flex items-center gap-1.5 cursor-pointer shadow-2xs" title="Mở thư mục lưu trữ ảnh">
+        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+        <span>Thư mục Render</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ========================================================================= -->
+  <!-- MAIN APP CONTAINER (FIT SCREEN 100VH NO BODY SCROLL)                      -->
+  <!-- ========================================================================= -->
+  <main class="flex-1 min-h-0 p-3 sm:p-4 grid grid-cols-12 gap-3.5 overflow-hidden">
+    
+    <!-- CỘT TRÁI (5 CỘT): CONTROL PANEL VỚI PROMPT MAX HEIGHT -->
+    <div class="col-span-12 lg:col-span-5 h-full flex flex-col min-h-0 bg-white border border-slate-200/90 rounded-xl p-3.5 shadow-xs overflow-hidden">
+      
+      <!-- Tab Switcher: Tạo Mới vs Sửa Ảnh (Slim Height) -->
+      <div class="shrink-0 grid grid-cols-2 p-0.5 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold mb-2.5">
+        <button type="button" onclick="switchTab('create')" id="tabBtnCreate"
+          class="py-1.5 rounded-md transition flex items-center justify-center gap-1.5 cursor-pointer bg-violet-600 text-white shadow-2xs">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          <span>Tạo Ảnh Mới</span>
+        </button>
+        <button type="button" onclick="switchTab('edit')" id="tabBtnEdit"
+          class="py-1.5 rounded-md transition flex items-center justify-center gap-1.5 cursor-pointer text-slate-500 hover:text-slate-900">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+          <span>Sửa Ảnh & Inpainting</span>
+        </button>
+      </div>
+
+      <!-- ================= TAB 1: TẠO MỚI (TEXT-TO-IMAGE) ================= -->
+      <div id="panelCreate" class="flex-1 min-h-0 flex flex-col gap-2">
+        
+        <!-- COMPACT SETTING 1: AI Engine & Resolution (1 Hàng gọn) -->
+        <div class="shrink-0 grid grid-cols-2 gap-2">
+          <!-- Engine -->
+          <div>
+            <div class="text-[11px] font-semibold text-slate-600 mb-1 flex items-center justify-between">
+              <span>Động cơ AI</span>
+              <span class="text-[9px] text-emerald-700 font-mono font-medium">vps_go.md</span>
+            </div>
+            <div class="grid grid-cols-2 gap-1 p-0.5 bg-slate-100 rounded-lg">
+              <button type="button" onclick="setEngine('gpt')" data-engine="gpt" class="engine-btn py-1 text-center rounded text-xs font-bold transition border border-violet-300 bg-white text-violet-700 shadow-2xs">
+                GPT
+              </button>
+              <button type="button" onclick="setEngine('gemini')" data-engine="gemini" class="engine-btn py-1 text-center rounded text-xs font-semibold transition border border-transparent text-slate-600 hover:text-slate-900">
+                Gemini
+              </button>
+            </div>
+          </div>
+
+          <!-- Resolution -->
+          <div>
+            <div class="text-[11px] font-semibold text-slate-600 mb-1 flex items-center justify-between">
+              <span>Độ phân giải</span>
+              <span class="text-[9px] text-violet-700 font-semibold" id="resIndicator">4K • 300 DPI</span>
+            </div>
+            <div class="grid grid-cols-3 gap-1 p-0.5 bg-slate-100 rounded-lg" id="resSelector">
+              <button type="button" onclick="setResolution('4k')" data-res="4k" class="res-btn py-1 text-center rounded text-xs font-bold transition border border-violet-300 bg-white text-violet-700 shadow-2xs">
+                4K
+              </button>
+              <button type="button" onclick="setResolution('2k')" data-res="2k" class="res-btn py-1 text-center rounded text-xs font-semibold transition border border-transparent text-slate-600 hover:text-slate-900">
+                2K
+              </button>
+              <button type="button" onclick="setResolution('1080p')" data-res="1080p" class="res-btn py-1 text-center rounded text-xs font-semibold transition border border-transparent text-slate-600 hover:text-slate-900">
+                1080p
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- COMPACT SETTING 2: Tỉ lệ khung hình (1 Hàng gọn) -->
+        <div class="shrink-0">
+          <div class="text-[11px] font-semibold text-slate-600 mb-1">Tỉ lệ khung hình</div>
+          <div class="grid grid-cols-5 gap-1 p-0.5 bg-slate-100 rounded-lg text-center text-xs" id="ratioSelector">
+            <button type="button" onclick="setRatio('1:1')" data-ratio="1:1" class="ratio-btn py-1 rounded font-semibold text-slate-600 hover:text-slate-900 transition">1:1</button>
+            <button type="button" onclick="setRatio('16:9')" data-ratio="16:9" class="ratio-btn py-1 rounded font-semibold text-slate-600 hover:text-slate-900 transition">16:9</button>
+            <button type="button" onclick="setRatio('9:16')" data-ratio="9:16" class="ratio-btn py-1 rounded font-semibold text-slate-600 hover:text-slate-900 transition">9:16</button>
+            <button type="button" onclick="setRatio('4:3')" data-ratio="4:3" class="ratio-btn py-1 rounded font-bold border border-violet-300 bg-white text-violet-700 shadow-2xs transition">4:3</button>
+            <button type="button" onclick="setRatio('3:4')" data-ratio="3:4" class="ratio-btn py-1 rounded font-semibold text-slate-600 hover:text-slate-900 transition">3:4</button>
+          </div>
+        </div>
+
+        <!-- COMPACT SETTING 3: AI Prompt Enhancer & Pro Presets Drawer (Thu nhỏ tối đa) -->
+        <div class="shrink-0 border border-slate-200 rounded-lg p-2 bg-slate-50/70 space-y-1.5">
+          <div class="flex items-center justify-between">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="aiEnhancerToggle" checked class="w-3.5 h-3.5 rounded text-violet-600 bg-white border-slate-300 focus:ring-violet-500 accent-violet-600 cursor-pointer">
+              <span class="text-xs font-bold text-slate-800">Tối ưu Prompt 5 lớp (GPT-4o-mini)</span>
+            </label>
+            <button type="button" onclick="toggleProPresets()" id="toggleProBtn" class="text-[11px] font-semibold text-violet-700 hover:text-violet-900 flex items-center gap-1 cursor-pointer">
+              <span>Bộ lọc Studio</span>
+              <span id="proChevron" class="text-[9px]">▼</span>
+            </button>
+          </div>
+
+          <!-- Drawer thả xuống nếu cần chỉnh Pro Presets -->
+          <div id="proPresetsPanel" class="hidden pt-1.5 border-t border-slate-200 grid grid-cols-3 gap-1.5 text-xs">
+            <div>
+              <label class="block text-[10px] text-slate-500 mb-0.5">Phong cách</label>
+              <select id="stylePreset" class="w-full bg-white border border-slate-300 rounded px-1.5 py-1 text-[11px] text-slate-800 focus:outline-none focus:border-violet-600">
+                <option value="none">Tự do</option>
+                <option value="doc_realism" selected>Chân thực đời thường</option>
+                <option value="cinematic">Điện ảnh Cinematic</option>
+                <option value="commercial_studio">Studio Thương mại</option>
+                <option value="vintage_film">Analog Film Cổ điển</option>
+                <option value="oil_painting">Tranh sơn dầu</option>
+                <option value="packaging_mockup">Mockup Bao bì</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-500 mb-0.5">Ánh sáng</label>
+              <select id="lightingPreset" class="w-full bg-white border border-slate-300 rounded px-1.5 py-1 text-[11px] text-slate-800 focus:outline-none focus:border-violet-600">
+                <option value="none">Tự do</option>
+                <option value="golden_hour">Nắng sớm bình minh</option>
+                <option value="soft_daylight">Ánh sáng dịu</option>
+                <option value="studio_softbox">Studio Softbox</option>
+                <option value="sunset_dramatic">Hoàng hôn rực rỡ</option>
+                <option value="moody_night">Đêm / Ánh trăng</option>
+                <option value="neon_glow">Đèn Neon</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-500 mb-0.5">Ống kính</label>
+              <select id="lensPreset" class="w-full bg-white border border-slate-300 rounded px-1.5 py-1 text-[11px] text-slate-800 focus:outline-none focus:border-violet-600">
+                <option value="none">Tự do</option>
+                <option value="portrait_85mm">Chân dung 85mm</option>
+                <option value="natural_50mm">Mắt nhìn 50mm</option>
+                <option value="wide_24mm">Góc rộng 24mm</option>
+                <option value="macro_100mm">Cận cảnh Macro</option>
+                <option value="drone_aerial">Góc trên cao</option>
+                <option value="full_body">Toàn thân</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= PROMPT AREA: MAX HEIGHT CHO PHÉP NHẬP DÀI ================= -->
+        <div class="flex-1 min-h-0 flex flex-col">
+          <div class="shrink-0 flex items-center justify-between mb-1">
+            <label class="text-xs font-semibold text-slate-700">Mô tả hình ảnh (Prompt) *</label>
+            <span class="text-[10px] text-slate-400">Tiếng Việt / English</span>
+          </div>
+
+          <textarea id="promptInput" placeholder="Nhập mô tả ảnh chi tiết (ví dụ: chai nước hoa cao cấp, cô gái áo kendogi, phong cảnh bao bì hộp quà)..."
+            class="flex-1 w-full min-h-[120px] bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-violet-600 focus:ring-1 focus:ring-violet-600 transition resize-none"></textarea>
+
+          <!-- Prompt Suggestions Chips (Slim) -->
+          <div class="shrink-0 flex flex-wrap gap-1 mt-1.5">
+            <button type="button" onclick="setPrompt('Ảnh chụp tài liệu cô gái trẻ đang thu hoạch bắp ngô, mồ hôi lấp lánh trên trán, ánh nắng sáng trong trẻo, chân thực tự nhiên')" class="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 px-2 py-0.5 rounded transition cursor-pointer">Cô gái đồng ngô</button>
+            <button type="button" onclick="setPrompt('Chai nước hoa cao cấp nắp vàng sang trọng, ánh sáng studio nghệ thuật')" class="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 px-2 py-0.5 rounded transition cursor-pointer">Chai nước hoa</button>
+            <button type="button" onclick="setPrompt('giọt sữa rơi trên áo kendogi, thớ vải dệt cotton sashiko màu xanh chàm sắc nét')" class="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 px-2 py-0.5 rounded transition cursor-pointer">Kendogi & Sữa</button>
+          </div>
+        </div>
+
+        <!-- SUBMIT BUTTON -->
+        <button type="button" id="submitBtn" onclick="submitRenderJob()"
+          class="shrink-0 w-full h-10 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs tracking-wide transition shadow-xs active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          <span>Render 4K Ngay</span>
+        </button>
+
+      </div>
+
+      <!-- ================= TAB 2: CHỈNH SỬA & INPAINTING ================= -->
+      <div id="panelEdit" class="flex-1 min-h-0 flex flex-col gap-2 hidden">
+        <!-- Nguồn ảnh -->
+        <div class="shrink-0">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs font-semibold text-slate-700">Ảnh nguồn cần sửa</span>
+            <button type="button" onclick="document.getElementById('fileUploadInput').click()" class="text-[11px] font-semibold text-cyan-700 hover:text-cyan-800 transition flex items-center gap-1 cursor-pointer">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+              <span>Tải ảnh lên</span>
+            </button>
+            <input type="file" id="fileUploadInput" accept="image/*" class="hidden" onchange="handleFileUpload(event)">
+          </div>
+          <select id="sourceSelect" onchange="loadSourceFromSelect(this.value)"
+            class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-800 focus:outline-none focus:border-cyan-600">
+            <option value="">-- Chọn ảnh từ thư viện render --</option>
+          </select>
+        </div>
+
+        <!-- Khung vẽ Inpainting Canvas (Gọn gàng) -->
+        <div class="shrink-0">
+          <div class="flex items-center justify-between mb-1">
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs font-semibold text-slate-700">Vùng sửa (Mask)</span>
+              <span id="modeBadge" class="text-[9px] px-1.5 py-0.2 rounded font-mono bg-blue-50 text-blue-700 border border-blue-200 font-semibold">
+                Sửa toàn bộ
+              </span>
+            </div>
+            <div class="flex items-center gap-1">
+              <button type="button" onclick="setTool('brush')" id="toolBrush" class="px-2 py-0.5 text-[10px] rounded bg-red-100 border border-red-300 text-red-800 font-bold transition cursor-pointer">Cọ tô</button>
+              <button type="button" onclick="setTool('eraser')" id="toolEraser" class="px-2 py-0.5 text-[10px] rounded bg-slate-100 border border-slate-200 text-slate-700 transition cursor-pointer">Tẩy</button>
+              <button type="button" onclick="clearMask()" class="px-2 py-0.5 text-[10px] rounded bg-slate-100 border border-slate-200 text-slate-500 hover:text-slate-800 transition cursor-pointer">Xóa hết</button>
+            </div>
+          </div>
+
+          <div class="relative w-full h-44 bg-slate-100 rounded-lg border border-slate-300 overflow-hidden flex items-center justify-center select-none shadow-inner">
+            <canvas id="mainCanvas" class="max-w-full max-h-full cursor-crosshair"></canvas>
+            <div id="canvasPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 text-xs gap-1 pointer-events-none">
+              <svg class="w-6 h-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+              <span>Chọn ảnh ở trên để vẽ vùng cần sửa</span>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 mt-1 text-[11px] text-slate-600">
+            <span class="shrink-0 text-[10px]">Cỡ cọ:</span>
+            <input type="range" id="brushSize" min="10" max="90" value="35" class="w-full accent-red-600 cursor-pointer h-1" oninput="document.getElementById('brushSizeVal').innerText = this.value + 'px'">
+            <span id="brushSizeVal" class="font-mono text-slate-700 font-bold shrink-0 text-[10px] w-7">35px</span>
+          </div>
+        </div>
+
+        <!-- Prompt Sửa Ảnh (Cao linh hoạt) -->
+        <div class="flex-1 min-h-0 flex flex-col">
+          <div class="shrink-0 flex items-center justify-between mb-1">
+            <label class="text-xs font-semibold text-slate-700">Yêu cầu sửa (Edit Prompt) *</label>
+            <label class="flex items-center gap-1 cursor-pointer">
+              <input type="checkbox" id="editAiEnhancerToggle" checked class="w-3 h-3 rounded text-cyan-600 accent-cyan-600 cursor-pointer">
+              <span class="text-[10px] text-cyan-800 font-semibold">Tự hòa trộn sáng</span>
+            </label>
+          </div>
+
+          <textarea id="editPromptInput" placeholder="Nhập chi tiết cần sửa (ví dụ: đổi nón lá thành mũ tai bèo xanh rêu, đổi màu áo sang màu đỏ thắm)..."
+            class="flex-1 w-full min-h-[90px] bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-cyan-600 focus:ring-1 focus:ring-cyan-600 transition resize-none"></textarea>
+
+          <div class="shrink-0 flex flex-wrap gap-1 mt-1">
+            <button type="button" onclick="setEditPrompt('Đổi nón lá thành mũ tai bèo quân đội màu xanh rêu')" class="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 px-2 py-0.5 rounded transition cursor-pointer">Đổi mũ tai bèo</button>
+            <button type="button" onclick="setEditPrompt('Đổi màu áo sơ mi thành màu đỏ tươi thêu hoa văn')" class="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 px-2 py-0.5 rounded transition cursor-pointer">Đổi áo đỏ</button>
+          </div>
+        </div>
+
+        <button type="button" id="submitEditBtn" onclick="submitEditJob()"
+          class="shrink-0 w-full h-10 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs tracking-wide transition shadow-xs active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+          <span>Thực Hiện Sửa Ảnh 4K</span>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- CỘT PHẢI (7 CỘT): DANH SÁCH RENDER VÀ THƯ VIỆN KẾT QUẢ -->
+    <div class="col-span-12 lg:col-span-7 h-full flex flex-col min-h-0 overflow-hidden">
+      <!-- Toolbar đầu danh sách -->
+      <div class="shrink-0 flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700">Lịch sử Render</h2>
+          <span id="jobCount" class="text-xs font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 border border-violet-200">0</span>
+          <span id="totalCostBadge" class="hidden text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200" title="Tổng chi phí của toàn bộ render jobs"></span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <button type="button" onclick="clearFailedJobs()" class="text-xs text-slate-600 hover:text-amber-700 transition flex items-center gap-1 cursor-pointer px-2.5 py-1 rounded-md bg-white border border-slate-200 hover:border-amber-300 shadow-2xs font-medium">
+            <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            <span>Dọn task lỗi</span>
+          </button>
+          <button type="button" onclick="lastJobsHash=''; fetchJobs()" class="text-xs text-violet-700 hover:text-violet-900 transition flex items-center gap-1 cursor-pointer px-2.5 py-1 rounded-md bg-white border border-slate-200 hover:border-violet-300 shadow-2xs font-semibold">
+            <svg class="w-3.5 h-3.5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            <span>Làm mới</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Vùng cuộn danh sách (Tự động scroll nội bộ, không làm scroll cả trang) -->
+      <div id="jobList" class="flex-1 min-h-0 overflow-y-auto pr-1.5 space-y-2.5">
+        <!-- Render cards inject ở đây -->
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL ZOOM & PAN 4K IMAGE VIEWER                                         -->
+  <!-- ========================================================================= -->
+  <div id="imageViewerModal" class="fixed inset-0 z-50 bg-black/95 backdrop-blur-md hidden flex-col select-none" tabindex="-1">
+    <!-- Top Toolbar (Clean Pro Style) -->
+    <div class="h-13 px-4 sm:px-6 border-b border-slate-200 bg-white flex items-center justify-between z-10 shrink-0 shadow-xs">
+      <div class="flex items-center gap-3 min-w-0 pr-4">
+        <!-- Small logo in modal -->
+        <div class="w-6 h-6 shrink-0 hidden sm:block">
+          <svg viewBox="0 0 100 100" class="w-full h-full">
+            <path d="M26 26 L74 74" stroke="#8b5cf6" stroke-width="14" stroke-linecap="round" />
+            <path d="M74 26 L26 74" stroke="#06b6d4" stroke-width="14" stroke-linecap="round" />
+          </svg>
+        </div>
+        <span class="text-xs font-bold text-slate-900 font-mono truncate" id="viewerFilename">image.png</span>
+        <span class="text-[11px] px-2 py-0.5 rounded bg-violet-50 text-violet-700 border border-violet-200 font-mono shrink-0 hidden sm:inline-block font-semibold" id="viewerDimensions">4096×3072</span>
+        <span class="text-[11px] px-2 py-0.5 rounded bg-slate-100 text-cyan-800 border border-slate-200 font-mono font-bold shrink-0" id="viewerZoomLevel">100%</span>
+      </div>
+
+      <!-- Controls -->
+      <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <button type="button" onclick="zoomIn()" class="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 transition text-xs font-bold border border-slate-200 cursor-pointer" title="Phóng to (+)">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        </button>
+        <button type="button" onclick="zoomOut()" class="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 transition text-xs font-bold border border-slate-200 cursor-pointer" title="Thu nhỏ (-)">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
+        </button>
+        <button type="button" onclick="zoomActual()" class="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 transition text-xs font-bold cursor-pointer border border-slate-200" title="Kích thước thực 1:1">
+          1:1
+        </button>
+        <button type="button" onclick="zoomFit()" class="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 transition text-xs font-bold cursor-pointer border border-slate-200" title="Vừa màn hình">
+          Fit
+        </button>
+        <button type="button" onclick="viewerQuickEdit()" class="px-2.5 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white transition text-xs font-bold flex items-center gap-1 cursor-pointer shadow-2xs">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+          <span>Sửa ảnh</span>
+        </button>
+        <a id="viewerDownloadBtn" href="#" download="" class="px-2.5 py-1 rounded-lg bg-violet-600 hover:bg-violet-700 text-white transition text-xs font-bold flex items-center gap-1 cursor-pointer shadow-2xs">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          <span>Tải 4K</span>
+        </a>
+        <button type="button" onclick="closeImageModal()" class="p-1.5 ml-1 rounded-lg bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 border border-slate-200 transition cursor-pointer text-xs font-bold" title="Đóng (Esc)">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Viewport Area (Container for pan and zoom) -->
+    <div id="viewerContainer" class="flex-1 relative overflow-hidden bg-slate-950 flex items-center justify-center cursor-grab active:cursor-grabbing">
+      <div id="viewerTransformLayer" class="absolute transform-gpu origin-center will-change-transform">
+        <img id="viewerImage" src="" alt="4K Preview" class="max-none pointer-events-none select-none rounded shadow-2xl">
+      </div>
+      <div class="absolute bottom-3 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur border border-slate-700 px-3.5 py-1 rounded-full text-[10px] text-slate-300 pointer-events-none text-center shadow-lg">
+        Cuộn chuột: Zoom • Giữ chuột: Pan • Nhấp đúp: Phóng to / Fit • Phím Esc: Đóng
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let activeTab = 'create';
+    let selectedRatio = '4:3';
+    let selectedRes = '4k';
+    let selectedEngine = 'gpt';
+
+    function switchTab(tab) {
+      activeTab = tab;
+      const btnCreate = document.getElementById('tabBtnCreate');
+      const btnEdit = document.getElementById('tabBtnEdit');
+      const panelCreate = document.getElementById('panelCreate');
+      const panelEdit = document.getElementById('panelEdit');
+
+      if (tab === 'create') {
+        btnCreate.className = 'py-1.5 rounded-md transition flex items-center justify-center gap-1.5 cursor-pointer bg-violet-600 text-white shadow-2xs font-bold';
+        btnEdit.className = 'py-1.5 rounded-md transition flex items-center justify-center gap-1.5 cursor-pointer text-slate-500 hover:text-slate-900 font-semibold';
+        panelCreate.classList.remove('hidden');
+        panelEdit.classList.add('hidden');
+      } else {
+        btnEdit.className = 'py-1.5 rounded-md transition flex items-center justify-center gap-1.5 cursor-pointer bg-cyan-600 text-white shadow-2xs font-bold';
+        btnCreate.className = 'py-1.5 rounded-md transition flex items-center justify-center gap-1.5 cursor-pointer text-slate-500 hover:text-slate-900 font-semibold';
+        panelEdit.classList.remove('hidden');
+        panelCreate.classList.add('hidden');
+        if (!currentSourceImage && lastCompletedJobs.length > 0) {
+          loadSourceImage(lastCompletedJobs[0].filename);
+        }
+      }
+    }
+
+    function setEngine(eng) {
+      selectedEngine = eng;
+      document.querySelectorAll('.engine-btn').forEach(btn => {
+        if (btn.getAttribute('data-engine') === eng) {
+          btn.className = 'engine-btn py-1 text-center rounded text-xs font-bold transition border border-violet-300 bg-white text-violet-700 shadow-2xs';
+        } else {
+          btn.className = 'engine-btn py-1 text-center rounded text-xs font-semibold transition border border-transparent text-slate-600 hover:text-slate-900';
+        }
+      });
+    }
+
+    function setResolution(res) {
+      selectedRes = res;
+      document.querySelectorAll('.res-btn').forEach(btn => {
+        if (btn.getAttribute('data-res') === res) {
+          btn.className = 'res-btn py-1 text-center rounded text-xs font-bold transition border border-violet-300 bg-white text-violet-700 shadow-2xs';
+        } else {
+          btn.className = 'res-btn py-1 text-center rounded text-xs font-semibold transition border border-transparent text-slate-600 hover:text-slate-900';
+        }
+      });
+      document.getElementById('resIndicator').innerText = (res === '4k' ? '4K • 300 DPI' : (res === '2k' ? '2K • 2560px' : '1080p • 1920px'));
+    }
+
+    function setRatio(ratio) {
+      selectedRatio = ratio;
+      document.querySelectorAll('.ratio-btn').forEach(btn => {
+        if (btn.getAttribute('data-ratio') === ratio) {
+          btn.className = 'ratio-btn py-1 rounded font-bold border border-violet-300 bg-white text-violet-700 shadow-2xs transition';
+        } else {
+          btn.className = 'ratio-btn py-1 rounded font-semibold text-slate-600 hover:text-slate-900 transition';
+        }
+      });
+    }
+
+    function setPrompt(text) {
+      document.getElementById('promptInput').value = text;
+      document.getElementById('promptInput').focus();
+    }
+
+    function setEditPrompt(text) {
+      document.getElementById('editPromptInput').value = text;
+      document.getElementById('editPromptInput').focus();
+    }
+
+    async function openRenderFolder() {
+      try {
+        await fetch('/open-folder', { method: 'POST' });
+      } catch (err) {
+        alert('Lỗi mở thư mục render: ' + err.message);
+      }
+    }
+
+    // =========================================================================
+    // CANVAS INPAINTING & DRAWING ENGINE
+    // =========================================================================
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d');
+    let currentSourceImage = null;
+    let currentSourceFilename = '';
+    let isDrawing = false;
+    let currentTool = 'brush'; // 'brush' or 'eraser'
+    let hasDrawnMask = false;
+
+    // Off-screen canvas để export mask chuẩn cho OpenAI
+    const maskCanvas = document.createElement('canvas');
+    const maskCtx = maskCanvas.getContext('2d');
+
+    function initCanvasDimensions(w, h) {
+      canvas.width = w;
+      canvas.height = h;
+      maskCanvas.width = w;
+      maskCanvas.height = h;
+      resetMaskCanvas();
+      redraw();
+    }
+
+    function resetMaskCanvas() {
+      maskCtx.globalCompositeOperation = 'source-over';
+      maskCtx.fillStyle = '#000000';
+      maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+      hasDrawnMask = false;
+      updateModeBadge();
+    }
+
+    function updateModeBadge() {
+      const badge = document.getElementById('modeBadge');
+      if (hasDrawnMask) {
+        badge.className = 'text-[9px] px-1.5 py-0.2 rounded font-mono bg-red-100 text-red-800 border border-red-300 font-bold';
+        badge.innerText = 'Inpainting (vùng đỏ)';
+      } else {
+        badge.className = 'text-[9px] px-1.5 py-0.2 rounded font-mono bg-blue-50 text-blue-700 border border-blue-200 font-semibold';
+        badge.innerText = 'Sửa toàn bộ';
+      }
+    }
+
+    function setTool(tool) {
+      currentTool = tool;
+      document.getElementById('toolBrush').className = tool === 'brush'
+        ? 'px-2 py-0.5 text-[10px] rounded bg-red-100 border border-red-300 text-red-800 font-bold transition cursor-pointer'
+        : 'px-2 py-0.5 text-[10px] rounded bg-slate-100 border border-slate-200 text-slate-700 transition cursor-pointer';
+      document.getElementById('toolEraser').className = tool === 'eraser'
+        ? 'px-2 py-0.5 text-[10px] rounded bg-amber-100 border border-amber-300 text-amber-800 font-bold transition cursor-pointer'
+        : 'px-2 py-0.5 text-[10px] rounded bg-slate-100 border border-slate-200 text-slate-700 transition cursor-pointer';
+    }
+
+    function clearMask() {
+      resetMaskCanvas();
+      redraw();
+    }
+
+    function redraw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (currentSourceImage) {
+        ctx.drawImage(currentSourceImage, 0, 0, canvas.width, canvas.height);
+      }
+
+      if (hasDrawnMask) {
+        const imgData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+        const visualCanvas = document.createElement('canvas');
+        visualCanvas.width = canvas.width;
+        visualCanvas.height = canvas.height;
+        const vCtx = visualCanvas.getContext('2d');
+        const vImgData = vCtx.createImageData(canvas.width, canvas.height);
+
+        for (let i = 0; i < imgData.data.length; i += 4) {
+          if (imgData.data[i + 3] < 128) {
+            vImgData.data[i] = 239;     // R
+            vImgData.data[i + 1] = 68;  // G
+            vImgData.data[i + 2] = 68;  // B
+            vImgData.data[i + 3] = 135; // A (~50%)
+          }
+        }
+        vCtx.putImageData(vImgData, 0, 0);
+        ctx.drawImage(visualCanvas, 0, 0);
+      }
+    }
+
+    function getCanvasCoords(e) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+      };
+    }
+
+    function drawStroke(x, y) {
+      const bSize = parseInt(document.getElementById('brushSize').value, 10);
+
+      maskCtx.lineWidth = bSize;
+      maskCtx.lineCap = 'round';
+      maskCtx.lineJoin = 'round';
+
+      if (currentTool === 'brush') {
+        maskCtx.globalCompositeOperation = 'destination-out';
+        maskCtx.beginPath();
+        maskCtx.arc(x, y, bSize / 2, 0, Math.PI * 2);
+        maskCtx.fill();
+        hasDrawnMask = true;
+      } else {
+        maskCtx.globalCompositeOperation = 'source-over';
+        maskCtx.fillStyle = '#000000';
+        maskCtx.beginPath();
+        maskCtx.arc(x, y, bSize / 2, 0, Math.PI * 2);
+        maskCtx.fill();
+      }
+
+      updateModeBadge();
+      redraw();
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+      if (!currentSourceImage) return;
+      isDrawing = true;
+      const c = getCanvasCoords(e);
+      drawStroke(c.x, c.y);
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (!isDrawing) return;
+      const c = getCanvasCoords(e);
+      drawStroke(c.x, c.y);
+    });
+
+    window.addEventListener('mouseup', () => { isDrawing = false; });
+
+    function loadSourceImage(filename) {
+      if (!filename) return;
+      currentSourceFilename = filename;
+      document.getElementById('sourceSelect').value = filename;
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        currentSourceImage = img;
+        document.getElementById('canvasPlaceholder').style.display = 'none';
+        const maxDim = 800;
+        let w = img.width;
+        let h = img.height;
+        if (w > maxDim || h > maxDim) {
+          const ratio = Math.min(maxDim / w, maxDim / h);
+          w = Math.round(w * ratio);
+          h = Math.round(h * ratio);
+        }
+        initCanvasDimensions(w, h);
+      };
+      img.src = '/render-files/' + filename + '?t=' + Date.now();
+    }
+
+    function loadSourceFromSelect(val) {
+      if (val) loadSourceImage(val);
+    }
+
+    function quickEditImage(filename) {
+      switchTab('edit');
+      loadSourceImage(filename);
+    }
+
+    async function handleFileUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const formData = new FormData();
+      formData.append('file', file);
+      try {
+        const res = await fetch('/upload-source-image', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (res.ok && data.filename) {
+          await fetchJobs();
+          loadSourceImage(data.filename);
+        } else {
+          alert('Lỗi tải ảnh: ' + (data.error || 'Thất bại'));
+        }
+      } catch (err) {
+        alert('Lỗi tải file: ' + err.message);
+      }
+    }
+
+    function toggleProPresets() {
+      const panel = document.getElementById('proPresetsPanel');
+      const chevron = document.getElementById('proChevron');
+      if (panel.classList.contains('hidden')) {
+        panel.classList.remove('hidden');
+        chevron.innerText = '▲';
+      } else {
+        panel.classList.add('hidden');
+        chevron.innerText = '▼';
+      }
+    }
+
+    window.enhancedPrompts = {};
+
+    function copyEnhancedPrompt(jobId) {
+      const text = window.enhancedPrompts[jobId];
+      if (text) {
+        navigator.clipboard.writeText(text).then(() => {
+          alert('Đã sao chép Prompt Chuẩn Hóa AI vào bộ nhớ đệm!');
+        }).catch(err => {
+          prompt('Sao chép prompt bên dưới:', text);
+        });
+      }
+    }
+
+    // =========================================================================
+    // SUBMIT RENDER / EDIT JOBS
+    // =========================================================================
+    async function submitRenderJob() {
+      const prompt = document.getElementById('promptInput').value.trim();
+      if (!prompt) {
+        alert('Vui lòng nhập mô tả ảnh (Prompt)!');
+        return;
+      }
+
+      const useAiEnhancer = document.getElementById('aiEnhancerToggle') ? document.getElementById('aiEnhancerToggle').checked : true;
+      const presets = {
+        style: document.getElementById('stylePreset') ? document.getElementById('stylePreset').value : 'none',
+        lighting: document.getElementById('lightingPreset') ? document.getElementById('lightingPreset').value : 'none',
+        lens: document.getElementById('lensPreset') ? document.getElementById('lensPreset').value : 'none'
+      };
+
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="inline-block animate-spin mr-1">⏳</span> <span>Đang xử lý 4K...</span>';
+
+      try {
+        const res = await fetch('/render-job', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: prompt,
+            use_ai_enhancer: useAiEnhancer,
+            presets: presets,
+            engine: selectedEngine,
+            aspect_ratio: selectedRatio,
+            resolution: selectedRes,
+            render_mode: 'auto',
+            timeout_minutes: 60
+          })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          document.getElementById('promptInput').value = '';
+          lastJobsHash = '';
+          fetchJobs();
+        } else {
+          alert('Lỗi: ' + (data.error || 'Không thể tạo job'));
+        }
+      } catch (err) {
+        alert('Lỗi kết nối tới Render Studio: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> <span>Render 4K Ngay</span>';
+      }
+    }
+
+    async function submitEditJob() {
+      if (!currentSourceFilename) {
+        alert('Vui lòng chọn hoặc tải lên một bức ảnh cần sửa!');
+        return;
+      }
+      const prompt = document.getElementById('editPromptInput').value.trim();
+      if (!prompt) {
+        alert('Vui lòng nhập mô tả chi tiết cần sửa (Edit Prompt)!');
+        return;
+      }
+
+      const useAiEnhancer = document.getElementById('editAiEnhancerToggle') ? document.getElementById('editAiEnhancerToggle').checked : true;
+
+      const btn = document.getElementById('submitEditBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="inline-block animate-spin mr-1">⏳</span> <span>Đang thực hiện sửa 4K...</span>';
+
+      let maskB64 = null;
+      if (hasDrawnMask) {
+        maskB64 = maskCanvas.toDataURL('image/png');
+      }
+
+      try {
+        const res = await fetch('/render-edit-job', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: prompt,
+            use_ai_enhancer: useAiEnhancer,
+            source_filename: currentSourceFilename,
+            mask_base64: maskB64,
+            engine: 'gpt',
+            resolution: selectedRes,
+            timeout_minutes: 60
+          })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          document.getElementById('editPromptInput').value = '';
+          clearMask();
+          lastJobsHash = '';
+          fetchJobs();
+        } else {
+          alert('Lỗi sửa ảnh: ' + (data.error || 'Thất bại'));
+        }
+      } catch (err) {
+        alert('Lỗi kết nối: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg> <span>Thực Hiện Sửa Ảnh 4K</span>';
+      }
+    }
+
+    let lastJobsHash = '';
+    let lastCompletedJobs = [];
+
+    async function fetchJobs() {
+      try {
+        const res = await fetch('/render-jobs/all');
+        const data = await res.json();
+        if (!data.success) return;
+
+        const jobs = data.jobs || [];
+        document.getElementById('jobCount').innerText = jobs.length;
+
+        // Thống kê tổng tokens và chi phí
+        let totalAllTokens = 0;
+        let totalAllUsd = 0;
+        let totalAllVnd = 0;
+        jobs.forEach(j => {
+          const u = j.usage || {};
+          const isWide = ['16:9', '4:3', '9:16', '3:4'].includes(j.aspect_ratio);
+          const isEdit = j.type === 'edit';
+          const defaultTok = isEdit ? 3500 : (j.engine === 'gemini' ? 1200 : (isWide ? 3450 : 2000));
+          const defaultUsd = isEdit ? 0.140 : (j.engine === 'gemini' ? 0.030 : (isWide ? 0.138 : 0.080));
+          const tok = u.total_tokens !== undefined ? u.total_tokens : defaultTok;
+          const usd = u.cost_usd !== undefined ? u.cost_usd : defaultUsd;
+          const vnd = u.cost_vnd !== undefined ? u.cost_vnd : Math.round(usd * 25400);
+          totalAllTokens += tok;
+          totalAllUsd += usd;
+          totalAllVnd += vnd;
+        });
+        const totalCostBadge = document.getElementById('totalCostBadge');
+        if (totalCostBadge) {
+          if (jobs.length > 0) {
+            totalCostBadge.classList.remove('hidden');
+            totalCostBadge.innerHTML = `<span class="text-emerald-900 font-bold">$${totalAllUsd.toFixed(4)}</span> <span class="text-emerald-700 font-semibold">• ${Number(totalAllVnd).toLocaleString()}₫</span> <span class="text-amber-800 font-bold ml-1 font-mono">(${Number(totalAllTokens).toLocaleString()} tok)</span>`;
+          } else {
+            totalCostBadge.classList.add('hidden');
+          }
+        }
+
+        // Cập nhật dropdown ảnh nguồn cho tab Sửa Ảnh
+        const completed = jobs.filter(j => j.status === 'completed' && j.filename);
+        lastCompletedJobs = completed;
+        const select = document.getElementById('sourceSelect');
+        const prevVal = select.value;
+        select.innerHTML = '<option value="">-- Chọn ảnh từ thư viện render --</option>';
+        completed.forEach(j => {
+          const opt = document.createElement('option');
+          opt.value = j.filename;
+          opt.innerText = `${j.filename} — "${(j.raw_prompt || j.prompt || '').substring(0, 35)}..."`;
+          if (j.filename === prevVal) opt.selected = true;
+          select.appendChild(opt);
+        });
+
+        const container = document.getElementById('jobList');
+        const currentHash = jobs.map(j => {
+          const u = j.usage || {};
+          return `${j.job_id}:${j.status}:${j.file_size_bytes || 0}:${j.error || ''}:${j.enhanced_prompt ? j.enhanced_prompt.length : 0}:${u.total_tokens || 0}:${u.cost_usd || 0}`;
+        }).join('|');
+
+        if (currentHash === lastJobsHash) {
+          return;
+        }
+        lastJobsHash = currentHash;
+
+        if (jobs.length === 0) {
+          container.innerHTML = `
+            <div class="bg-white border border-dashed border-slate-300 rounded-xl py-12 text-center text-slate-400 text-xs shadow-2xs">
+              Chưa có lệnh render nào. Hãy nhập prompt ở cột bên trái để bắt đầu!
+            </div>
+          `;
+          return;
+        }
+
+        const emptyNotice = container.querySelector('.border-dashed');
+        if (emptyNotice) emptyNotice.remove();
+
+        const currentJobIds = new Set(jobs.map(j => j.job_id));
+        Array.from(container.children).forEach(child => {
+          const id = child.getAttribute('data-job-id');
+          if (id && !currentJobIds.has(id)) child.remove();
+        });
+
+        jobs.forEach(j => {
+          let card = document.getElementById('card-' + j.job_id);
+          const isDone = j.status === 'completed';
+          const isPending = j.status === 'pending';
+          const isFailed = j.status === 'failed';
+          const isEdit = j.type === 'edit';
+
+          let statusBadge = '';
+          if (isDone) {
+            statusBadge = `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded">Hoàn tất (${j.elapsed_seconds || 0}s)</span>`;
+          } else if (isPending) {
+            statusBadge = `<span class="bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span> Đang render...
+            </span>`;
+          } else if (isFailed) {
+            statusBadge = `<span class="bg-red-50 text-red-700 border border-red-200 text-[10px] font-bold px-2 py-0.5 rounded">Thất bại</span>`;
+          } else {
+            statusBadge = `<span class="bg-red-50 text-red-700 border border-red-200 text-[10px] font-bold px-2 py-0.5 rounded">${j.status}</span>`;
+          }
+
+          const fullImgUrl = isDone ? `/render-files/${j.filename}` : null;
+          const thumbUrl = isDone ? `/render-thumbnail/${j.filename}` : null;
+          const mbSize = j.file_size_bytes ? (j.file_size_bytes / (1024 * 1024)).toFixed(2) + ' MB' : '';
+          const engineLabel = isEdit ? 'Inpaint' : (j.engine === 'gemini' ? 'Gemini' : 'GPT');
+          const engineBadgeClass = isEdit 
+            ? 'bg-cyan-50 text-cyan-700 border-cyan-200'
+            : (j.engine === 'gemini' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-purple-50 text-purple-700 border-purple-200');
+
+          const rawText = j.raw_prompt || j.prompt || '';
+          const hasEnhanced = j.enhanced_prompt && j.enhanced_prompt.trim() !== '' && j.enhanced_prompt.trim() !== rawText.trim();
+          if (j.enhanced_prompt) {
+            window.enhancedPrompts[j.job_id] = j.enhanced_prompt;
+          }
+
+          const usage = j.usage || {};
+          const isWide = ['16:9', '4:3', '9:16', '3:4'].includes(j.aspect_ratio);
+          const defaultTok = isEdit ? 3500 : (j.engine === 'gemini' ? 1200 : (isWide ? 3450 : 2000));
+          const defaultUsd = isEdit ? 0.140 : (j.engine === 'gemini' ? 0.030 : (isWide ? 0.138 : 0.080));
+          const totalTokens = usage.total_tokens || defaultTok;
+          const costUsd = usage.cost_usd !== undefined ? usage.cost_usd : defaultUsd;
+          const costVnd = usage.cost_vnd !== undefined ? usage.cost_vnd : Math.round(costUsd * 25400);
+
+          const tokenFormatted = Number(totalTokens).toLocaleString() + ' tok';
+          const usdFormatted = '$' + Number(costUsd).toFixed(4);
+          const vndFormatted = Number(costVnd).toLocaleString() + '₫';
+
+          const cardHTML = `
+            ${isDone && thumbUrl ? `
+              <div class="w-36 h-36 bg-slate-100 rounded-lg overflow-hidden shrink-0 border border-slate-200 relative group cursor-pointer flex items-center justify-center" onclick="openImageModal('${fullImgUrl}', '${j.filename}', '${j.dimensions || ''}')">
+                <img src="${thumbUrl}" alt="${j.filename}" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+                <div style="display:none;" class="w-full h-full flex flex-col items-center justify-center p-2 text-center bg-slate-50 text-slate-400">
+                  <svg class="w-8 h-8 mb-1 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                  <span class="text-[10px] font-bold text-slate-600">Xem ảnh 4K</span>
+                  <span class="text-[9px] text-slate-400 font-mono truncate max-w-full">${j.filename}</span>
+                </div>
+                <div class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-[11px] font-bold gap-1 text-center px-1">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7"/></svg>
+                  <span>Phóng to 4K</span>
+                </div>
+              </div>
+            ` : `
+              <div class="w-36 h-36 bg-slate-50 rounded-lg border border-dashed border-slate-300 flex flex-col items-center justify-center shrink-0 text-slate-400 text-xs">
+                ${isFailed ? `
+                  <svg class="w-6 h-6 text-red-500 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                  <span class="text-red-500 text-[11px] text-center px-1 font-bold">Lỗi tạo ảnh</span>
+                ` : `
+                  <div class="w-6 h-6 rounded-full border-2 border-violet-600 border-t-transparent animate-spin mb-1.5"></div>
+                  <span class="font-medium text-slate-500 text-[11px]">Đang render...</span>
+                `}
+              </div>
+            `}
+
+            <div class="flex-1 min-w-0 flex flex-col justify-between h-full space-y-1.5">
+              <div>
+                <div class="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                  <div class="flex items-center gap-1.5 truncate">
+                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded border font-mono ${engineBadgeClass}">
+                      ${engineLabel}
+                    </span>
+                    <span class="text-xs font-mono font-bold text-slate-800 truncate" title="${j.filename}">${j.filename}</span>
+                  </div>
+                  <div class="flex items-center gap-1.5 shrink-0 flex-wrap">
+                    <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-300 flex items-center gap-1 shadow-2xs" title="Tổng tokens tiêu thụ: ${tokenFormatted}">
+                      <svg class="w-3 h-3 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                      <span>${tokenFormatted}</span>
+                    </span>
+                    <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-300 flex items-center gap-1 shadow-2xs" title="Chi phí: ${usdFormatted} (~${vndFormatted})">
+                      <span class="text-emerald-900">${usdFormatted}</span>
+                      <span class="text-emerald-600 font-semibold">• ${vndFormatted}</span>
+                    </span>
+                    ${statusBadge}
+                    <button type="button" onclick="deleteJob('${j.job_id}')" title="Xóa task" class="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition border border-transparent hover:border-red-200 cursor-pointer">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <p class="text-xs text-slate-700 font-medium line-clamp-2 leading-relaxed">"${rawText}"</p>
+
+                ${hasEnhanced ? `
+                  <details class="mt-1.5 text-xs bg-slate-50 border border-violet-200 rounded-lg p-2 transition group">
+                    <summary class="cursor-pointer font-bold text-violet-800 flex items-center justify-between select-none text-[11px]">
+                      <div class="flex items-center gap-1.5">
+                        <span>Prompt Chuẩn Hóa AI</span>
+                        <span class="text-[9px] bg-violet-100 text-violet-700 border border-violet-200 px-1 py-0.2 rounded font-mono font-bold">5-Layer</span>
+                        ${usage.enhancer_tokens ? `<span class="text-[9px] bg-amber-50 text-amber-800 border border-amber-200 px-1 py-0.2 rounded font-mono font-semibold" title="Tokens chuẩn hóa prompt">${usage.enhancer_tokens} tok</span>` : ''}
+                      </div>
+                      <span class="text-[9px] text-slate-400 group-open:rotate-180 transition">▼</span>
+                    </summary>
+                    <div class="mt-1.5 p-1.5 rounded bg-white border border-slate-200 text-[10px] text-slate-800 leading-relaxed font-mono select-all break-words">
+                      ${j.enhanced_prompt}
+                    </div>
+                    <div class="mt-1 flex items-center justify-between">
+                      <span class="text-[10px] text-slate-500 font-mono">
+                        Prompt AI: ~$${(usage.enhancer_cost_usd || 0.0001).toFixed(4)} • Ảnh: ~$${(usage.image_cost_usd || (costUsd - (usage.enhancer_cost_usd || 0))).toFixed(4)}
+                      </span>
+                      <button type="button" onclick="copyEnhancedPrompt('${j.job_id}')" class="text-[10px] px-2 py-0.5 rounded bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 transition cursor-pointer flex items-center gap-1 font-semibold">
+                        <svg class="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                        <span>Sao chép</span>
+                      </button>
+                    </div>
+                  </details>
+                ` : ''}
+
+                ${isFailed && j.error ? `
+                  <div class="mt-1.5 p-2 rounded bg-red-50 border border-red-200 text-red-800 text-xs font-mono break-all leading-normal flex items-start gap-1.5">
+                    <span class="text-red-600 font-bold shrink-0">Lỗi:</span>
+                    <span>${j.error}</span>
+                  </div>
+                ` : ''}
+              </div>
+
+              <div class="pt-1.5 border-t border-slate-200 flex flex-wrap items-center justify-between gap-1.5 text-[10px] text-slate-500 font-mono">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="bg-slate-100 text-slate-700 border border-slate-200 px-1.5 py-0.5 rounded font-semibold">${j.dimensions || '4096×3072'}</span>
+                  <span class="bg-slate-100 text-slate-700 border border-slate-200 px-1.5 py-0.5 rounded font-semibold">300 DPI</span>
+                  ${mbSize ? `<span class="bg-slate-100 text-slate-700 border border-slate-200 px-1.5 py-0.5 rounded font-semibold">${mbSize}</span>` : ''}
+                  <span class="text-slate-400">Tokens: ${tokenFormatted} | Phí: ${usdFormatted} (~${vndFormatted})</span>
+                </div>
+
+                ${isDone ? `
+                  <div class="flex items-center gap-1.5">
+                    <button type="button" onclick="quickEditImage('${j.filename}')" class="px-2 py-0.5 rounded bg-cyan-50 hover:bg-cyan-100 text-cyan-700 border border-cyan-200 text-xs font-bold transition flex items-center gap-1 cursor-pointer">
+                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                      <span>Sửa</span>
+                    </button>
+                    <a href="${fullImgUrl}" download="${j.filename}" class="px-2 py-0.5 rounded bg-violet-50 hover:bg-violet-100 text-violet-700 border border-violet-200 text-xs font-bold transition flex items-center gap-1">
+                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                      <span>Tải 4K</span>
+                    </a>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+          `;
+
+          const cardHash = `${j.status}:${j.file_size_bytes || 0}:${j.error || ''}:${j.enhanced_prompt ? j.enhanced_prompt.length : 0}:${costUsd}:${totalTokens}`;
+          if (!card) {
+            card = document.createElement('div');
+            card.id = 'card-' + j.job_id;
+            card.setAttribute('data-job-id', j.job_id);
+            card.setAttribute('data-hash', cardHash);
+            card.className = 'bg-white border border-slate-200/90 rounded-xl p-3 shadow-2xs hover:shadow-xs flex gap-3 items-start transition duration-200';
+            card.innerHTML = cardHTML;
+            container.appendChild(card);
+          } else {
+            if (card.getAttribute('data-hash') !== cardHash) {
+              card.setAttribute('data-hash', cardHash);
+              card.innerHTML = cardHTML;
+            }
+          }
+        });
+      } catch (err) {
+        console.error('Lỗi nạp danh sách jobs:', err);
+      }
+    }
+
+    async function deleteJob(jobId) {
+      if (!confirm('Bạn có chắc muốn xóa task ' + jobId + ' khỏi danh sách?')) return;
+      try {
+        const res = await fetch('/render-job/' + jobId, { method: 'DELETE' });
+        if (res.ok) {
+          const card = document.getElementById('card-' + jobId);
+          if (card) card.remove();
+          lastJobsHash = '';
+          fetchJobs();
+        } else {
+          alert('Không thể xóa task');
+        }
+      } catch (err) {
+        alert('Lỗi: ' + err.message);
+      }
+    }
+
+    async function clearFailedJobs() {
+      if (!confirm('Bạn có muốn dọn dẹp tất cả các task bị lỗi/hủy không?')) return;
+      try {
+        const res = await fetch('/render-jobs/clear-failed', { method: 'POST' });
+        if (res.ok) {
+          lastJobsHash = '';
+          fetchJobs();
+        }
+      } catch (err) {
+        alert('Lỗi: ' + err.message);
+      }
+    }
+
+    // =========================================================================
+    // MODAL ZOOM & PAN ENGINE
+    // =========================================================================
+    let viewerScale = 1;
+    let viewerPanX = 0;
+    let viewerPanY = 0;
+    let isPanning = false;
+    let startPanX = 0;
+    let startPanY = 0;
+    let currentViewerFilename = '';
+    let currentViewerUrl = '';
+
+    function openImageModal(url, filename, dimensions) {
+      currentViewerUrl = url;
+      currentViewerFilename = filename;
+      document.getElementById('viewerFilename').innerText = filename;
+      document.getElementById('viewerDimensions').innerText = dimensions || '300 DPI';
+      document.getElementById('viewerDownloadBtn').href = url;
+      document.getElementById('viewerDownloadBtn').download = filename;
+
+      const modal = document.getElementById('imageViewerModal');
+      const img = document.getElementById('viewerImage');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+
+      img.onload = () => {
+        zoomFit();
+      };
+      img.src = url;
+    }
+
+    function closeImageModal() {
+      const modal = document.getElementById('imageViewerModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function updateViewerTransform() {
+      const layer = document.getElementById('viewerTransformLayer');
+      layer.style.transform = `translate(${viewerPanX}px, ${viewerPanY}px) scale(${viewerScale})`;
+      document.getElementById('viewerZoomLevel').innerText = Math.round(viewerScale * 100) + '%';
+    }
+
+    function zoomFit() {
+      const container = document.getElementById('viewerContainer');
+      const img = document.getElementById('viewerImage');
+      if (!img.naturalWidth || !img.naturalHeight) return;
+
+      const pad = 48;
+      const availW = container.clientWidth - pad;
+      const availH = container.clientHeight - pad;
+      const scale = Math.min(availW / img.naturalWidth, availH / img.naturalHeight, 1);
+
+      viewerScale = scale;
+      viewerPanX = 0;
+      viewerPanY = 0;
+      updateViewerTransform();
+    }
+
+    function zoomActual() {
+      viewerScale = 1;
+      viewerPanX = 0;
+      viewerPanY = 0;
+      updateViewerTransform();
+    }
+
+    function zoomIn() {
+      zoomAtCenter(1.25);
+    }
+
+    function zoomOut() {
+      zoomAtCenter(0.8);
+    }
+
+    function zoomAtCenter(factor) {
+      const newScale = Math.max(0.08, Math.min(viewerScale * factor, 10));
+      viewerScale = newScale;
+      updateViewerTransform();
+    }
+
+    function viewerQuickEdit() {
+      if (currentViewerFilename) {
+        closeImageModal();
+        quickEditImage(currentViewerFilename);
+      }
+    }
+
+    function initViewerEvents() {
+      const viewerContainer = document.getElementById('viewerContainer');
+      if (!viewerContainer) return;
+
+      viewerContainer.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const rect = viewerContainer.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left - rect.width / 2;
+        const mouseY = e.clientY - rect.top - rect.height / 2;
+
+        const zoomFactor = e.deltaY < 0 ? 1.2 : 0.833;
+        const newScale = Math.max(0.08, Math.min(viewerScale * zoomFactor, 10));
+
+        viewerPanX -= (mouseX - viewerPanX) * (newScale / viewerScale - 1);
+        viewerPanY -= (mouseY - viewerPanY) * (newScale / viewerScale - 1);
+        viewerScale = newScale;
+
+        updateViewerTransform();
+      }, { passive: false });
+
+      viewerContainer.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        isPanning = true;
+        startPanX = e.clientX - viewerPanX;
+        startPanY = e.clientY - viewerPanY;
+        viewerContainer.style.cursor = 'grabbing';
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!isPanning) return;
+        viewerPanX = e.clientX - startPanX;
+        viewerPanY = e.clientY - startPanY;
+        updateViewerTransform();
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (isPanning) {
+          isPanning = false;
+          viewerContainer.style.cursor = 'grab';
+        }
+      });
+
+      viewerContainer.addEventListener('dblclick', (e) => {
+        const img = document.getElementById('viewerImage');
+        const pad = 48;
+        const fitScale = Math.min((viewerContainer.clientWidth - pad) / img.naturalWidth, (viewerContainer.clientHeight - pad) / img.naturalHeight, 1);
+        if (Math.abs(viewerScale - fitScale) < 0.05) {
+          viewerScale = 1.0;
+        } else {
+          viewerScale = fitScale;
+          viewerPanX = 0;
+          viewerPanY = 0;
+        }
+        updateViewerTransform();
+      });
+
+      window.addEventListener('keydown', (e) => {
+        const modal = document.getElementById('imageViewerModal');
+        if (!modal || modal.classList.contains('hidden')) return;
+
+        if (e.key === 'Escape') {
+          closeImageModal();
+        } else if (e.key === '+' || e.key === '=') {
+          zoomIn();
+        } else if (e.key === '-') {
+          zoomOut();
+        } else if (e.key === '0') {
+          zoomFit();
+        } else if (e.key === '1') {
+          zoomActual();
+        }
+      });
+    }
+
+    initViewerEvents();
+    fetchJobs();
+    setInterval(fetchJobs, 2500);
+  </script>
+</body>
+</html>

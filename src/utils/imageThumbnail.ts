@@ -90,7 +90,15 @@ function resizeImageToThumbnail(img: HTMLImageElement, maxDim: number, quality: 
   ctx.drawImage(img, 0, 0, tw, th);
 
   try {
-    return canvas.toDataURL('image/jpeg', quality);
+    const imgData = ctx.getImageData(0, 0, tw, th);
+    let hasAlpha = false;
+    for (let i = 3; i < imgData.data.length; i += 16) {
+      if (imgData.data[i] < 250) {
+        hasAlpha = true;
+        break;
+      }
+    }
+    return hasAlpha ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', quality);
   } catch (e) {
     return img.src;
   }

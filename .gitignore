@@ -43,7 +43,11 @@ python-services/source_files/
 python-services/test_*.jpg
 python-services/test_*.py
 python-services/create_sample.py
+# scratch
 scratch/
+check_*.py
+test_*_vps.py
+/*_sample.png
 
 # IDE
 .vscode/

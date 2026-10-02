@@ -46,7 +46,10 @@ def generate_pdf_task(
     rot_180_back: bool = False,
     data_mode: int = 1,
     x_up_qty: int = 1,
-    standard_qty: int = 1
+    standard_qty: int = 1,
+    use_color_bar: bool = False,
+    color_bar_position: str = 'bottom',
+    color_bar_padding: float = 3.0
 ) -> Dict[str, Any]:
     """
     Background task for PDF generation
@@ -86,7 +89,10 @@ def generate_pdf_task(
             data_mode=data_mode,
             x_up_qty=x_up_qty,
             standard_qty=standard_qty,
-            total_sheets=total_sheets
+            total_sheets=total_sheets,
+            use_color_bar=use_color_bar,
+            color_bar_position=color_bar_position,
+            color_bar_padding=color_bar_padding
         )
         
         task_manager.update_progress(task_id, 90, "Đang lưu PDF...")

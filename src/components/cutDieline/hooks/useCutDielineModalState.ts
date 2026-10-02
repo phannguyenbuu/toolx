@@ -3,6 +3,23 @@ import { LayoutPlan } from '../../../utils/layoutSolver';
 import { ShapeTabItem, BgTheme } from '../types';
 import { calculateDielineSvg, buildCompleteSvgDocument } from '../services/dielineSvgGenerator';
 import { exportDielinePdf } from '../services/dielinePdfExporter';
+import { utiCommandService } from '../../../services/utiCommand/UtiCommandService';
+import { GOAGENT_DEFAULT_PORT } from '../../../services/goAgentService';
+import { safeToastSuccess, safeToastError } from '../../imposition/impositionHelpers';
+
+function utf8ToBase64(str: string): string {
+  try {
+    const bytes = new TextEncoder().encode(str);
+    let bin = '';
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i += 8192) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + 8192, len)) as any);
+    }
+    return window.btoa(bin);
+  } catch (_) {
+    return btoa(unescape(encodeURIComponent(str)));
+  }
+}
 
 interface UseCutDielineModalStateProps {
   isOpen: boolean;
@@ -44,6 +61,8 @@ export const useCutDielineModalState = ({
   const [bgTheme, setBgTheme] = useState<BgTheme>('light');
   const [customFilename, setCustomFilename] = useState<string>('');
   const [isCopied, setIsCopied] = useState<boolean>(false);
+  const [isCopyingCorel, setIsCopyingCorel] = useState<boolean>(false);
+  const [isCorelCopied, setIsCorelCopied] = useState<boolean>(false);
   const [isExporting, setIsExporting] = useState<boolean>(false);
 
   // Canvas zoom & pan
@@ -214,14 +233,71 @@ export const useCutDielineModalState = ({
     customFilename,
   ]);
 
-  // Copy SVG XML code
-  const handleCopySvg = useCallback(() => {
+  // Copy SVG (supports image/svg+xml for Illustrator/Figma and text fallback)
+  const handleCopySvg = useCallback(async () => {
     if (!completeSvgString) return;
-    navigator.clipboard.writeText(completeSvgString).then(() => {
+    try {
+      if (typeof ClipboardItem !== 'undefined') {
+        const textBlob = new Blob([completeSvgString], { type: 'text/plain' });
+        const svgBlob = new Blob([completeSvgString], { type: 'image/svg+xml' });
+        const itemData: Record<string, Blob> = {
+          'text/plain': textBlob,
+        };
+        const supportsSvg = typeof (ClipboardItem as any).supports === 'function'
+          ? (ClipboardItem as any).supports('image/svg+xml')
+          : true;
+        if (supportsSvg) {
+          try {
+            itemData['image/svg+xml'] = svgBlob;
+          } catch (_) {}
+        }
+        await navigator.clipboard.write([new ClipboardItem(itemData)]);
+      } else {
+        await navigator.clipboard.writeText(completeSvgString);
+      }
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2000);
-    });
+    } catch (_) {
+      try {
+        await navigator.clipboard.writeText(completeSvgString);
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2000);
+      } catch (err) {
+        console.error('Không thể chép SVG vào clipboard:', err);
+      }
+    }
   }, [completeSvgString]);
+
+  // Copy SVG for CorelDRAW via GoAgent (CF_HDROP clipboard + COM auto import)
+  const handleCopyCorel = useCallback(async () => {
+    if (!completeSvgString) return;
+    setIsCopyingCorel(true);
+    try {
+      const svgBase64 = utf8ToBase64(completeSvgString);
+      const result = await utiCommandService.executeCommand(
+        'corel_paste_svg',
+        { svg_base64: svgBase64 },
+        'goagent',
+        GOAGENT_DEFAULT_PORT
+      );
+
+      if (result.ok) {
+        setIsCorelCopied(true);
+        const msg = result.result_payload?.message || 'Đã nạp file SVG vào Clipboard (CF_HDROP). Sang CorelDRAW nhấn Ctrl+V để dán!';
+        safeToastSuccess(msg);
+        setTimeout(() => setIsCorelCopied(false), 3000);
+      } else {
+        safeToastError(`GoAgent cổng ${GOAGENT_DEFAULT_PORT} chưa phản hồi (${result.error || 'Offline'}). Đã tự động chép SVG bộ nhớ đệm.`);
+        await handleCopySvg();
+      }
+    } catch (err: any) {
+      console.warn('Lỗi chép sang Corel qua GoAgent:', err);
+      safeToastError('Không thể kết nối GoAgent. Đã tự động chép SVG bộ nhớ đệm.');
+      await handleCopySvg();
+    } finally {
+      setIsCopyingCorel(false);
+    }
+  }, [completeSvgString, handleCopySvg]);
 
   // Pan and drag handlers
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -265,6 +341,8 @@ export const useCutDielineModalState = ({
     customFilename,
     setCustomFilename,
     isCopied,
+    isCopyingCorel,
+    isCorelCopied,
     isExporting,
     zoom,
     pan,
@@ -276,6 +354,7 @@ export const useCutDielineModalState = ({
     handleDownloadSvg,
     handleDownloadPdf,
     handleCopySvg,
+    handleCopyCorel,
     handleMouseDown,
     handleMouseMove,
     handleMouseUp,

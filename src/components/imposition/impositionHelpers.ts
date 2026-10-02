@@ -4,7 +4,7 @@ import { ImpositionConfig, ImpositionStyle, ImpositionAutoSavedState, AUTOSAVE_S
 
 export const DEFAULT_CONFIG: ImpositionConfig = {
   shape: 'rect', itemW: 90, itemH: 54, padding: 3, cornerRadius: 0,
-  pageW: 320, pageH: 480, printW: 300, printH: 460, totalOrder: 100,
+  pageW: 320, pageH: 480, printW: 300, printH: 460, totalOrder: 1, useTotalLimit: false,
   useCrop: true, cropLen: 5, cropDist: 2, cropThick: 0.2, cropColor: '#000000',
   fitMode: 'fill', colorMode: 'original', dpi: 300, autoRotate: true,
   autoRotateImage: true, processMode: 'vector', cutBleed: 3,

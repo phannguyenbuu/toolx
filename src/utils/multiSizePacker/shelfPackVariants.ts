@@ -334,3 +334,5 @@ export function shelfPackRotated(
 
   return { items: placed, totalSheets: curSheet + 1, skipped };
 }
+
+export const shelfPackJobByJob = shelfPackLayerByLayer;

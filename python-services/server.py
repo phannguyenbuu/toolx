@@ -49,6 +49,17 @@ except ImportError as e:
     print(f"[AI] IOPaint not available: {e}")
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024
+app.config['MAX_FORM_MEMORY_SIZE'] = 50 * 1024 * 1024
+app.config['MAX_FORM_PARTS'] = 10000
+
+try:
+    from werkzeug.wrappers import Request as WerkzeugRequest
+    WerkzeugRequest.max_form_memory_size = 50 * 1024 * 1024
+    WerkzeugRequest.max_content_length = 200 * 1024 * 1024
+except Exception:
+    pass
+
 from flask_cors import CORS
 CORS(app)
 
@@ -192,6 +203,9 @@ def generate_pdf_from_request(file, form_data):
         data_mode = int(form_data.get('dataMode', 1))
         x_up_qty = int(form_data.get('xUpQty', 1))
         standard_qty = int(form_data.get('standardQty', 1))
+        use_color_bar = _is_truthy(form_data.get('useColorBar', '0'))
+        color_bar_position = form_data.get('colorBarPosition', 'bottom')
+        color_bar_padding = float(form_data.get('colorBarPadding', 3))
         
         # If no plan_items provided, this is an error - don't create demo
         if not plan_items:
@@ -235,7 +249,10 @@ def generate_pdf_from_request(file, form_data):
             rot_180_back=rot_180_back,
             data_mode=data_mode,
             x_up_qty=x_up_qty,
-            standard_qty=standard_qty
+            standard_qty=standard_qty,
+            use_color_bar=use_color_bar,
+            color_bar_position=color_bar_position,
+            color_bar_padding=color_bar_padding
         )
         
         return pdf_bytes
@@ -312,6 +329,9 @@ def generate_pdf_multipage_from_request(files, form_data):
         total_sheets = int(form_data.get('totalSheets', 1))
         target_sheet_index_raw = form_data.get('targetSheetIndex')
         target_sheet_index = int(target_sheet_index_raw) if target_sheet_index_raw is not None else None
+        use_color_bar = _is_truthy(form_data.get('useColorBar', '0'))
+        color_bar_position = form_data.get('colorBarPosition', 'bottom')
+        color_bar_padding = float(form_data.get('colorBarPadding', 3))
         
         print(f"[DEBUG] Multipage PDF: {len(temp_paths)} files, {len(plan_items)} items, mode={data_mode}")
         
@@ -349,7 +369,10 @@ def generate_pdf_multipage_from_request(files, form_data):
             x_up_qty=x_up_qty,
             standard_qty=standard_qty,
             total_sheets=total_sheets,
-            target_sheet_index=target_sheet_index
+            target_sheet_index=target_sheet_index,
+            use_color_bar=use_color_bar,
+            color_bar_position=color_bar_position,
+            color_bar_padding=color_bar_padding
         )
         
         return pdf_bytes

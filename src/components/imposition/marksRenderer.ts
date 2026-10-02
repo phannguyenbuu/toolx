@@ -90,7 +90,25 @@ export function generateItemCropMarksPath(
 }
 
 /**
+ * Dải màu CMYK nguyên bản của ToolX (10 ô màu: CMYK, RGB, 2 mức xám, trắng)
+ */
+export const CMYK_COLOR_BAR_COLORS = [
+  '#00FFFF', // Cyan
+  '#FF00FF', // Magenta
+  '#FFFF00', // Yellow
+  '#000000', // Black
+  '#FF0000', // Red
+  '#00FF00', // Green
+  '#0000FF', // Blue
+  '#777777', // Xám đậm
+  '#BBBBBB', // Xám nhạt
+  '#FFFFFF', // Trắng
+];
+
+/**
  * Sinh chuỗi SVG Path biểu diễn ốc bo góc tờ in (Page Crop Marks)
+ * Vẽ dạng góc L tại 4 góc tờ in với khoảng cách d (pageCropDist) và chiều dài l (pageCropLen)
+ * Hoàn toàn đồng bộ với engine xuất file PDF ReportLab bên Python
  */
 export function generatePageCropMarksPath(
   pageW: number,
@@ -102,21 +120,21 @@ export function generatePageCropMarksPath(
   const l = cropLen;
   const d = cropDist;
 
-  // Top-left
-  p.push(`M ${-d - l},0 L ${-d},0`);
-  p.push(`M 0,${-d - l} L 0,${-d}`);
+  // Top-left corner (inset by d, arms of length l)
+  p.push(`M ${d},${d} L ${d + l},${d}`);
+  p.push(`M ${d},${d} L ${d},${d + l}`);
 
-  // Top-right
-  p.push(`M ${pageW + d},0 L ${pageW + d + l},0`);
-  p.push(`M ${pageW},${-d - l} L ${pageW},${-d}`);
+  // Top-right corner
+  p.push(`M ${pageW - d},${d} L ${pageW - d - l},${d}`);
+  p.push(`M ${pageW - d},${d} L ${pageW - d},${d + l}`);
 
-  // Bottom-left
-  p.push(`M ${-d - l},${pageH} L ${-d},${pageH}`);
-  p.push(`M 0,${pageH + d} L 0,${pageH + d + l}`);
+  // Bottom-left corner
+  p.push(`M ${d},${pageH - d} L ${d + l},${pageH - d}`);
+  p.push(`M ${d},${pageH - d} L ${d},${pageH - d - l}`);
 
-  // Bottom-right
-  p.push(`M ${pageW + d},${pageH} L ${pageW + d + l},${pageH}`);
-  p.push(`M ${pageW},${pageH + d} L ${pageW},${pageH + d + l}`);
+  // Bottom-right corner
+  p.push(`M ${pageW - d},${pageH - d} L ${pageW - d - l},${pageH - d}`);
+  p.push(`M ${pageW - d},${pageH - d} L ${pageW - d},${pageH - d - l}`);
 
   return p.join(' ');
 }

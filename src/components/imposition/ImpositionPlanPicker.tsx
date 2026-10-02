@@ -140,7 +140,14 @@ export const ImpositionPlanPicker: React.FC<ImpositionPlanPickerProps> = ({
                       const ah = Math.max(2, itH * sc);
                       const itemColor = it.color || '#8b5cf6';
                       const cornerR = it.cornerRadius !== undefined ? it.cornerRadius : config.cornerRadius;
-                      const thumb = it.sourceImage?.thumb || (isMultiShape ? shapeTabs.find(t => t.id === it.tabId || t.name === it.tabName)?.sourceImage?.thumb : null) || (allPages.length > 0 ? allPages[j % allPages.length]?.thumb : null);
+                      const correspondingTab = isMultiShape
+                        ? shapeTabs.find(t => t.id === it.tabId || t.name === it.tabName)
+                        : (shapeTabs && shapeTabs.length > 0 ? shapeTabs[0] : null);
+                      const thumb =
+                        it.sourceImage?.thumb ||
+                        correspondingTab?.sourceImage?.thumb ||
+                        (shapeTabs && shapeTabs.length > 0 ? shapeTabs[0]?.sourceImage?.thumb : null) ||
+                        (allPages.length > 0 ? allPages[j % allPages.length]?.thumb : null);
 
                       let borderRadius = '0px';
                       if (itemShape === 'circle' || itemShape === 'oval') borderRadius = '50%';

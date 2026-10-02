@@ -1,5 +1,6 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight, Settings2 } from 'lucide-react';
+import { Settings2, X } from 'lucide-react';
+import { CollapsibleSidebar } from '../../common/CollapsibleSidebar';
 import { LayoutPlan } from '../../../utils/layoutSolver';
 import {
   ImpositionConfig,
@@ -8,7 +9,7 @@ import {
   ImpositionHistoryItem
 } from '../types';
 import { ImpositionPrintSettings } from './ImpositionPrintSettings';
-import { ImpositionHistoryList } from './ImpositionHistoryList';
+import { ImpositionHistoryList } from '../../imposition/ImpositionHistoryList';
 
 interface ImpositionHistoryPanelProps {
   isRightSidebarCollapsed: boolean;
@@ -60,40 +61,12 @@ export const ImpositionHistoryPanel: React.FC<ImpositionHistoryPanelProps> = ({
   onRestoreHistoryConfig
 }) => {
   return (
-    <>
-      {/* Floating Arrow Toggle Button on the Right Edge */}
-      <button
-        type="button"
-        onClick={toggleRightSidebar}
-        className={`fixed z-50 top-1/2 -translate-y-1/2 transition-all duration-200 ease-in-out w-5 hover:w-6.5 h-14 bg-white/95 backdrop-blur-sm border border-slate-200 hover:border-slate-300 border-r-0 rounded-l-xl shadow-xs hover:shadow-sm flex items-center justify-center text-slate-400 hover:text-slate-700 cursor-pointer group select-none ${
-          isRightSidebarCollapsed ? 'right-0' : 'right-[700px] -mr-px'
-        }`}
-        title={isRightSidebarCollapsed ? 'Mở rộng' : 'Thu gọn'}
-      >
-        {isRightSidebarCollapsed ? (
-          <ChevronLeft
-            size={16}
-            strokeWidth={1.75}
-            className="transition-transform group-hover:scale-105"
-          />
-        ) : (
-          <ChevronRight
-            size={16}
-            strokeWidth={1.75}
-            className="transition-transform group-hover:scale-105"
-          />
-        )}
-      </button>
-
-      {/* Right sidebar: Stats & Actions (w-[700px]) */}
-      <aside
-        className={`flex-shrink-0 h-full flex flex-col z-40 shadow-xl transition-all duration-300 ease-in-out relative overflow-hidden bg-white border-slate-200 ${
-          isRightSidebarCollapsed
-            ? 'w-0 min-w-0 border-l-0 opacity-0 pointer-events-none'
-            : 'w-[700px] max-w-[95vw] border-l opacity-100'
-        }`}
-      >
-        <div className="w-[700px] max-w-[95vw] h-full flex flex-col overflow-y-auto flex-shrink-0">
+    <CollapsibleSidebar
+      isCollapsed={isRightSidebarCollapsed}
+      onToggle={toggleRightSidebar}
+      width="700px"
+      toggleSide="left"
+    >
           {/* Header */}
           <div className="p-3.5 border-b flex items-center justify-between bg-slate-50 flex-shrink-0">
             <div className="flex items-center gap-2 min-w-0">
@@ -111,7 +84,7 @@ export const ImpositionHistoryPanel: React.FC<ImpositionHistoryPanelProps> = ({
               className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-200 transition cursor-pointer"
               title="Thu gọn"
             >
-              <ChevronRight size={18} />
+              <X size={18} />
             </button>
           </div>
 
@@ -135,15 +108,13 @@ export const ImpositionHistoryPanel: React.FC<ImpositionHistoryPanelProps> = ({
 
           {/* Imposition History List */}
           <ImpositionHistoryList
-            isHistorySectionOpen={isHistorySectionOpen}
-            setIsHistorySectionOpen={setIsHistorySectionOpen}
-            impositionHistory={impositionHistory}
-            onRemoveHistoryItem={onRemoveHistoryItem}
+            isOpen={isHistorySectionOpen}
+            onToggleOpen={() => setIsHistorySectionOpen(v => !v)}
+            impositionHistory={impositionHistory as any}
+            onDeleteItem={onRemoveHistoryItem}
             onClearHistory={onClearHistory}
-            onRestoreHistoryConfig={onRestoreHistoryConfig}
+            onRestoreHistory={onRestoreHistoryConfig as any}
           />
-        </div>
-      </aside>
-    </>
+    </CollapsibleSidebar>
   );
 };

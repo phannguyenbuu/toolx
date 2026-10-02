@@ -7,8 +7,8 @@ import {
   RotateCw
 } from 'lucide-react';
 import { ImpositionConfig, PageItem, ImpositionHistoryItem } from './types';
-import { DebouncedNumberInput } from './DebouncedNumberInput';
-import { ImpositionHistorySidebar } from './ImpositionHistorySidebar';
+import { DebouncedNumberInput } from '../common/DebouncedNumberInput';
+import { ImpositionHistoryList } from './ImpositionHistoryList';
 import { ImpositionAiOutpaintPanel } from './ImpositionAiOutpaintPanel';
 
 export interface ImpositionPaperSidebarProps {
@@ -377,13 +377,13 @@ export const ImpositionPaperSidebar: React.FC<ImpositionPaperSidebarProps> = ({
         </div>
 
         {/* LOWER SECTION: LỊCH SỬ BÌNH TRANG */}
-        <ImpositionHistorySidebar
+        <ImpositionHistoryList
           impositionHistory={impositionHistory}
-          handleRequestRestoreHistory={handleRequestRestoreHistory}
-          handleExportSortJob={handleExportSortJob}
-          isExportingSortJob={isExportingSortJob}
-          deleteHistoryItem={deleteHistoryItem}
-          clearHistory={clearHistory}
+          onRestoreHistory={handleRequestRestoreHistory}
+          onExportJson={handleExportSortJob}
+          isExportingJson={isExportingSortJob}
+          onDeleteItem={deleteHistoryItem}
+          onClearHistory={clearHistory}
         />
       </div>
     </aside>
