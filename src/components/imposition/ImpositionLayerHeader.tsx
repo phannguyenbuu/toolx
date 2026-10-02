@@ -170,19 +170,15 @@ export const ImpositionLayerHeader: React.FC<ImpositionLayerHeaderProps> = ({
             )}
           </div>
 
-          {/* Nút tím Tạo ảnh nguồn ở đáy Cột 1 (thêm ảnh nguồn/trang vào chung layer này) */}
+          {/* Nút tím Tạo ảnh nguồn ở đáy Cột 1 (giữ logo icon, bỏ label) */}
           <button
             type="button"
             onClick={() => sourceImageInputRef.current?.click()}
-            className="mt-2 w-full h-[52px] min-h-[52px] py-1 px-2.5 bg-violet-600 hover:bg-violet-700 active:bg-violet-800 text-white rounded-2xl shadow-xs transition-all cursor-pointer shrink-0 select-none flex items-center justify-center gap-2"
+            className="mt-2 w-full h-[52px] min-h-[52px] bg-violet-600 hover:bg-violet-700 active:bg-violet-800 text-white rounded-2xl shadow-xs transition-all cursor-pointer shrink-0 select-none flex items-center justify-center"
             style={{ borderRadius: '16px', backgroundColor: '#7c3aed', minHeight: '52px' }}
-            title="Thêm ảnh nguồn / trang mới vào chung Layer này"
+            title="Tạo ảnh nguồn (thêm ảnh/trang vào layer này)"
           >
-            <UploadCloud size={20} className="shrink-0" />
-            <div className="flex flex-col text-left leading-tight font-bold text-xs tracking-tight">
-              <span>Tạo ảnh</span>
-              <span>nguồn</span>
-            </div>
+            <UploadCloud size={26} className="text-white" />
           </button>
         </div>
 
